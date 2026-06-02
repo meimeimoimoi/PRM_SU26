@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("SmartDine.API")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+2e44ff0803191c5758d3048ad5221f3a0468c6db")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+8a9892921759740aeb1af83d25479b770b73084e")]
 [assembly: System.Reflection.AssemblyProductAttribute("SmartDine.API")]
 [assembly: System.Reflection.AssemblyTitleAttribute("SmartDine.API")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

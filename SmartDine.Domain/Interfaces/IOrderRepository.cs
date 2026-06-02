@@ -1,19 +1,13 @@
 using SmartDine.Domain.Entities;
+using SmartDine.Domain.Enums;
 
 namespace SmartDine.Domain.Interfaces;
 
-/// <summary>
-/// Bản vẽ (contract) cho Order Repository.
-/// Quy định các hàm mà bất kỳ implementation nào cũng phải có.
-/// </summary>
-public interface IOrderRepository
+public interface IOrderRepository : IRepository<Order>
 {
-    /// <summary>Thêm đơn hàng mới.</summary>
-    void Add(Order order);
-
-    /// <summary>Lấy đơn hàng theo Id.</summary>
-    Order? GetById(Guid id);
-
-    /// <summary>Lấy tất cả đơn hàng.</summary>
-    IEnumerable<Order> GetAll();
+    Task<IReadOnlyList<Order>> GetByCustomerIdAsync(Guid customerId, int page, int pageSize);
+    Task<IReadOnlyList<Order>> GetByStatusAsync(OrderStatus status);
+    Task<IReadOnlyList<Order>> GetActiveOrdersAsync();
+    Task<IReadOnlyList<Order>> GetTodayOrdersAsync();
+    Task<IReadOnlyList<Order>> GetByDiningSessionIdAsync(Guid sessionId);
 }

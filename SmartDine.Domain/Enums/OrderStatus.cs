@@ -5,12 +5,10 @@ namespace SmartDine.Domain.Enums;
 /// </summary>
 public enum OrderStatus
 {
-    /// <summary>Đơn hàng đang chờ xử lý.</summary>
     PENDING,
-
-    /// <summary>Đang chế biến.</summary>
+    CONFIRMED,
     COOKING,
-
-    /// <summary>Đã hoàn thành.</summary>
-    COMPLETED
+    READY,
+    COMPLETED,
+    CANCELLED
 }

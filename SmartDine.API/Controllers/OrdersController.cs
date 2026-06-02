@@ -1,14 +1,15 @@
+using System.Security.Claims;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using SmartDine.Application.DTOs;
+using SmartDine.Application.DTOs.Common;
+using SmartDine.Application.DTOs.Orders;
 using SmartDine.Application.Services;
 
 namespace SmartDine.API.Controllers;
 
-/// <summary>
-/// API Controller xử lý các yêu cầu liên quan đến đơn hàng.
-/// </summary>
 [ApiController]
-[Route("api/[controller]")]
+[Route("api/v1/orders")]
+[Authorize]
 public class OrdersController : ControllerBase
 {
     private readonly OrderService _orderService;
@@ -18,53 +19,59 @@ public class OrdersController : ControllerBase
         _orderService = orderService;
     }
 
-    /// <summary>
-    /// POST /api/orders — Đặt món mới.
-    /// </summary>
+    /// <summary>POST /api/v1/orders — Đặt món mới</summary>
     [HttpPost]
-    public IActionResult PlaceOrder([FromBody] PlaceOrderRequest request)
+    public async Task<IActionResult> PlaceOrder([FromBody] PlaceOrderRequest request)
     {
-        try
-        {
-            var response = _orderService.PlaceOrder(request);
-            return CreatedAtAction(nameof(GetOrderById), new { id = response.Id }, response);
-        }
-        catch (ArgumentException ex)
-        {
-            return BadRequest(new { error = ex.Message });
-        }
+        // Lấy customerId từ JWT claims (cần mapping user → customer)
+        var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        var result = await _orderService.PlaceOrderAsync(userId, request);
+        return Created("", ApiResponse<OrderResponse>.Ok(result, "Đặt món thành công"));
     }
 
-    /// <summary>
-    /// GET /api/orders/{id} — Lấy đơn hàng theo Id.
-    /// </summary>
+    /// <summary>GET /api/v1/orders/{id} — Lấy chi tiết đơn hàng</summary>
     [HttpGet("{id:guid}")]
-    public IActionResult GetOrderById(Guid id)
+    public async Task<IActionResult> GetById(Guid id)
     {
-        var order = _orderService.GetOrderById(id);
-        if (order is null)
-            return NotFound(new { error = $"Không tìm thấy đơn hàng với Id: {id}" });
-
-        return Ok(order);
+        var result = await _orderService.GetByIdAsync(id);
+        if (result == null)
+            return NotFound(ApiResponse<object>.Fail("Không tìm thấy đơn hàng"));
+        return Ok(ApiResponse<OrderResponse>.Ok(result));
     }
 
-    /// <summary>
-    /// GET /api/orders — Lấy tất cả đơn hàng.
-    /// </summary>
-    [HttpGet]
-    public IActionResult GetAllOrders()
+    /// <summary>GET /api/v1/orders/active — Đơn hàng đang hoạt động (cho kitchen/staff)</summary>
+    [HttpGet("active")]
+    [Authorize(Roles = "STAFF,CHEF,MANAGER")]
+    public async Task<IActionResult> GetActiveOrders()
     {
-        var orders = _orderService.GetAllOrders();
-        return Ok(orders);
+        var result = await _orderService.GetActiveOrdersAsync();
+        return Ok(ApiResponse<List<OrderResponse>>.Ok(result));
     }
 
-    /// <summary>
-    /// GET /api/orders/menu — Lấy danh sách thực đơn.
-    /// </summary>
-    [HttpGet("menu")]
-    public IActionResult GetMenu()
+    /// <summary>GET /api/v1/orders/today — Tất cả đơn hôm nay (cho manager)</summary>
+    [HttpGet("today")]
+    [Authorize(Roles = "MANAGER")]
+    public async Task<IActionResult> GetTodayOrders()
     {
-        var menu = _orderService.GetMenu();
-        return Ok(menu);
+        var result = await _orderService.GetTodayOrdersAsync();
+        return Ok(ApiResponse<List<OrderResponse>>.Ok(result));
+    }
+
+    /// <summary>PATCH /api/v1/orders/{id}/status — Cập nhật trạng thái đơn hàng</summary>
+    [HttpPatch("{id:guid}/status")]
+    [Authorize(Roles = "STAFF,CHEF,MANAGER")]
+    public async Task<IActionResult> UpdateStatus(Guid id, [FromBody] UpdateOrderStatusRequest request)
+    {
+        var result = await _orderService.UpdateStatusAsync(id, request.Status);
+        return Ok(ApiResponse<OrderResponse>.Ok(result, "Cập nhật trạng thái thành công"));
+    }
+
+    /// <summary>GET /api/v1/orders/my — Lịch sử đơn hàng của customer</summary>
+    [HttpGet("my")]
+    public async Task<IActionResult> GetMyOrders([FromQuery] int page = 1, [FromQuery] int pageSize = 20)
+    {
+        var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        var result = await _orderService.GetByCustomerIdAsync(userId, page, pageSize);
+        return Ok(ApiResponse<List<OrderResponse>>.Ok(result));
     }
 }

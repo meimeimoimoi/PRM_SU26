@@ -1,112 +1,139 @@
-using SmartDine.Application.DTOs;
+using SmartDine.Application.DTOs.Orders;
 using SmartDine.Domain.Entities;
 using SmartDine.Domain.Enums;
+using SmartDine.Domain.Exceptions;
 using SmartDine.Domain.Interfaces;
 
 namespace SmartDine.Application.Services;
 
 /// <summary>
-/// Service xử lý nghiệp vụ đặt món cho nhà hàng.
-/// Tính toán tổng tiền, tạo đơn hàng, gọi Repository để lưu.
+/// Service xử lý nghiệp vụ đặt món — tạo đơn, cập nhật status, lấy danh sách.
 /// </summary>
 public class OrderService
 {
-    private readonly IOrderRepository _orderRepository;
+    private readonly IUnitOfWork _uow;
 
-    // Dữ liệu menu giả lập (sau này sẽ lấy từ DB)
-    private readonly List<MenuItem> _menu = new()
+    public OrderService(IUnitOfWork uow)
     {
-        new MenuItem { Id = Guid.Parse("11111111-1111-1111-1111-111111111111"), Name = "Phở Bò", Price = 55000 },
-        new MenuItem { Id = Guid.Parse("22222222-2222-2222-2222-222222222222"), Name = "Bún Chả", Price = 45000 },
-        new MenuItem { Id = Guid.Parse("33333333-3333-3333-3333-333333333333"), Name = "Cơm Tấm", Price = 50000 },
-        new MenuItem { Id = Guid.Parse("44444444-4444-4444-4444-444444444444"), Name = "Bánh Mì", Price = 25000 },
-        new MenuItem { Id = Guid.Parse("55555555-5555-5555-5555-555555555555"), Name = "Trà Đá", Price = 5000 },
-    };
-
-    public OrderService(IOrderRepository orderRepository)
-    {
-        _orderRepository = orderRepository;
+        _uow = uow;
     }
 
-    /// <summary>
-    /// Đặt món: Tìm món trong menu → tính tổng tiền → tạo Order → lưu vào Repository.
-    /// </summary>
-    public OrderResponse PlaceOrder(PlaceOrderRequest request)
+    public async Task<OrderResponse> PlaceOrderAsync(Guid customerId, PlaceOrderRequest request)
     {
-        // Tìm các món ăn theo Id
-        var orderedItems = _menu
-            .Where(m => request.MenuItemIds.Contains(m.Id))
-            .ToList();
+        // Validate menu items exist
+        var menuItemIds = request.Items.Select(i => i.MenuItemId).ToList();
+        var menuItems = await _uow.MenuItems.GetByIdsAsync(menuItemIds);
 
-        if (orderedItems.Count == 0)
-            throw new ArgumentException("Không tìm thấy món ăn nào trong menu!");
+        if (menuItems.Count != menuItemIds.Count)
+            throw new BusinessRuleViolationException("Một hoặc nhiều món không tồn tại trong menu.");
 
-        // Tính tổng tiền
-        var totalAmount = orderedItems.Sum(item => item.Price);
+        var unavailable = menuItems.Where(m => !m.IsAvailable).Select(m => m.Name).ToList();
+        if (unavailable.Any())
+            throw new BusinessRuleViolationException($"Các món sau đang hết: {string.Join(", ", unavailable)}");
 
-        // Tạo đơn hàng mới
+        // Create order
         var order = new Order
         {
-            Id = Guid.NewGuid(),
-            Items = orderedItems,
-            TotalAmount = totalAmount,
-            Status = "PENDING",
-            CreatedAt = DateTime.UtcNow
+            CustomerId = customerId,
+            TableId = request.TableId,
+            DiningSessionId = request.DiningSessionId,
+            SpecialInstructions = request.SpecialInstructions,
+            Status = OrderStatus.PENDING
         };
 
-        // Lưu vào Repository
-        _orderRepository.Add(order);
-
-        // Map sang Response DTO để trả về cho Frontend
-        return MapToResponse(order);
-    }
-
-    /// <summary>
-    /// Lấy đơn hàng theo Id.
-    /// </summary>
-    public OrderResponse? GetOrderById(Guid id)
-    {
-        var order = _orderRepository.GetById(id);
-        return order is null ? null : MapToResponse(order);
-    }
-
-    /// <summary>
-    /// Lấy tất cả đơn hàng.
-    /// </summary>
-    public IEnumerable<OrderResponse> GetAllOrders()
-    {
-        return _orderRepository.GetAll().Select(MapToResponse);
-    }
-
-    /// <summary>
-    /// Lấy danh sách thực đơn.
-    /// </summary>
-    public IEnumerable<OrderItemResponse> GetMenu()
-    {
-        return _menu.Select(m => new OrderItemResponse
+        // Create order items
+        foreach (var itemRequest in request.Items)
         {
-            Id = m.Id,
-            Name = m.Name,
-            Price = m.Price
-        });
+            var menuItem = menuItems.First(m => m.Id == itemRequest.MenuItemId);
+            order.Items.Add(new OrderItem
+            {
+                MenuItemId = menuItem.Id,
+                Quantity = itemRequest.Quantity,
+                UnitPrice = menuItem.Price,
+                SpecialInstructions = itemRequest.SpecialInstructions
+            });
+        }
+
+        order.CalculateTotal();
+        await _uow.Orders.AddAsync(order);
+        await _uow.SaveChangesAsync();
+
+        return MapToResponse(order, menuItems);
     }
 
-    /// <summary>
-    /// Map từ Entity sang DTO.
-    /// </summary>
-    private static OrderResponse MapToResponse(Order order)
+    public async Task<OrderResponse> UpdateStatusAsync(Guid orderId, OrderStatus newStatus)
+    {
+        var order = await _uow.Orders.GetByIdAsync(orderId)
+            ?? throw new EntityNotFoundException("Order", orderId);
+
+        order.UpdateStatus(newStatus); // Domain business rule validation
+        await _uow.SaveChangesAsync();
+
+        var menuItems = await _uow.MenuItems.GetByIdsAsync(
+            order.Items.Select(i => i.MenuItemId).ToList());
+        return MapToResponse(order, menuItems);
+    }
+
+    public async Task<OrderResponse?> GetByIdAsync(Guid orderId)
+    {
+        var order = await _uow.Orders.GetByIdAsync(orderId);
+        if (order == null) return null;
+
+        var menuItems = await _uow.MenuItems.GetByIdsAsync(
+            order.Items.Select(i => i.MenuItemId).ToList());
+        return MapToResponse(order, menuItems);
+    }
+
+    public async Task<List<OrderResponse>> GetActiveOrdersAsync()
+    {
+        var orders = await _uow.Orders.GetActiveOrdersAsync();
+        return orders.Select(o => MapToResponse(o,
+            o.Items.Select(i => i.MenuItem).Where(m => m != null).ToList()!))
+            .ToList();
+    }
+
+    public async Task<List<OrderResponse>> GetTodayOrdersAsync()
+    {
+        var orders = await _uow.Orders.GetTodayOrdersAsync();
+        return orders.Select(o => MapToResponse(o,
+            o.Items.Select(i => i.MenuItem).Where(m => m != null).ToList()!))
+            .ToList();
+    }
+
+    public async Task<List<OrderResponse>> GetByCustomerIdAsync(Guid customerId, int page = 1, int pageSize = 20)
+    {
+        var orders = await _uow.Orders.GetByCustomerIdAsync(customerId, page, pageSize);
+        return orders.Select(o => MapToResponse(o,
+            o.Items.Select(i => i.MenuItem).Where(m => m != null).ToList()!))
+            .ToList();
+    }
+
+    private static OrderResponse MapToResponse(Order order, IReadOnlyList<MenuItem> menuItems)
     {
         return new OrderResponse
         {
             Id = order.Id,
+            CustomerId = order.CustomerId,
+            CustomerName = order.Customer?.User?.FullName,
+            TableNumber = order.Table?.TableNumber ?? 0,
+            SubTotal = order.SubTotal,
+            DiscountAmount = order.DiscountAmount,
             TotalAmount = order.TotalAmount,
-            Status = Enum.Parse<OrderStatus>(order.Status),
+            Status = order.Status,
+            SpecialInstructions = order.SpecialInstructions,
             CreatedAt = order.CreatedAt,
-            Items = order.Items.Select(i => new OrderItemResponse
+            Items = order.Items.Select(i =>
             {
-                Id = i.Id,
-                Name = i.Name,
-                Price = i.Price
+                var menu = menuItems.FirstOrDefault(m => m.Id == i.MenuItemId);
+                return new OrderItemResponse
+                {
+                    Id = i.Id,
+                    MenuItemId = i.MenuItemId,
+                    Name = menu?.Name ?? "Unknown",
+                    UnitPrice = i.UnitPrice,
+                    Quantity = i.Quantity,
+                    SpecialInstructions = i.SpecialInstructions
+                };
             }).ToList()
         };
     }

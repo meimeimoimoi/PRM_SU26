@@ -14,3 +14,5 @@ E:\FPTUer\Sen8\PRM393\WEB\PRM_SU26\SmartDine.Infrastructure\obj\Debug\net10.0\Sm
 E:\FPTUer\Sen8\PRM393\WEB\PRM_SU26\SmartDine.Infrastructure\obj\Debug\net10.0\refint\SmartDine.Infrastructure.dll
 E:\FPTUer\Sen8\PRM393\WEB\PRM_SU26\SmartDine.Infrastructure\obj\Debug\net10.0\SmartDine.Infrastructure.pdb
 E:\FPTUer\Sen8\PRM393\WEB\PRM_SU26\SmartDine.Infrastructure\obj\Debug\net10.0\ref\SmartDine.Infrastructure.dll
+E:\FPTUer\Sen8\PRM393\WEB\PRM_SU26\SmartDine.Infrastructure\bin\Debug\net10.0\SmartDine.Infrastructure.runtimeconfig.json
+E:\FPTUer\Sen8\PRM393\WEB\PRM_SU26\SmartDine.Infrastructure\obj\Debug\net10.0\SmartDine.Infrastructure.genruntimeconfig.cache
