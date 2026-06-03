@@ -38,10 +38,11 @@ Trước khi bắt đầu, hãy đảm bảo máy tính của bạn đã cài đ
 2. Mở file [appsettings.Development.json]và cập nhật thông tin kết nối PostgreSQL tại mục `ConnectionStrings:DefaultConnection` (nếu cần thiết):
    ```json
    "ConnectionStrings": {
-     "DefaultConnection": "Host=localhost;Database=smartdine;Username=postgres;Password=YOUR_PASSWORD"
+     "DefaultConnection": "Host=localhost;Port=5432;Database=smartdine;Username=postgres;Password=YOUR_PASSWORD"
    }
    ```
-3. Cài đặt công cụ Entity Framework Core CLI (nếu chưa cài):
+3. Cài đặt công cụ Entity Framework Core C
+LI (nếu chưa cài):
    ```bash
    dotnet tool install --global dotnet-ef
    ```
