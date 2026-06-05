@@ -1,3 +1,4 @@
+using SmartDine.Application.Constants;
 using SmartDine.Application.DTOs.Auth;
 using SmartDine.Domain.Entities;
 using SmartDine.Domain.Exceptions;
@@ -10,7 +11,7 @@ namespace SmartDine.Application.Services;
 /// <summary>
 /// Service xử lý authentication cho cả Nhân viên (User) và Khách hàng (Customer).
 /// </summary>
-public class AuthService
+public class AuthService 
 {
     private readonly IUnitOfWork _uow;
     private readonly IJwtTokenService _jwtService;
@@ -27,10 +28,14 @@ public class AuthService
     {
         // 1. Kiểm tra tài khoản Nhân viên (User) trước
         var user = await _uow.Users.GetByEmailAsync(request.Email);
+        if (user == null)
+        {
+            throw new ResourceNotFoundException(ValidationMessages.NOT_FOUND);
+        }
         if (user != null && user.IsActive)
         {
             if (!_passwordHasher.VerifyPassword(request.Password, user.PasswordHash))
-                throw new BusinessRuleViolationException("Email hoặc mật khẩu không đúng.");
+                throw new BusinessRuleViolationException(ValidationMessages.EMAIL_OR_PASSSWORD_INVALID);
 
             return GenerateTokenResponse(user.Id, user.Email, user.FullName, user.Role);
         }

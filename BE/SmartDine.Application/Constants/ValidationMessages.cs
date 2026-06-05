@@ -2,6 +2,12 @@ namespace SmartDine.Application.Constants;
 
 public static class ValidationMessages
 {
+    //valid
+    public const string NOT_FOUND = "NOT_FOUND";
+
+    //Auth
+    public const string EMAIL_OR_PASSSWORD_INVALID = "EMAIL_OR_PASSSWORD_INVALID";
+
     public const string MENU_ITEM_NOT_FOUND = "MENU_ITEM_NOT_FOUND";
     public const string ORDER_ITEM_NOT_FOUND = "ORDER_ITEM_NOT_FOUND";
     public const string ORDER_NOT_FOUND = "ORDER_NOT_FOUND";
