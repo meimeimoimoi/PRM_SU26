@@ -14,6 +14,7 @@ namespace SmartDine.Application.Services;
 public class MenuService
 {
     private readonly IUnitOfWork _uow;
+    private readonly IMenuItemRepository _menuItemRepo;
 
     public MenuService(IUnitOfWork uow)
     {
@@ -34,18 +35,33 @@ public class MenuService
 
     public async Task<MenuItemResponse> CreateAsync(CreateMenuItemRequest request)
     {
+        // Validate
+        if (string.IsNullOrWhiteSpace(request.Name))
+            throw new ArgumentException("Tên món ăn không được để trống.");
+
+        if (request.Price <= 0)
+            throw new ArgumentException("Giá món ăn phải lớn hơn 0.");
+
+        // Kiểm tra category tồn tại
+        var category = await _menuItemRepo.GetByCategoryIdAsync(request.CategoryId);
+    
+        if (category == null)
+            throw new KeyNotFoundException("Danh mục không tồn tại.");
+
         var item = new MenuItem
         {
-            Name = request.Name,
-            Description = request.Description,
+            Name = request.Name.Trim(),
+            Description = request.Description?.Trim(),
             Price = request.Price,
-            ImageUrl = request.ImageUrl,
+            ImageUrl = ,
             CategoryId = request.CategoryId,
-            IsAvailable = true
+            IsAvailable = true,
+            CreatedAt = DateTime.UtcNow
         };
 
         await _uow.MenuItems.AddAsync(item);
         await _uow.SaveChangesAsync();
+
         return MapToResponse(item);
     }
 
