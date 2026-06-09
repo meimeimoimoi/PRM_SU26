@@ -58,6 +58,6 @@ const App: React.FC = () => {
       </BrowserRouter>
     </ConfigProvider>
   );
-};
+}
 
 export default App;
