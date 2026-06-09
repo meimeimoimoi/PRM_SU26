@@ -44,6 +44,9 @@ public static class DependencyInjection
         services.AddScoped<IJwtTokenService, JwtTokenService>();
         services.AddScoped<IPasswordHasher, BCryptPasswordHasher>();
 
+        // Fallback services
+        services.AddScoped<IOrderNotificationService, Services.NullOrderNotificationService>();
+
         // Seeder
         services.AddScoped<DbSeeder>();
 

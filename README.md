@@ -9,6 +9,12 @@ Hệ thống **SmartDine** bao gồm Backend (Microservices Architecture .NET Co
 ```text
 PRM_SU26/
 ├── BE/                           # Backend (ASP.NET Core 10.0 Microservices)
+│   ├── docker/                   # Chứa các tệp Dockerfile quản lý chung
+│   │   ├── Gateway.Dockerfile
+│   │   ├── Identity.Dockerfile
+│   │   ├── Menu.Dockerfile
+│   │   ├── Order.Dockerfile
+│   │   └── Table.Dockerfile
 │   ├── SmartDine.Gateway         # API Gateway (YARP Reverse Proxy - Port 5000)
 │   ├── SmartDine.Identity.API    # Auth & Customer Identity Service (Port 5001)
 │   ├── SmartDine.Menu.API        # Menu Catalog Service (Port 5002)
@@ -116,6 +122,24 @@ flutter pub run build_runner build --delete-conflicting-outputs
 # Khởi chạy ứng dụng (trên máy ảo hoặc thiết bị thật)
 flutter run
 ```
+
+---
+
+## Triển khai bằng Docker (Docker Deployment)
+
+Hệ thống đã được cấu hình tệp `docker-compose.yml` để tự động xây dựng và khởi chạy cơ sở dữ liệu PostgreSQL cùng 5 dịch vụ backend microservices chỉ với một câu lệnh.
+
+1. **Khởi chạy hệ thống:**
+   Đứng tại thư mục gốc (nơi chứa tệp `docker-compose.yml`) và chạy câu lệnh:
+   ```bash
+   docker-compose up --build
+   ```
+   *Lưu ý:* Câu lệnh trên sẽ tự động xây dựng Docker images từ các tệp `Dockerfile` của từng microservice, khởi chạy cơ sở dữ liệu PostgreSQL, tự động thực hiện migrations/seeding dữ liệu khởi tạo, và bật API Gateway trên cổng `5000`.
+
+2. **Dừng hệ thống:**
+   ```bash
+   docker-compose down
+   ```
 
 ---
 

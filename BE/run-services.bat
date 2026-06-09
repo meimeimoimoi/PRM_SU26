@@ -13,6 +13,9 @@ start "Order API" dotnet run --project SmartDine.Order.API
 echo Starting Table API on port 5004...
 start "Table API" dotnet run --project SmartDine.Table.API
 
+echo Starting AI API on port 5005...
+start "AI API" dotnet run --project SmartDine.AI.API
+
 echo Starting Gateway on port 5000...
 start "API Gateway" dotnet run --project SmartDine.Gateway
 

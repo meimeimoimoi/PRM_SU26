@@ -4,6 +4,7 @@
   <Project Path="SmartDine.Menu.API/SmartDine.Menu.API.csproj" />
   <Project Path="SmartDine.Order.API/SmartDine.Order.API.csproj" />
   <Project Path="SmartDine.Table.API/SmartDine.Table.API.csproj" />
+  <Project Path="SmartDine.AI.API/SmartDine.AI.API.csproj" />
   <Project Path="SmartDine.API/SmartDine.API.csproj" />
   <Project Path="SmartDine.Application/SmartDine.Application.csproj" />
   <Project Path="SmartDine.Domain/SmartDine.Domain.csproj" />

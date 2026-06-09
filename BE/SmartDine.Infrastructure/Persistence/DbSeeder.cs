@@ -1,8 +1,8 @@
-using SmartDine.Domain.Entities;
-using SmartDine.Domain.Interfaces;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using SmartDine.Domain.Entities;
+using SmartDine.Domain.Interfaces;
 
 namespace SmartDine.Infrastructure.Persistence;
 

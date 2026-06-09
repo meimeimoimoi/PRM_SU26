@@ -1,0 +1,177 @@
+version: '3.8'
+
+services:
+  postgres-db:
+    image: postgres:15-alpine
+    container_name: smartdine-postgres
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=12345
+      - POSTGRES_DB=smartdine
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - smartdine-network
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama-service
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-data:/root/.ollama
+    networks:
+      - smartdine-network
+
+  ollama-pull-model:
+    image: curlimages/curl:latest
+    container_name: ollama-pull-model
+    depends_on:
+      - ollama
+    networks:
+      - smartdine-network
+    entrypoint: [ "/bin/sh", "-c" ]
+    command: >
+      "
+      echo 'Waiting for Ollama service to start...';
+      until curl -s http://ollama-service:11434/api/tags > /dev/null; do
+        sleep 3;
+      done;
+      echo 'Ollama is up! Pulling qwen2.5:1.5b model...';
+      curl -s -d '{\"name\": \"qwen2.5:1.5b\"}' http://ollama-service:11434/api/pull;
+      echo 'Model pulled successfully!';
+      "
+
+  identity-api:
+    image: smartdine-identity-api:latest
+    container_name: identity-api
+    build:
+      context: ./BE
+      dockerfile: docker/Identity.Dockerfile
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ConnectionStrings__DefaultConnection=Host=postgres-db;Port=5432;Database=smartdine;Username=postgres;Password=12345
+      - Jwt__SecretKey=f14cc5eb24eb6a57d5d36b3f6a30d58c9144445afa2d7f221f023d25bfe2f170
+      - Jwt__Issuer=SmartDineAPI
+      - Jwt__Audience=SmartDineApp
+    ports:
+      - "5001:8080"
+    depends_on:
+      - postgres-db
+    networks:
+      - smartdine-network
+
+  menu-api:
+    image: smartdine-menu-api:latest
+    container_name: menu-api
+    build:
+      context: ./BE
+      dockerfile: docker/Menu.Dockerfile
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ConnectionStrings__DefaultConnection=Host=postgres-db;Port=5432;Database=smartdine;Username=postgres;Password=12345
+      - Jwt__SecretKey=f14cc5eb24eb6a57d5d36b3f6a30d58c9144445afa2d7f221f023d25bfe2f170
+      - Jwt__Issuer=SmartDineAPI
+      - Jwt__Audience=SmartDineApp
+    ports:
+      - "5002:8080"
+    depends_on:
+      - postgres-db
+    networks:
+      - smartdine-network
+
+  order-api:
+    image: smartdine-order-api:latest
+    container_name: order-api
+    build:
+      context: ./BE
+      dockerfile: docker/Order.Dockerfile
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ConnectionStrings__DefaultConnection=Host=postgres-db;Port=5432;Database=smartdine;Username=postgres;Password=12345
+      - Jwt__SecretKey=f14cc5eb24eb6a57d5d36b3f6a30d58c9144445afa2d7f221f023d25bfe2f170
+      - Jwt__Issuer=SmartDineAPI
+      - Jwt__Audience=SmartDineApp
+    ports:
+      - "5003:8080"
+    depends_on:
+      - postgres-db
+    networks:
+      - smartdine-network
+
+  table-api:
+    image: smartdine-table-api:latest
+    container_name: table-api
+    build:
+      context: ./BE
+      dockerfile: docker/Table.Dockerfile
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ConnectionStrings__DefaultConnection=Host=postgres-db;Port=5432;Database=smartdine;Username=postgres;Password=12345
+      - Jwt__SecretKey=f14cc5eb24eb6a57d5d36b3f6a30d58c9144445afa2d7f221f023d25bfe2f170
+      - Jwt__Issuer=SmartDineAPI
+      - Jwt__Audience=SmartDineApp
+    ports:
+      - "5004:8080"
+    depends_on:
+      - postgres-db
+    networks:
+      - smartdine-network
+
+  ai-api:
+    image: smartdine-ai-api:latest
+    container_name: ai-api
+    build:
+      context: ./BE
+      dockerfile: docker/AI.Dockerfile
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - Jwt__SecretKey=f14cc5eb24eb6a57d5d36b3f6a30d58c9144445afa2d7f221f023d25bfe2f170
+      - Jwt__Issuer=SmartDineAPI
+      - Jwt__Audience=SmartDineApp
+      - Services__Ollama=http://ollama-service:11434
+      - Services__OllamaModel=qwen2.5:1.5b
+      - Services__TableApi=http://table-api:8080
+      - Services__MenuApi=http://menu-api:8080
+    ports:
+      - "5005:8080"
+    depends_on:
+      - ollama
+      - table-api
+      - menu-api
+    networks:
+      - smartdine-network
+
+  gateway:
+    image: smartdine-gateway:latest
+    container_name: gateway-api
+    build:
+      context: ./BE
+      dockerfile: docker/Gateway.Dockerfile
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ReverseProxy__Clusters__auth-cluster__Destinations__destination1__Address=http://identity-api:8080
+      - ReverseProxy__Clusters__menu-cluster__Destinations__destination1__Address=http://menu-api:8080
+      - ReverseProxy__Clusters__orders-cluster__Destinations__destination1__Address=http://order-api:8080
+      - ReverseProxy__Clusters__tables-cluster__Destinations__destination1__Address=http://table-api:8080
+      - ReverseProxy__Clusters__ai-cluster__Destinations__destination1__Address=http://ai-api:8080
+    ports:
+      - "5000:8080"
+    depends_on:
+      - identity-api
+      - menu-api
+      - order-api
+      - table-api
+      - ai-api
+    networks:
+      - smartdine-network
+
+volumes:
+  postgres-data:
+  ollama-data:
+
+networks:
+  smartdine-network:
+    driver: bridge
