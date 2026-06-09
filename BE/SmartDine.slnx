@@ -1,4 +1,9 @@
 <Solution>
+  <Project Path="SmartDine.Gateway/SmartDine.Gateway.csproj" />
+  <Project Path="SmartDine.Identity.API/SmartDine.Identity.API.csproj" />
+  <Project Path="SmartDine.Menu.API/SmartDine.Menu.API.csproj" />
+  <Project Path="SmartDine.Order.API/SmartDine.Order.API.csproj" />
+  <Project Path="SmartDine.Table.API/SmartDine.Table.API.csproj" />
   <Project Path="SmartDine.API/SmartDine.API.csproj" />
   <Project Path="SmartDine.Application/SmartDine.Application.csproj" />
   <Project Path="SmartDine.Domain/SmartDine.Domain.csproj" />

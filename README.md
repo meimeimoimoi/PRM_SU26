@@ -1,6 +1,6 @@
 # SmartDine - Hệ thống Quản lý và Đặt món thông minh
 
-Hệ thống **SmartDine** bao gồm Backend (Clean Architecture .NET Core), Web Dashboard dành cho Admin/Quản lý (React/Vite) và Ứng dụng Di động dành cho Khách hàng (Flutter).
+Hệ thống **SmartDine** bao gồm Backend (Microservices Architecture .NET Core + API Gateway YARP), Web Dashboard dành cho Admin/Quản lý (React/Vite) và Ứng dụng Di động dành cho Khách hàng (Flutter).
 
 ---
 
@@ -8,12 +8,18 @@ Hệ thống **SmartDine** bao gồm Backend (Clean Architecture .NET Core), Web
 
 ```text
 PRM_SU26/
-├── BE/                           # Backend (ASP.NET Core 10.0 Web API)
-│   ├── SmartDine.API             # API Controllers, Hubs (Realtime) & Middlewares
-│   ├── SmartDine.Application     # Application Logic, Interfaces & DTOs
-│   ├── SmartDine.Domain          # Entities & Domain Models
-│   ├── SmartDine.Infrastructure  # Database (EF Core / PostgreSQL) & Security
-│   └── SmartDine.slnx            # Solution File
+├── BE/                           # Backend (ASP.NET Core 10.0 Microservices)
+│   ├── SmartDine.Gateway         # API Gateway (YARP Reverse Proxy - Port 5000)
+│   ├── SmartDine.Identity.API    # Auth & Customer Identity Service (Port 5001)
+│   ├── SmartDine.Menu.API        # Menu Catalog Service (Port 5002)
+│   ├── SmartDine.Order.API       # Order & Realtime Hub Service (Port 5003)
+│   ├── SmartDine.Table.API       # Dining Table & Session Service (Port 5004)
+│   ├── SmartDine.Application     # Application Logic, Interfaces & DTOs (Shared)
+│   ├── SmartDine.Domain          # Entities & Domain Models (Shared)
+│   ├── SmartDine.Infrastructure  # Database & Security Persistence (Shared)
+│   ├── SmartDine.Tests           # Test suite
+│   ├── SmartDine.slnx            # Solution File (Visual Studio 2022 Format)
+│   └── run-services.bat          # File chạy đồng thời tất cả các service
 └── FE/                           # Frontend
     ├── web-dashboard             # Admin/Staff Dashboard (React + Vite + Ant Design)
     └── customer-mobile           # Customer Mobile App (Flutter + Riverpod)
@@ -35,32 +41,47 @@ Trước khi bắt đầu, hãy đảm bảo máy tính của bạn đã cài đ
 
 ### 1. Cấu hình Cơ sở dữ liệu (Database Setup)
 1. Đảm bảo PostgreSQL Server của bạn đang chạy.
-2. Mở file [appsettings.Development.json]và cập nhật thông tin kết nối PostgreSQL tại mục `ConnectionStrings:DefaultConnection` (nếu cần thiết):
+2. Cập nhật chuỗi kết nối PostgreSQL tại mục `ConnectionStrings:DefaultConnection` trong tệp `appsettings.Development.json` của các dự án API (nếu cần thiết):
    ```json
    "ConnectionStrings": {
      "DefaultConnection": "Host=localhost;Port=5432;Database=smartdine;Username=postgres;Password=YOUR_PASSWORD"
    }
    ```
-3. Cài đặt công cụ Entity Framework Core C
-LI (nếu chưa cài):
+3. Cài đặt công cụ Entity Framework Core CLI (nếu chưa cài):
    ```bash
    dotnet tool install --global dotnet-ef
    ```
-4. Chạy câu lệnh migration để tự động tạo cơ sở dữ liệu và bảng:
+4. Chạy câu lệnh migration thông qua dự án Identity để tự động tạo cơ sở dữ liệu và bảng:
    ```bash
-   # Di chuyển vào thư mục gốc của project (nơi chứa thư mục BE)
-   dotnet ef database update --project BE/SmartDine.Infrastructure --startup-project BE/SmartDine.API
+   dotnet ef database update --project BE/SmartDine.Infrastructure --startup-project BE/SmartDine.Identity.API
    ```
 
 ---
 
-### 2. Khởi chạy Backend (ASP.NET Core Web API)
-Chạy API ở chế độ Development:
-```bash
-cd BE/SmartDine.API
-dotnet run
-```
-*Sau khi chạy, API Swagger và tài liệu API sẽ khả dụng tại địa chỉ (mặc định): `http://localhost:5000/swagger` hoặc `https://localhost:5001/swagger` (hoặc cổng cấu hình trong project).*
+### 2. Khởi chạy Backend (Microservices)
+
+Để chạy hệ thống microservices cùng lúc, sử dụng một trong hai cách:
+
+*   **Cách 1: Sử dụng tập lệnh `run-services.bat` (Khuyên dùng trên Windows)**
+    Chạy tệp batch tại thư mục `BE/`:
+    ```bash
+    cd BE
+    run-services.bat
+    ```
+    Script này sẽ tự động mở 5 cửa sổ console độc lập khởi chạy 4 service và 1 API Gateway.
+
+*   **Cách 2: Cấu hình trên Visual Studio 2022**
+    1. Nhấp chuột phải vào **Solution 'SmartDine'** $\rightarrow$ chọn **Properties**.
+    2. Chọn **Startup Project** $\rightarrow$ **Multiple startup projects**.
+    3. Chọn Action là **Start** cho cả 5 dự án: `Gateway`, `Identity.API`, `Menu.API`, `Order.API`, và `Table.API`.
+    4. Nhấn **Start (F5)**.
+
+*Các cổng dịch vụ hoạt động ở chế độ Local:*
+*   **Gateway**: `http://localhost:5000` (Địa chỉ giao tiếp chính của Frontend)
+*   **Identity API**: `http://localhost:5001`
+*   **Menu API**: `http://localhost:5002`
+*   **Order API**: `http://localhost:5003` (Chứa SignalR Hub tại `/hubs/orders`)
+*   **Table API**: `http://localhost:5004`
 
 ---
 
@@ -76,7 +97,7 @@ npm install
 # Khởi chạy dev server
 npm run dev
 ```
-*Tru cập ứng dụng tại: `http://localhost:5173` (hoặc cổng được hiển thị trong terminal).*
+*Truy cập ứng dụng tại: `http://localhost:5173`.*
 
 ---
 
@@ -99,4 +120,4 @@ flutter run
 ---
 
 ## Thông tin Bảo mật & Môi trường
-- **JWT Authentication**: Cấu hình khóa bí mật tại `Jwt:SecretKey` trong [appsettings.json](file:///e:/FPTUer/Sen8/PRM393/WEB/PRM_SU26/BE/SmartDine.API/appsettings.json). Vui lòng đổi khóa này khi triển khai thực tế (Production).
+- **JWT Authentication**: Cấu hình khóa bí mật tại `Jwt:SecretKey` trong các tệp `appsettings.json` của các dự án API. Vui lòng đổi khóa này khi triển khai thực tế (Production).
