@@ -1,69 +1,47 @@
-import { Button, Space, Tooltip, Typography } from 'antd';
+import { Avatar, Button, Space, Tooltip, Typography } from 'antd';
 import {
   Download,
-  FileDown,
   FolderOpen,
+  HelpCircle,
   Map,
   Navigation,
-  Redo2,
-  RotateCcw,
+  Route,
   Save,
   Settings,
 } from 'lucide-react';
 
-interface ToolbarProps {
-  onExportPGM: () => void;
-  onExportWaypoints: () => void;
-  onValidateNavigation: () => void;
-  onGeneratePath: () => void;
-}
-
-const iconSize = 17;
-
-export function Toolbar({
-  onExportPGM,
-  onExportWaypoints,
-  onValidateNavigation,
-  onGeneratePath,
-}: ToolbarProps) {
+export function Toolbar() {
   return (
-    <div className="flex h-16 items-center justify-between gap-4 border-b border-slate-200 bg-white px-5 shadow-sm">
-      <div className="flex min-w-0 items-center gap-3">
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#1677ff] text-white">
+    <div className="top-toolbar">
+      <div className="toolbar-brand">
+        <div className="toolbar-logo">
           <Map size={20} />
         </div>
-        <Typography.Title level={4} className="!mb-0 whitespace-nowrap !text-slate-900">
+        <Typography.Title level={4} className="toolbar-title">
           Restaurant Map Designer
         </Typography.Title>
       </div>
 
-      <Space size={8} wrap className="min-w-0 justify-center">
-        <Button icon={<Save size={iconSize} />}>Save</Button>
-        <Button icon={<FolderOpen size={iconSize} />}>Load</Button>
-        <Button icon={<Download size={iconSize} />} onClick={onExportPGM}>
-          Export PGM
-        </Button>
-        <Button icon={<FileDown size={iconSize} />} onClick={onExportWaypoints}>
-          Export Waypoints
-        </Button>
-        <Button icon={<Navigation size={iconSize} />} onClick={onValidateNavigation}>
+      <Space size={8} wrap className="toolbar-actions">
+        <Button icon={<Save size={16} />}>Save</Button>
+        <Button icon={<FolderOpen size={16} />}>Load</Button>
+        <Button icon={<Download size={16} />}>Export</Button>
+        <Button type="primary" icon={<Navigation size={16} />}>
           Validate Navigation
         </Button>
-        <Button type="primary" icon={<RotateCcw size={iconSize} />} onClick={onGeneratePath}>
+        <Button type="primary" icon={<Route size={16} />}>
           Generate Path
         </Button>
       </Space>
 
-      <Space size={6}>
-        <Tooltip title="Undo">
-          <Button aria-label="Undo" icon={<RotateCcw size={iconSize} />} />
-        </Tooltip>
-        <Tooltip title="Redo">
-          <Button aria-label="Redo" icon={<Redo2 size={iconSize} />} />
-        </Tooltip>
+      <Space size={8} className="toolbar-meta">
         <Tooltip title="Settings">
-          <Button aria-label="Settings" icon={<Settings size={iconSize} />} />
+          <Button aria-label="Settings" icon={<Settings size={17} />} />
         </Tooltip>
+        <Tooltip title="Help">
+          <Button aria-label="Help" icon={<HelpCircle size={17} />} />
+        </Tooltip>
+        <Avatar style={{ backgroundColor: '#1677ff' }}>RM</Avatar>
       </Space>
     </div>
   );

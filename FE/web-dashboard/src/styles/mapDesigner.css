@@ -1,0 +1,258 @@
+.restaurant-map-designer {
+  min-height: 100vh;
+  background: #f5f5f5;
+}
+
+.app-header {
+  height: 64px;
+  padding: 0;
+  background: #ffffff;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.top-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  height: 64px;
+  padding: 0 20px;
+}
+
+.toolbar-brand,
+.toolbar-actions,
+.toolbar-meta {
+  display: flex;
+  align-items: center;
+}
+
+.toolbar-brand {
+  min-width: 260px;
+  gap: 12px;
+}
+
+.toolbar-logo {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  color: #ffffff;
+  place-items: center;
+  background: #1677ff;
+  border-radius: 8px;
+}
+
+.toolbar-title {
+  margin: 0 !important;
+  color: #111827 !important;
+  white-space: nowrap;
+}
+
+.app-body {
+  min-height: calc(100vh - 64px);
+  background: #f5f5f5;
+}
+
+.app-content {
+  min-width: 0;
+  padding: 20px;
+}
+
+.map-canvas-card {
+  position: relative;
+  height: calc(100vh - 104px);
+  min-height: 620px;
+  overflow: hidden;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+}
+
+.map-canvas-grid {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 620px;
+  overflow: hidden;
+  background-color: #ffffff;
+  background-image:
+    linear-gradient(#e5e7eb 1px, transparent 1px),
+    linear-gradient(90deg, #e5e7eb 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+
+.floating-toolbox {
+  position: absolute;
+  top: 72px;
+  left: 16px;
+  z-index: 10;
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+}
+
+.canvas-status {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  z-index: 9;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+}
+
+.canvas-path-placeholder {
+  position: absolute;
+  top: 178px;
+  left: 350px;
+  width: 280px;
+  height: 230px;
+  pointer-events: none;
+  border-top: 4px dashed #1677ff;
+  border-right: 4px dashed #1677ff;
+  opacity: 0.55;
+}
+
+.canvas-zoom-placeholder {
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  padding: 8px 12px;
+  font-size: 12px;
+  color: #475569;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+}
+
+.map-object {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px;
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.2;
+  color: #1f2937;
+  cursor: pointer;
+  border: 2px solid #94a3b8;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12);
+}
+
+.map-object-selected {
+  outline: 2px solid #1677ff;
+  outline-offset: 3px;
+}
+
+.map-object-table {
+  color: #1d4ed8;
+  background: #eff6ff;
+  border-color: #3b82f6;
+}
+
+.map-object-kitchen {
+  color: #92400e;
+  background: #fffbeb;
+  border-color: #f59e0b;
+}
+
+.map-object-restricted {
+  color: #be123c;
+  background: #fff1f2;
+  border-color: #f43f5e;
+}
+
+.map-object-charging {
+  color: #6d28d9;
+  background: #f5f3ff;
+  border-color: #8b5cf6;
+}
+
+.map-object-robotStart {
+  color: #3730a3;
+  background: #eef2ff;
+  border-color: #6366f1;
+}
+
+.property-panel {
+  padding: 20px 20px 20px 0;
+  background: #f5f5f5 !important;
+}
+
+.project-card,
+.panel-card {
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+}
+
+.project-card {
+  margin-bottom: 12px;
+}
+
+.project-card h5 {
+  margin: 4px 0;
+}
+
+.property-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.full-width-control {
+  width: 100%;
+}
+
+.layer-list {
+  display: grid;
+  gap: 8px;
+}
+
+.layer-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 10px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+}
+
+.layer-row.active {
+  background: #e6f4ff;
+  border-color: #91caff;
+}
+
+@media (max-width: 960px) {
+  .app-body {
+    display: block;
+  }
+
+  .property-panel {
+    width: auto !important;
+    max-width: none !important;
+    padding: 0 20px 20px;
+  }
+
+  .top-toolbar {
+    align-items: flex-start;
+    height: auto;
+    min-height: 64px;
+    padding: 12px 16px;
+  }
+
+  .toolbar-actions {
+    justify-content: center;
+  }
+}

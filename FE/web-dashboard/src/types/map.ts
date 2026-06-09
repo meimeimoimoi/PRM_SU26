@@ -1,4 +1,4 @@
-export type ObjectType =
+export type MapObjectType =
   | 'table'
   | 'chair'
   | 'wall'
@@ -7,15 +7,21 @@ export type ObjectType =
   | 'charging'
   | 'restricted'
   | 'door'
-  | 'robot';
+  | 'robotStart';
+
+export type MapTool =
+  | 'select'
+  | 'pan'
+  | MapObjectType;
 
 export interface MapObject {
   id: string;
   name: string;
-  type: ObjectType;
+  type: MapObjectType;
   x: number;
   y: number;
   width: number;
   height: number;
   rotation: number;
+  tableNumber?: number;
 }

@@ -1,52 +1,57 @@
-import { Card } from 'antd';
+import { Button, Tooltip } from 'antd';
 import {
   Armchair,
   BatteryCharging,
   CircleDot,
   DoorOpen,
+  Hand,
   MapPin,
-  Minus,
+  MousePointer2,
+  Move,
   Navigation,
   Square,
   Utensils,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import type { ObjectType } from '@/types/map';
+import type { MapTool } from '@/types/map';
+import { useMapStore } from '@/store/mapStore';
 
-interface ToolboxItem {
-  type: ObjectType;
+interface ToolDefinition {
+  tool: MapTool;
   label: string;
   Icon: LucideIcon;
 }
 
-const toolboxItems: ToolboxItem[] = [
-  { type: 'table', label: 'Table', Icon: Square },
-  { type: 'chair', label: 'Chair', Icon: Armchair },
-  { type: 'delivery', label: 'Delivery Point', Icon: MapPin },
-  { type: 'kitchen', label: 'Kitchen', Icon: Utensils },
-  { type: 'charging', label: 'Charging Station', Icon: BatteryCharging },
-  { type: 'wall', label: 'Wall', Icon: Minus },
-  { type: 'restricted', label: 'Restricted Area', Icon: CircleDot },
-  { type: 'door', label: 'Door', Icon: DoorOpen },
-  { type: 'robot', label: 'Robot Start Position', Icon: Navigation },
+const tools: ToolDefinition[] = [
+  { tool: 'select', label: 'Select', Icon: MousePointer2 },
+  { tool: 'pan', label: 'Pan', Icon: Hand },
+  { tool: 'table', label: 'Table', Icon: Square },
+  { tool: 'chair', label: 'Chair', Icon: Armchair },
+  { tool: 'delivery', label: 'Delivery Point', Icon: MapPin },
+  { tool: 'kitchen', label: 'Kitchen', Icon: Utensils },
+  { tool: 'charging', label: 'Charging Station', Icon: BatteryCharging },
+  { tool: 'wall', label: 'Wall', Icon: Move },
+  { tool: 'restricted', label: 'Restricted Area', Icon: CircleDot },
+  { tool: 'door', label: 'Door', Icon: DoorOpen },
+  { tool: 'robotStart', label: 'Start Position', Icon: Navigation },
 ];
 
 export function Toolbox() {
+  const selectedTool = useMapStore((state) => state.selectedTool);
+  const setSelectedTool = useMapStore((state) => state.setSelectedTool);
+
   return (
-    <Card title="Object Toolbox" className="shadow-sm" styles={{ body: { padding: 12 } }}>
-      <div className="grid grid-cols-1 gap-2">
-        {toolboxItems.map(({ type, label, Icon }) => (
-          <button
-            key={type}
-            draggable
-            type="button"
-            className="flex h-11 items-center gap-3 rounded-lg border border-slate-200 bg-white px-3 text-left text-sm font-medium text-slate-700 transition hover:border-[#1677ff] hover:bg-blue-50 hover:text-[#1677ff]"
-          >
-            <Icon size={18} />
-            <span>{label}</span>
-          </button>
-        ))}
-      </div>
-    </Card>
+    <div className="floating-toolbox" aria-label="Map tools">
+      {tools.map(({ tool, label, Icon }) => (
+        <Tooltip key={tool} title={label} placement="right">
+          <Button
+            aria-label={label}
+            type={selectedTool === tool ? 'primary' : 'default'}
+            icon={<Icon size={18} />}
+            onClick={() => setSelectedTool(tool)}
+          />
+        </Tooltip>
+      ))}
+    </div>
   );
 }

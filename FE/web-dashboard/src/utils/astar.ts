@@ -9,19 +9,16 @@ export interface RouteValidationResult {
 }
 
 export class AStarService {
-  findPath(start: GridPoint, end: GridPoint): GridPoint[] {
-    return [
-      start,
-      { x: (start.x + end.x) / 2, y: start.y },
-      { x: (start.x + end.x) / 2, y: end.y },
-      end,
-    ];
+  findPath(): GridPoint[] {
+    console.log('TODO: calculate A* path for robot navigation.');
+    return [];
   }
 
   validateRoute(): RouteValidationResult {
+    console.log('TODO: validate robot route against walls and restricted zones.');
     return {
       isValid: true,
-      warnings: [],
+      warnings: ['TODO_ROUTE_VALIDATION'],
     };
   }
 }

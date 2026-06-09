@@ -1,14 +1,15 @@
 import { create } from 'zustand';
-import type { MapObject } from '@/types/map';
+import type { MapObject, MapTool } from '@/types/map';
 
 interface MapState {
+  selectedTool: MapTool;
+  selectedObjectId: string | null;
   objects: MapObject[];
-  selectedObject: MapObject | null;
+  setSelectedTool: (tool: MapTool) => void;
+  setSelectedObject: (id: string | null) => void;
   addObject: (object: MapObject) => void;
   updateObject: (id: string, updates: Partial<MapObject>) => void;
   removeObject: (id: string) => void;
-  selectObject: (id: string) => void;
-  clearSelection: () => void;
 }
 
 const initialObjects: MapObject[] = [
@@ -31,6 +32,7 @@ const initialObjects: MapObject[] = [
     width: 92,
     height: 92,
     rotation: 0,
+    tableNumber: 1,
   },
   {
     id: 'table-2',
@@ -41,16 +43,18 @@ const initialObjects: MapObject[] = [
     width: 92,
     height: 92,
     rotation: 0,
+    tableNumber: 2,
   },
   {
-    id: 'table-3',
-    name: 'Table 03',
+    id: 'table-4',
+    name: 'Table 04',
     type: 'table',
     x: 470,
     y: 300,
     width: 92,
     height: 92,
-    rotation: 0,
+    rotation: 45,
+    tableNumber: 4,
   },
   {
     id: 'restricted-1',
@@ -65,7 +69,7 @@ const initialObjects: MapObject[] = [
   {
     id: 'robot-1',
     name: 'Robot Start Position',
-    type: 'robot',
+    type: 'robotStart',
     x: 315,
     y: 420,
     width: 64,
@@ -84,36 +88,26 @@ const initialObjects: MapObject[] = [
   },
 ];
 
-export const useMapStore = create<MapState>((set, get) => ({
+export const useMapStore = create<MapState>((set) => ({
+  selectedTool: 'select',
+  selectedObjectId: 'table-4',
   objects: initialObjects,
-  selectedObject: initialObjects[1],
+  setSelectedTool: (tool) => set({ selectedTool: tool }),
+  setSelectedObject: (id) => set({ selectedObjectId: id }),
   addObject: (object) =>
     set((state) => ({
       objects: [...state.objects, object],
-      selectedObject: object,
+      selectedObjectId: object.id,
     })),
   updateObject: (id, updates) =>
-    set((state) => {
-      const objects = state.objects.map((object) =>
+    set((state) => ({
+      objects: state.objects.map((object) =>
         object.id === id ? { ...object, ...updates } : object,
-      );
-
-      return {
-        objects,
-        selectedObject:
-          state.selectedObject?.id === id
-            ? objects.find((object) => object.id === id) ?? null
-            : state.selectedObject,
-      };
-    }),
+      ),
+    })),
   removeObject: (id) =>
     set((state) => ({
       objects: state.objects.filter((object) => object.id !== id),
-      selectedObject: state.selectedObject?.id === id ? null : state.selectedObject,
+      selectedObjectId: state.selectedObjectId === id ? null : state.selectedObjectId,
     })),
-  selectObject: (id) =>
-    set({
-      selectedObject: get().objects.find((object) => object.id === id) ?? null,
-    }),
-  clearSelection: () => set({ selectedObject: null }),
 }));
