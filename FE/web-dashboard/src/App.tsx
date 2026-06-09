@@ -1,47 +1,87 @@
-import React from 'react';
-import { BrowserRouter, Routes, Route, Link } from 'react-router-dom';
-import { Layout, Menu, Typography } from 'antd';
+import { Layout, message, Tabs } from 'antd';
+import { MapCanvas } from '@/components/components_draw_map/MapCanvas';
+import { PropertyPanel } from '@/components/components_draw_map/PropertyPanel';
+import { Toolbar } from '@/components/components_draw_map/Toolbar';
+import { Toolbox } from '@/components/components_draw_map/Toolbox';
+import { useMapStore } from '@/store/mapStore';
+import { astarService } from '@/utils/astar';
+import { exportPGM } from '@/utils/exportPGM';
+import { exportWaypoints } from '@/utils/exportWaypoints';
 
-const { Header, Content, Footer } = Layout;
-const { Title } = Typography;
+const { Header, Content, Sider } = Layout;
 
-const Home: React.FC = () => (
-  <div style={{ padding: 24, minHeight: 380, background: '#fff', color: '#333' }}>
-    <Title level={2}>Chào mừng tới SmartDine Management Dashboard</Title>
-    <p>Hệ thống quản lý thời gian thực cho nhà hàng của bạn.</p>
-  </div>
-);
+function App() {
+  const objects = useMapStore((state) => state.objects);
+  const selectedObject = useMapStore((state) => state.selectedObject);
+  const [messageApi, contextHolder] = message.useMessage();
 
-const App: React.FC = () => {
+  const handleExportPGM = () => {
+    const pgm = exportPGM(objects);
+    messageApi.success(`PGM export generated (${pgm.length.toLocaleString()} characters)`);
+  };
+
+  const handleExportWaypoints = () => {
+    const waypoints = exportWaypoints(objects);
+    messageApi.success(`Waypoint export generated (${waypoints.split('\n').length} entries)`);
+  };
+
+  const handleValidateNavigation = () => {
+    const result = astarService.validateRoute();
+    messageApi.success(result.isValid ? 'Navigation route is valid' : 'Navigation warnings found');
+  };
+
+  const handleGeneratePath = () => {
+    const path = astarService.findPath({ x: 347, y: 452 }, { x: 426, y: 166 });
+    messageApi.success(`Generated mocked A* path with ${path.length} points`);
+  };
+
   return (
-    <BrowserRouter>
-      <Layout className="layout" style={{ minWidth: '100vw', minHeight: '100vh' }}>
-        <Header style={{ display: 'flex', alignItems: 'center' }}>
-          <div className="demo-logo" style={{ color: '#fff', marginRight: 24, fontWeight: 'bold' }}>
-            SMARTDINE ADMIN
+    <Layout className="min-h-screen bg-[#f5f5f5]">
+      {contextHolder}
+      <Header className="!h-16 !bg-transparent !p-0">
+        <Toolbar
+          onExportPGM={handleExportPGM}
+          onExportWaypoints={handleExportWaypoints}
+          onValidateNavigation={handleValidateNavigation}
+          onGeneratePath={handleGeneratePath}
+        />
+      </Header>
+
+      <Layout className="bg-[#f5f5f5]">
+        <Content className="p-4 lg:p-6">
+          <div className="grid min-h-[calc(100vh-112px)] grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
+            <main className="min-w-0">
+              <MapCanvas />
+            </main>
+
+            <Sider
+              width={340}
+              breakpoint="xl"
+              collapsedWidth={0}
+              className="!max-w-none !bg-transparent"
+              theme="light"
+            >
+              <Tabs
+                defaultActiveKey="toolbox"
+                items={[
+                  {
+                    key: 'toolbox',
+                    label: 'Toolbox',
+                    children: <Toolbox />,
+                  },
+                  {
+                    key: 'properties',
+                    label: 'Properties',
+                    children: <PropertyPanel selectedObject={selectedObject} />,
+                  },
+                ]}
+              />
+            </Sider>
           </div>
-          <Menu
-            theme="dark"
-            mode="horizontal"
-            defaultSelectedKeys={['1']}
-            items={[
-              { key: '1', label: <Link to="/">Trang chủ</Link> },
-              { key: '2', label: <Link to="/orders">Đơn hàng</Link> },
-              { key: '3', label: <Link to="/menu">Thực đơn</Link> },
-            ]}
-          />
-        </Header>
-        <Content style={{ padding: '0 50px', marginTop: 24 }}>
-          <Routes>
-            <Route path="/" element={<Home />} />
-            <Route path="/orders" element={<div style={{ color: '#fff' }}>Đơn hàng (Real-time Queue)</div>} />
-            <Route path="/menu" element={<div style={{ color: '#fff' }}>Quản lý thực đơn (Menu Items)</div>} />
-          </Routes>
         </Content>
-        <Footer style={{ textAlign: 'center' }}>SmartDine ©2026 Created by DeepMind Antigravity</Footer>
       </Layout>
-    </BrowserRouter>
+    </Layout>
   );
-};
+}
 
 export default App;
