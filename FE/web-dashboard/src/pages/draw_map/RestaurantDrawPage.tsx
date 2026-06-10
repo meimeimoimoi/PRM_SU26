@@ -1,18 +1,42 @@
-import React from 'react';
-import { MapCanvas } from '@/components/components_draw_map/MapCanvas';
-import { Toolbar } from '@/components/components_draw_map/Toolbar';
-import { PropertyPanel } from '@/components/components_draw_map/PropertyPanel';
-import { Toolbox } from '@/components/components_draw_map/Toolbox';
+import React from "react";
+import { Layout } from "antd";
+
+import { Toolbar } from "@/components/components_draw_map/Toolbar";
+import { MapCanvas } from "@/components/components_draw_map/MapCanvas";
+import { PropertyPanel } from "@/components/components_draw_map/PropertyPanel";
+import "@/styles/mapDesigner.css";
+
+const { Content, Sider } = Layout;
 
 const RestaurantDrawPage: React.FC = () => {
   return (
-    <div className="restaurant-map-designer" style={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
+    <Layout style={{ height: "100vh", overflow: "hidden" }}>
       <Toolbar />
-      <div style={{ flex: 1, display: 'flex' }}>
-        <MapCanvas />
-        <PropertyPanel />
-      </div>
-    </div>
+
+      <Layout>
+        <Content
+          style={{
+            flex: 1,
+            position: "relative",
+            background: "#fafafa",
+            overflow: "hidden",
+          }}
+        >
+          <MapCanvas />
+        </Content>
+
+        <Sider
+          width={320}
+          theme="light"
+          style={{
+            borderLeft: "1px solid #e5e7eb",
+            background: "#f5f5f5",
+          }}
+        >
+          <PropertyPanel />
+        </Sider>
+      </Layout>
+    </Layout>
   );
 };
 

@@ -5,11 +5,13 @@ interface MapState {
   selectedTool: MapTool;
   selectedObjectId: string | null;
   objects: MapObject[];
+  zoom: number;
   setSelectedTool: (tool: MapTool) => void;
   setSelectedObject: (id: string | null) => void;
   addObject: (object: MapObject) => void;
   updateObject: (id: string, updates: Partial<MapObject>) => void;
   removeObject: (id: string) => void;
+  setZoom: (zoom: number) => void;
 }
 
 const initialObjects: MapObject[] = [
@@ -92,6 +94,7 @@ export const useMapStore = create<MapState>((set) => ({
   selectedTool: 'select',
   selectedObjectId: 'table-4',
   objects: initialObjects,
+  zoom: 1,
   setSelectedTool: (tool) => set({ selectedTool: tool }),
   setSelectedObject: (id) => set({ selectedObjectId: id }),
   addObject: (object) =>
@@ -101,13 +104,14 @@ export const useMapStore = create<MapState>((set) => ({
     })),
   updateObject: (id, updates) =>
     set((state) => ({
-      objects: state.objects.map((object) =>
-        object.id === id ? { ...object, ...updates } : object,
+      objects: state.objects.map((obj) =>
+        obj.id === id ? { ...obj, ...updates } : obj,
       ),
     })),
   removeObject: (id) =>
     set((state) => ({
-      objects: state.objects.filter((object) => object.id !== id),
+      objects: state.objects.filter((obj) => obj.id !== id),
       selectedObjectId: state.selectedObjectId === id ? null : state.selectedObjectId,
     })),
+  setZoom: (zoom) => set({ zoom }),
 }));

@@ -1,15 +1,8 @@
-.restaurant-map-designer {
-  min-height: 100vh;
-  background: #f5f5f5;
-}
+/* ============================================
+   Restaurant Map Designer — mapDesigner.css
+   ============================================ */
 
-.app-header {
-  height: 64px;
-  padding: 0;
-  background: #ffffff;
-  border-bottom: 1px solid #e5e7eb;
-}
-
+/* ---- Top Toolbar ---- */
 .top-toolbar {
   display: flex;
   align-items: center;
@@ -17,11 +10,14 @@
   gap: 16px;
   height: 64px;
   padding: 0 20px;
+  background: #ffffff;
+  border-bottom: 1px solid #e5e7eb;
 }
 
 .toolbar-brand,
 .toolbar-actions,
-.toolbar-meta {
+.toolbar-meta,
+.toolbar-zoom {
   display: flex;
   align-items: center;
 }
@@ -47,38 +43,56 @@
   white-space: nowrap;
 }
 
-.app-body {
-  min-height: calc(100vh - 64px);
-  background: #f5f5f5;
+.toolbar-zoom {
+  gap: 4px;
 }
 
-.app-content {
-  min-width: 0;
-  padding: 20px;
-}
-
+/* ---- Canvas Card ---- */
 .map-canvas-card {
-  position: relative;
-  height: calc(100vh - 104px);
-  min-height: 620px;
-  overflow: hidden;
-  border-radius: 8px;
-  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
-}
-
-.map-canvas-grid {
   position: relative;
   width: 100%;
   height: 100%;
-  min-height: 620px;
   overflow: hidden;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+}
+
+/* ---- Canvas Viewport (captures pointer events) ---- */
+.map-canvas-viewport {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  cursor: default;
+}
+
+.canvas-cursor-grab {
+  cursor: grab;
+}
+
+.canvas-cursor-grab:active {
+  cursor: grabbing;
+}
+
+.canvas-cursor-crosshair {
+  cursor: crosshair;
+}
+
+/* ---- Grid Background ---- */
+.map-canvas-grid {
+  position: relative;
+  width: 3000px;
+  height: 2000px;
   background-color: #ffffff;
   background-image:
     linear-gradient(#e5e7eb 1px, transparent 1px),
     linear-gradient(90deg, #e5e7eb 1px, transparent 1px);
   background-size: 20px 20px;
+  will-change: transform;
 }
 
+/* ---- Floating Toolbox ---- */
 .floating-toolbox {
   position: absolute;
   top: 72px;
@@ -93,6 +107,7 @@
   box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
 }
 
+/* ---- Canvas Status Bar ---- */
 .canvas-status {
   position: absolute;
   top: 16px;
@@ -108,30 +123,7 @@
   box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
 }
 
-.canvas-path-placeholder {
-  position: absolute;
-  top: 178px;
-  left: 350px;
-  width: 280px;
-  height: 230px;
-  pointer-events: none;
-  border-top: 4px dashed #1677ff;
-  border-right: 4px dashed #1677ff;
-  opacity: 0.55;
-}
-
-.canvas-zoom-placeholder {
-  position: absolute;
-  right: 16px;
-  bottom: 16px;
-  padding: 8px 12px;
-  font-size: 12px;
-  color: #475569;
-  background: #ffffff;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-}
-
+/* ---- Map Objects (common) ---- */
 .map-object {
   position: absolute;
   display: flex;
@@ -148,17 +140,42 @@
   border: 2px solid #94a3b8;
   border-radius: 8px;
   box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12);
+  transition: box-shadow 0.15s, outline-color 0.15s;
+}
+
+.map-object:hover {
+  box-shadow: 0 2px 8px rgba(22, 119, 255, 0.18);
 }
 
 .map-object-selected {
   outline: 2px solid #1677ff;
   outline-offset: 3px;
+  box-shadow: 0 0 0 4px rgba(22, 119, 255, 0.12);
 }
 
+/* ---- Object Type Styles ---- */
 .map-object-table {
   color: #1d4ed8;
   background: #eff6ff;
   border-color: #3b82f6;
+}
+
+.map-object-wall {
+  flex-direction: row;
+  gap: 0;
+  padding: 0;
+  font-size: 10px;
+  color: #374151;
+  background: #4b5563;
+  border-color: #374151;
+  border-radius: 3px;
+}
+
+.map-object-wall span {
+  color: #ffffff;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
 }
 
 .map-object-kitchen {
@@ -185,9 +202,11 @@
   border-color: #6366f1;
 }
 
-.property-panel {
-  padding: 20px 20px 20px 0;
-  background: #f5f5f5 !important;
+/* ---- Property Panel ---- */
+.property-panel-inner {
+  padding: 20px;
+  height: 100%;
+  overflow-y: auto;
 }
 
 .project-card,
@@ -227,6 +246,11 @@
   padding: 8px 10px;
   border: 1px solid #e5e7eb;
   border-radius: 8px;
+  transition: background 0.15s;
+}
+
+.layer-row:hover {
+  background: #f9fafb;
 }
 
 .layer-row.active {
@@ -234,19 +258,10 @@
   border-color: #91caff;
 }
 
+/* ---- Responsive ---- */
 @media (max-width: 960px) {
-  .app-body {
-    display: block;
-  }
-
-  .property-panel {
-    width: auto !important;
-    max-width: none !important;
-    padding: 0 20px 20px;
-  }
-
   .top-toolbar {
-    align-items: flex-start;
+    flex-wrap: wrap;
     height: auto;
     min-height: 64px;
     padding: 12px 16px;
