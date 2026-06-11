@@ -17,17 +17,10 @@ import {
   EyeOutlined 
 } from '@ant-design/icons';
 
+import { Transaction } from '@/types/transaction';
+
 const { Option } = Select;
 const { RangePicker } = DatePicker;
-
-interface Transaction {
-  id: string; // #ORD-8921
-  dateTime: string;
-  tableNo: string;
-  totalAmount: number;
-  paymentMethod: string;
-  status: 'Completed' | 'Cancelled' | 'Refunded';
-}
 
 const TransactionsPage: React.FC = () => {
   const [searchText, setSearchText] = useState<string>('');

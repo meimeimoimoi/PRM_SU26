@@ -21,16 +21,9 @@ import {
   ReloadOutlined 
 } from '@ant-design/icons';
 
-const { Option } = Select;
+import { StaffMember } from '@/types/staff';
 
-interface StaffMember {
-  id: string; // S-101
-  fullName: string;
-  email: string;
-  phone: string;
-  role: 'Admin' | 'Chef' | 'Staff';
-  isActive: boolean;
-}
+const { Option } = Select;
 
 const StaffManagementPage: React.FC = () => {
   const [searchText, setSearchText] = useState<string>('');
