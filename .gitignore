@@ -3,6 +3,9 @@
 # ==========================================
 [Bb]in/
 [Oo]bj/
+
+# RSA private key - never commit
+BE/SmartDine.API/keys/private.pem
 *.user
 *.userosscache
 *.sln.docstates
