@@ -35,3 +35,31 @@ public class UserInfoResponse
     public string Role { get; set; } = string.Empty;
     public string? AvatarUrl { get; set; }
 }
+
+public class ChangePasswordRequest
+{
+    public string CurrentPassword { get; set; } = string.Empty;
+    public string NewPassword { get; set; } = string.Empty;
+    public string ConfirmNewPassword { get; set; } = string.Empty;
+}
+
+public class ForgotPasswordRequest
+{
+    public string Email { get; set; } = string.Empty;
+}
+
+public class ForgotPasswordResponse
+{
+    public string Message { get; set; } = string.Empty;
+    /// <summary>
+    /// Trong production sẽ gửi qua email, ở đây trả về để test.
+    /// </summary>
+    public string ResetToken { get; set; } = string.Empty;
+}
+
+public class ResetPasswordRequest
+{
+    public string ResetToken { get; set; } = string.Empty;
+    public string NewPassword { get; set; } = string.Empty;
+    public string ConfirmNewPassword { get; set; } = string.Empty;
+}

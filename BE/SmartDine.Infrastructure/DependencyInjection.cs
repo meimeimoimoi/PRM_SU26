@@ -41,7 +41,8 @@ public static class DependencyInjection
         services.AddScoped<IReviewRepository, ReviewRepository>();
 
         // Security
-        services.AddScoped<IJwtTokenService, JwtTokenService>();
+        services.AddSingleton<IRsaKeyProvider, RsaKeyProvider>();
+        services.AddSingleton<IJwtTokenService, JwtTokenService>();
         services.AddScoped<IPasswordHasher, BCryptPasswordHasher>();
 
         // Seeder
