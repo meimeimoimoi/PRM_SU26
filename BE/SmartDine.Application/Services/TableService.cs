@@ -1,5 +1,6 @@
 using SmartDine.Application.DTOs.Tables;
 using SmartDine.Domain.Entities;
+using SmartDine.Domain.Enums;
 using SmartDine.Domain.Exceptions;
 using SmartDine.Domain.Interfaces;
 using System.Collections.Generic;
@@ -38,7 +39,7 @@ public class TableService
         {
             TableNumber = request.TableNumber,
             Capacity = request.Capacity,
-            Status = "AVAILABLE",
+            Status = TableStatus.AVAILABLE.ToString(),
             QrCode = $"smartdine://table/{request.TableNumber}"
         };
 

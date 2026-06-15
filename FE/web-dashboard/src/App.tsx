@@ -1,46 +1,60 @@
 import React from 'react';
-import { BrowserRouter, Routes, Route, Link } from 'react-router-dom';
-import { Layout, Menu, Typography } from 'antd';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { ConfigProvider, theme } from 'antd';
+import { useSelector } from 'react-redux';
+import { selectIsAuthenticated } from '@/store/slices/authSlice';
+import LoginPage from '@/pages/auth/LoginPage';
+import DashboardLayout from '@/layouts/DashboardLayout';
+import TableManagementPage from '@/pages/dashboard/TableManagementPage';
+import DashboardPage from '@/pages/dashboard/DashboardPage';
+import MenuManagementPage from '@/pages/dashboard/MenuManagementPage';
+import StaffManagementPage from '@/pages/dashboard/StaffManagementPage';
+import SettingsPage from '@/pages/dashboard/SettingsPage';
+import TransactionsPage from '@/pages/dashboard/TransactionsPage';
 
-const { Header, Content, Footer } = Layout;
-const { Title } = Typography;
-
-const Home: React.FC = () => (
-  <div style={{ padding: 24, minHeight: 380, background: '#fff', color: '#333' }}>
-    <Title level={2}>Chào mừng tới SmartDine Management Dashboard</Title>
-    <p>Hệ thống quản lý thời gian thực cho nhà hàng của bạn.</p>
-  </div>
-);
+// Protected Route Guard
+const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const isAuthenticated = useSelector(selectIsAuthenticated);
+  return isAuthenticated ? <>{children}</> : <Navigate to="/login" replace />;
+};
 
 const App: React.FC = () => {
   return (
-    <BrowserRouter>
-      <Layout className="layout" style={{ minWidth: '100vw', minHeight: '100vh' }}>
-        <Header style={{ display: 'flex', alignItems: 'center' }}>
-          <div className="demo-logo" style={{ color: '#fff', marginRight: 24, fontWeight: 'bold' }}>
-            SMARTDINE ADMIN
-          </div>
-          <Menu
-            theme="dark"
-            mode="horizontal"
-            defaultSelectedKeys={['1']}
-            items={[
-              { key: '1', label: <Link to="/">Trang chủ</Link> },
-              { key: '2', label: <Link to="/orders">Đơn hàng</Link> },
-              { key: '3', label: <Link to="/menu">Thực đơn</Link> },
-            ]}
-          />
-        </Header>
-        <Content style={{ padding: '0 50px', marginTop: 24 }}>
-          <Routes>
-            <Route path="/" element={<Home />} />
-            <Route path="/orders" element={<div style={{ color: '#fff' }}>Đơn hàng (Real-time Queue)</div>} />
-            <Route path="/menu" element={<div style={{ color: '#fff' }}>Quản lý thực đơn (Menu Items)</div>} />
-          </Routes>
-        </Content>
-        <Footer style={{ textAlign: 'center' }}>SmartDine ©2026 Created by DeepMind Antigravity</Footer>
-      </Layout>
-    </BrowserRouter>
+    <ConfigProvider
+      theme={{
+        algorithm: theme.defaultAlgorithm, // Light theme matching the screenshot
+        token: {
+          colorPrimary: '#1890ff', // Blue theme matching screenshot buttons/links
+          borderRadius: 6,
+        },
+      }}
+    >
+      <BrowserRouter>
+        <Routes>
+          <Route path="/login" element={<LoginPage />} />
+          
+          {/* Nested Dashboard Routes inside DashboardLayout layout */}
+          <Route
+            path="/*"
+            element={
+              <ProtectedRoute>
+                <DashboardLayout />
+              </ProtectedRoute>
+            }
+          >
+            <Route index element={<Navigate to="/dashboard" replace />} />
+            <Route path="dashboard" element={<DashboardPage />} />
+            <Route path="tables" element={<TableManagementPage />} />
+            <Route path="menu" element={<MenuManagementPage />} />
+            <Route path="staff" element={<StaffManagementPage />} />
+            <Route path="transactions" element={<TransactionsPage />} />
+            <Route path="settings" element={<SettingsPage />} />
+            {/* Fallback route within dashboard layout */}
+            <Route path="*" element={<Navigate to="/dashboard" replace />} />
+          </Route>
+        </Routes>
+      </BrowserRouter>
+    </ConfigProvider>
   );
 };
 

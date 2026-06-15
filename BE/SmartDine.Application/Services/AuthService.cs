@@ -58,14 +58,14 @@ public class AuthService
 
         var customer = new Customer
         {
-            FullName         = request.FullName,
-            Email            = request.Email,
-            Phone            = request.PhoneNumber,
-            PasswordHash     = _passwordHasher.HashPassword(request.Password),
-            LoyaltyPoints    = 0,
-            MembershipLevel  = "BRONZE",
-            TotalSpent       = 0.00m,
-            VisitCount       = 0
+            FullName        = request.FullName,
+            Email           = request.Email,
+            Phone           = request.PhoneNumber,
+            PasswordHash    = _passwordHasher.HashPassword(request.Password),
+            LoyaltyPoints   = 0,
+            MembershipLevel = "BRONZE",
+            TotalSpent      = 0.00m,
+            VisitCount      = 0
         };
 
         await _uow.Customers.AddAsync(customer);
@@ -157,7 +157,7 @@ public class AuthService
 
         var resetToken = _jwtService.GeneratePasswordResetToken(id, email, role);
 
-        // TODO: gửi resetToken qua email thay vì trả về trong response
+        // TODO: send resetToken via email instead of returning it in the response
         return new ForgotPasswordResponse
         {
             Message    = ValidationMessages.AUTH_FORGOT_PASSWORD_SENT,

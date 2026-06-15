@@ -51,9 +51,7 @@ public class ForgotPasswordRequest
 public class ForgotPasswordResponse
 {
     public string Message { get; set; } = string.Empty;
-    /// <summary>
-    /// Trong production sẽ gửi qua email, ở đây trả về để test.
-    /// </summary>
+    /// <summary>In production this is sent via email; returned here for testing purposes.</summary>
     public string ResetToken { get; set; } = string.Empty;
 }
 

@@ -68,7 +68,7 @@ public class RsaKeyProviderTests : IDisposable
     [Fact]
     public void Constructor_ThrowsWhenPrivateKeyFileNotFound()
     {
-        // Dùng temp dir hợp lệ nhưng file không tồn tại → FileNotFoundException
+        // Use a valid temp directory but with a non-existent filename → FileNotFoundException
         var missingFile = Path.Combine(Path.GetTempPath(), $"missing_{Guid.NewGuid()}.pem");
         var config = BuildConfig(privatePath: missingFile);
 
