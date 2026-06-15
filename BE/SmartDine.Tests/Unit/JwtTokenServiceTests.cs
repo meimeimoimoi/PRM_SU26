@@ -8,7 +8,7 @@ using SmartDine.Infrastructure.Security;
 
 namespace SmartDine.Tests.Unit;
 
-// Stub dùng key in-memory, không cần file PEM
+// In-memory RSA key stub — no PEM files needed
 public class FakeRsaKeyProvider : IRsaKeyProvider
 {
     public RSAParameters PrivateKeyParameters { get; }
@@ -37,8 +37,8 @@ public class JwtTokenServiceTests
         _config = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
-                ["Jwt:Issuer"]                  = Issuer,
-                ["Jwt:Audience"]                = Audience,
+                ["Jwt:Issuer"]                   = Issuer,
+                ["Jwt:Audience"]                 = Audience,
                 ["Jwt:AccessTokenExpiryMinutes"] = "60",
             })
             .Build();
@@ -136,7 +136,7 @@ public class JwtTokenServiceTests
         var refreshToken = _sut.GenerateRefreshToken();
 
         Assert.NotNull(refreshToken);
-        var bytes = Convert.FromBase64String(refreshToken); // throws nếu không phải base64
+        var bytes = Convert.FromBase64String(refreshToken); // throws if not valid base64
         Assert.Equal(64, bytes.Length);
     }
 
@@ -154,13 +154,13 @@ public class JwtTokenServiceTests
     [Fact]
     public void GetPrincipalFromExpiredToken_ReturnsClaimsForExpiredToken()
     {
-        // Tạo token đã hết hạn bằng cách sinh token với expiry = -1 phút
+        // Generate a token that is already expired (expiry = -1 minute)
         var expiredConfig = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
-                ["Jwt:Issuer"]                  = Issuer,
-                ["Jwt:Audience"]                = Audience,
-                ["Jwt:AccessTokenExpiryMinutes"] = "-1", // đã hết hạn
+                ["Jwt:Issuer"]                   = Issuer,
+                ["Jwt:Audience"]                 = Audience,
+                ["Jwt:AccessTokenExpiryMinutes"] = "-1",
             })
             .Build();
         var service      = new JwtTokenService(expiredConfig, _keyProvider);
@@ -177,9 +177,9 @@ public class JwtTokenServiceTests
     public void GetPrincipalFromExpiredToken_ThrowsForTamperedToken()
     {
         var token    = _sut.GenerateAccessToken(1, "user@test.com", "Test", "CUSTOMER");
-        var tampered = token[..^5] + "XXXXX"; // phá chữ ký
+        var tampered = token[..^5] + "XXXXX"; // corrupt the signature
 
-        // SecurityTokenInvalidSignatureException là subclass của SecurityTokenException
+        // SecurityTokenInvalidSignatureException is a subclass of SecurityTokenException
         Assert.ThrowsAny<SecurityTokenException>(
             () => _sut.GetPrincipalFromExpiredToken(tampered));
     }
@@ -187,7 +187,7 @@ public class JwtTokenServiceTests
     [Fact]
     public void GetPrincipalFromExpiredToken_ReturnsNullForHS256Token()
     {
-        // Tạo token HS256 giả lập (sai thuật toán)
+        // Create a fake HS256 token (wrong algorithm)
         var hmacKey    = new SymmetricSecurityKey(new byte[32]);
         var hs256Creds = new SigningCredentials(hmacKey, SecurityAlgorithms.HmacSha256);
         var hs256Token = new JwtSecurityTokenHandler().WriteToken(
@@ -195,7 +195,7 @@ public class JwtTokenServiceTests
                 signingCredentials: hs256Creds,
                 expires: DateTime.UtcNow.AddHours(-1)));
 
-        // Phải throw vì IssuerSigningKey không khớp (RSA key != HMAC key)
+        // Must throw because the IssuerSigningKey does not match (RSA key != HMAC key)
         Assert.ThrowsAny<Exception>(() => _sut.GetPrincipalFromExpiredToken(hs256Token));
     }
 }

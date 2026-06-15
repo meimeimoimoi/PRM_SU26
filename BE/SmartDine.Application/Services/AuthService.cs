@@ -157,7 +157,7 @@ public class AuthService
 
         var resetToken = _jwtService.GeneratePasswordResetToken(id, email, role);
 
-        // TODO: gửi resetToken qua email thay vì trả về trong response
+        // TODO: send resetToken via email instead of returning it in the response
         return new ForgotPasswordResponse
         {
             Message    = ValidationMessages.AUTH_FORGOT_PASSWORD_SENT,

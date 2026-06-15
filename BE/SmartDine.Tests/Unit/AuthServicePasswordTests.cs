@@ -106,8 +106,8 @@ public class AuthServicePasswordTests
         var config = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
-                ["Jwt:Issuer"]                  = "TestIssuer",
-                ["Jwt:Audience"]                = "TestAudience",
+                ["Jwt:Issuer"]                   = "TestIssuer",
+                ["Jwt:Audience"]                 = "TestAudience",
                 ["Jwt:AccessTokenExpiryMinutes"] = "60",
             })
             .Build();
@@ -126,8 +126,8 @@ public class AuthServicePasswordTests
 
         await _sut.ChangePasswordAsync(1, "STAFF", new ChangePasswordRequest
         {
-            CurrentPassword  = "OldPass1!",
-            NewPassword      = "NewPass2@",
+            CurrentPassword    = "OldPass1!",
+            NewPassword        = "NewPass2@",
             ConfirmNewPassword = "NewPass2@"
         });
 
@@ -149,7 +149,7 @@ public class AuthServicePasswordTests
                 ConfirmNewPassword = "New1!"
             }));
 
-        Assert.Contains("Mật khẩu hiện tại", ex.Message);
+        Assert.Contains("Current password", ex.Message);
     }
 
     [Fact]
@@ -162,10 +162,10 @@ public class AuthServicePasswordTests
             {
                 CurrentPassword    = "Pass!",
                 NewPassword        = "NewA",
-                ConfirmNewPassword = "NewB"  // không khớp
+                ConfirmNewPassword = "NewB"  // does not match
             }));
 
-        Assert.Contains("không khớp", ex.Message);
+        Assert.Contains("does not match", ex.Message);
     }
 
     // ── ChangePassword — Customer ──────────────────────────────────────────
@@ -307,7 +307,7 @@ public class AuthServicePasswordTests
                 ConfirmNewPassword = "New!"
             }));
 
-        Assert.Contains("Token không hợp lệ", ex.Message);
+        Assert.Contains("invalid or has expired", ex.Message);
     }
 
     [Fact]
@@ -325,13 +325,13 @@ public class AuthServicePasswordTests
                 ConfirmNewPassword = "NewB!"
             }));
 
-        Assert.Contains("không khớp", ex.Message);
+        Assert.Contains("does not match", ex.Message);
     }
 
     [Fact]
     public async Task ResetPassword_ThrowsWhenAccessTokenUsedInsteadOfResetToken()
     {
-        // Access token không có purpose=password-reset → phải bị từ chối
+        // Access token has no purpose=password-reset claim and must be rejected
         var accessToken = _jwtService.GenerateAccessToken(1, "x@test.com", "X", "STAFF");
 
         var ex = await Assert.ThrowsAsync<BusinessRuleViolationException>(() =>
@@ -342,6 +342,6 @@ public class AuthServicePasswordTests
                 ConfirmNewPassword = "New!"
             }));
 
-        Assert.Contains("Token không hợp lệ", ex.Message);
+        Assert.Contains("invalid or has expired", ex.Message);
     }
 }

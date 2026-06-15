@@ -31,23 +31,23 @@ public static class ValidationMessages
     public const string ORDER_CREATED_AT_DUPLICATE = "ORDER_CREATED_AT_DUPLICATE";
 
     // ── Authentication ───────────────────────────────────────────────────────
-    public const string EMAIL_OR_PASSSWORD_INVALID   = "EMAIL_OR_PASSSWORD_INVALID";
-    public const string AUTH_INVALID_CREDENTIALS     = "Email hoặc mật khẩu không đúng.";
-    public const string AUTH_EMAIL_ALREADY_EXISTS    = "Email đã được sử dụng.";
-    public const string AUTH_PHONE_ALREADY_EXISTS    = "Số điện thoại đã được sử dụng.";
+    public const string EMAIL_OR_PASSSWORD_INVALID    = "EMAIL_OR_PASSSWORD_INVALID";
+    public const string AUTH_INVALID_CREDENTIALS      = "Invalid email or password.";
+    public const string AUTH_EMAIL_ALREADY_EXISTS     = "Email is already in use.";
+    public const string AUTH_PHONE_ALREADY_EXISTS     = "Phone number is already in use.";
 
     // ── Change Password ──────────────────────────────────────────────────────
-    public const string AUTH_PASSWORD_CONFIRM_MISMATCH  = "Mật khẩu mới xác nhận không khớp.";
-    public const string AUTH_CURRENT_PASSWORD_INCORRECT = "Mật khẩu hiện tại không đúng.";
+    public const string AUTH_PASSWORD_CONFIRM_MISMATCH  = "Password confirmation does not match.";
+    public const string AUTH_CURRENT_PASSWORD_INCORRECT = "Current password is incorrect.";
 
     // ── Forgot / Reset Password ──────────────────────────────────────────────
-    public const string AUTH_FORGOT_PASSWORD_SENT    = "Hướng dẫn đặt lại mật khẩu đã được gửi đến email của bạn.";
-    public const string AUTH_FORGOT_PASSWORD_GENERIC = "Nếu email tồn tại trong hệ thống, bạn sẽ nhận được hướng dẫn đặt lại mật khẩu.";
-    public const string AUTH_RESET_TOKEN_INVALID     = "Token không hợp lệ hoặc đã hết hạn.";
+    public const string AUTH_FORGOT_PASSWORD_SENT    = "Password reset instructions have been sent to your email.";
+    public const string AUTH_FORGOT_PASSWORD_GENERIC = "If the email exists in our system, you will receive password reset instructions.";
+    public const string AUTH_RESET_TOKEN_INVALID     = "Reset token is invalid or has expired.";
 
     // ── Success Messages ─────────────────────────────────────────────────────
-    public const string AUTH_LOGIN_SUCCESS           = "Đăng nhập thành công";
-    public const string AUTH_REGISTER_SUCCESS        = "Đăng ký thành công";
-    public const string AUTH_CHANGE_PASSWORD_SUCCESS = "Đổi mật khẩu thành công.";
-    public const string AUTH_RESET_PASSWORD_SUCCESS  = "Đặt lại mật khẩu thành công.";
+    public const string AUTH_LOGIN_SUCCESS           = "Login successful.";
+    public const string AUTH_REGISTER_SUCCESS        = "Registration successful.";
+    public const string AUTH_CHANGE_PASSWORD_SUCCESS = "Password changed successfully.";
+    public const string AUTH_RESET_PASSWORD_SUCCESS  = "Password reset successfully.";
 }

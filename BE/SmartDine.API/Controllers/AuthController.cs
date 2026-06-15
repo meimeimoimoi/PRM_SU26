@@ -19,7 +19,7 @@ public class AuthController : ControllerBase
         _authService = authService;
     }
 
-    /// <summary>POST /api/v1/auth/login — Đăng nhập</summary>
+    /// <summary>POST /api/v1/auth/login — User or customer login</summary>
     [HttpPost("login")]
     public async Task<IActionResult> Login([FromBody] LoginRequest request)
     {
@@ -27,7 +27,7 @@ public class AuthController : ControllerBase
         return Ok(ApiResponse<TokenResponse>.Ok(result, ValidationMessages.AUTH_LOGIN_SUCCESS));
     }
 
-    /// <summary>POST /api/v1/auth/register — Đăng ký tài khoản khách hàng</summary>
+    /// <summary>POST /api/v1/auth/register — Register a new customer account</summary>
     [HttpPost("register")]
     public async Task<IActionResult> Register([FromBody] RegisterRequest request)
     {
@@ -35,7 +35,7 @@ public class AuthController : ControllerBase
         return Created("", ApiResponse<TokenResponse>.Ok(result, ValidationMessages.AUTH_REGISTER_SUCCESS));
     }
 
-    /// <summary>GET /api/v1/auth/me — Lấy thông tin user hiện tại</summary>
+    /// <summary>GET /api/v1/auth/me — Get current authenticated user info</summary>
     [HttpGet("me")]
     [Authorize]
     public async Task<IActionResult> GetCurrentUser()
@@ -46,7 +46,7 @@ public class AuthController : ControllerBase
         return Ok(ApiResponse<UserInfoResponse>.Ok(result));
     }
 
-    /// <summary>POST /api/v1/auth/change-password — Đổi mật khẩu (đã đăng nhập)</summary>
+    /// <summary>POST /api/v1/auth/change-password — Change password for authenticated user</summary>
     [HttpPost("change-password")]
     [Authorize]
     public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequest request)
@@ -57,7 +57,7 @@ public class AuthController : ControllerBase
         return Ok(ApiResponse<object>.Ok(null, ValidationMessages.AUTH_CHANGE_PASSWORD_SUCCESS));
     }
 
-    /// <summary>POST /api/v1/auth/forgot-password — Yêu cầu đặt lại mật khẩu</summary>
+    /// <summary>POST /api/v1/auth/forgot-password — Request a password reset token</summary>
     [HttpPost("forgot-password")]
     public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordRequest request)
     {
@@ -65,7 +65,7 @@ public class AuthController : ControllerBase
         return Ok(ApiResponse<ForgotPasswordResponse>.Ok(result));
     }
 
-    /// <summary>POST /api/v1/auth/reset-password — Đặt lại mật khẩu bằng token</summary>
+    /// <summary>POST /api/v1/auth/reset-password — Reset password using a valid reset token</summary>
     [HttpPost("reset-password")]
     public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordRequest request)
     {
