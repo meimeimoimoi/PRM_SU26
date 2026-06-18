@@ -11,7 +11,7 @@ import MenuManagementPage from '@/pages/dashboard/MenuManagementPage';
 import StaffManagementPage from '@/pages/dashboard/StaffManagementPage';
 import TransactionsPage from '@/pages/dashboard/TransactionsPage';
 import SettingsPage from '@/pages/dashboard/SettingsPage';
-import ChefPage from '@/pages/dashboard/ChefPage';
+import StaffDashboardPage from '@/pages/dashboard/StaffDashboardPage';
 
 import { selectCurrentUser } from '@/store/slices/authSlice';
 import { getDefaultRoute } from '@/utils/roleUtils';
@@ -61,7 +61,7 @@ const App: React.FC = () => {
           <Route
             path="/*"
             element={
-              <RoleProtectedRoute allowedRoles={['MANAGER', 'CHEF', 'STAFF', 'CUSTOMER']}>
+              <RoleProtectedRoute allowedRoles={['MANAGER', 'STAFF', 'CUSTOMER']}>
                 <DashboardLayout />
               </RoleProtectedRoute>
             }
@@ -79,7 +79,7 @@ const App: React.FC = () => {
             <Route 
               path="tables" 
               element={
-                <RoleProtectedRoute allowedRoles={['MANAGER', 'STAFF']}>
+                <RoleProtectedRoute allowedRoles={['MANAGER']}>
                   <TableManagementPage />
                 </RoleProtectedRoute>
               } 
@@ -87,7 +87,7 @@ const App: React.FC = () => {
             <Route 
               path="menu" 
               element={
-                <RoleProtectedRoute allowedRoles={['MANAGER', 'STAFF', 'CUSTOMER']}>
+                <RoleProtectedRoute allowedRoles={['MANAGER', 'CUSTOMER']}>
                   <MenuManagementPage />
                 </RoleProtectedRoute>
               } 
@@ -103,7 +103,7 @@ const App: React.FC = () => {
             <Route 
               path="transactions" 
               element={
-                <RoleProtectedRoute allowedRoles={['MANAGER', 'STAFF']}>
+                <RoleProtectedRoute allowedRoles={['MANAGER']}>
                   <TransactionsPage />
                 </RoleProtectedRoute>
               } 
@@ -111,16 +111,16 @@ const App: React.FC = () => {
             <Route 
               path="settings" 
               element={
-                <RoleProtectedRoute allowedRoles={['MANAGER', 'STAFF', 'CHEF']}>
+                <RoleProtectedRoute allowedRoles={['MANAGER', 'STAFF']}>
                   <SettingsPage />
                 </RoleProtectedRoute>
               } 
             />
             <Route 
-              path="chef" 
+              path="staff-dashboard" 
               element={
-                <RoleProtectedRoute allowedRoles={['CHEF']}>
-                  <ChefPage />
+                <RoleProtectedRoute allowedRoles={['STAFF', 'MANAGER']}>
+                  <StaffDashboardPage />
                 </RoleProtectedRoute>
               } 
             />
@@ -132,5 +132,6 @@ const App: React.FC = () => {
     </ConfigProvider>
   );
 };
+
 
 export default App;

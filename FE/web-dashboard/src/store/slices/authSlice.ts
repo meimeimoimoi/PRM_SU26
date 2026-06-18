@@ -50,23 +50,6 @@ export const loginUser = createAsyncThunk(
         return mockData;
       }
       
-      // CHEF Role Mock Account
-      if ((emailLower === 'chef' || emailLower === 'chef@smartdine.com') && credentials.password === 'Chef123') {
-        const mockData: TokenResponse = {
-          accessToken: 'mock_jwt_token_chef',
-          refreshToken: 'mock_refresh_token_chef',
-          user: {
-            id: 101,
-            fullName: 'Chef Alexander',
-            email: 'chef@smartdine.com',
-            role: 'CHEF'
-          }
-        };
-        localStorage.setItem('access_token', mockData.accessToken);
-        localStorage.setItem('refresh_token', mockData.refreshToken);
-        localStorage.setItem('user_info', JSON.stringify(mockData.user));
-        return mockData;
-      }
 
       // STAFF Role Mock Account
       if ((emailLower === 'staff' || emailLower === 'staff@smartdine.com') && credentials.password === 'Staff123') {

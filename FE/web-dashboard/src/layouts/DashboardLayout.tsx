@@ -38,7 +38,7 @@ const DashboardLayout: React.FC = () => {
       });
     }
 
-    if (role === 'MANAGER' || role === 'STAFF') {
+    if (role === 'MANAGER') {
       items.push({ 
         key: 'tables', 
         icon: <TableOutlined style={{ fontSize: 16 }} />, 
@@ -46,7 +46,7 @@ const DashboardLayout: React.FC = () => {
       });
     }
 
-    if (role === 'MANAGER' || role === 'STAFF' || role === 'CUSTOMER') {
+    if (role === 'MANAGER' || role === 'CUSTOMER') {
       items.push({ 
         key: 'menu', 
         icon: <CoffeeOutlined style={{ fontSize: 16 }} />, 
@@ -62,7 +62,7 @@ const DashboardLayout: React.FC = () => {
       });
     }
 
-    if (role === 'MANAGER' || role === 'STAFF') {
+    if (role === 'MANAGER') {
       items.push({ 
         key: 'transactions', 
         icon: <HistoryOutlined style={{ fontSize: 16 }} />, 
@@ -70,11 +70,11 @@ const DashboardLayout: React.FC = () => {
       });
     }
 
-    if (role === 'CHEF') {
+    if (role === 'MANAGER' || role === 'STAFF') {
       items.push({ 
-        key: 'chef', 
+        key: 'staff-dashboard', 
         icon: <FireOutlined style={{ fontSize: 16 }} />, 
-        label: <Link to="/chef">Kitchen Queue</Link> 
+        label: <Link to="/staff-dashboard">Kitchen & Billing</Link> 
       });
     }
 
@@ -88,7 +88,7 @@ const DashboardLayout: React.FC = () => {
     if (path.includes('/menu')) return 'menu';
     if (path.includes('/staff')) return 'staff';
     if (path.includes('/transactions')) return 'transactions';
-    if (path.includes('/chef')) return 'chef';
+    if (path.includes('/staff-dashboard')) return 'staff-dashboard';
     if (path.includes('/settings')) return 'settings';
     return 'dashboard'; // Default key
   };
@@ -100,7 +100,7 @@ const DashboardLayout: React.FC = () => {
     if (path.includes('/menu')) return 'Menu Management';
     if (path.includes('/staff')) return 'Staff Management';
     if (path.includes('/transactions')) return 'Order & Transaction History';
-    if (path.includes('/chef')) return 'Kitchen Queue';
+    if (path.includes('/staff-dashboard')) return 'Kitchen & Billing Dashboard';
     if (path.includes('/settings')) return 'System Settings';
     return 'SmartDine Admin';
   };
