@@ -8,9 +8,6 @@ using SmartDine.Infrastructure.Security;
 
 namespace SmartDine.Infrastructure;
 
-/// <summary>
-/// Extension method đăng ký tất cả services của Infrastructure layer.
-/// </summary>
 public static class DependencyInjection
 {
     public static IServiceCollection AddInfrastructureServices(
@@ -39,8 +36,11 @@ public static class DependencyInjection
         services.AddScoped<IDiningSessionRepository, DiningSessionRepository>();
         services.AddScoped<IPaymentRepository, PaymentRepository>();
         services.AddScoped<IReviewRepository, ReviewRepository>();
+        services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
+        services.AddScoped<IPasswordResetTokenRepository, PasswordResetTokenRepository>();
 
-        // Security
+        // Security — RSA key service (singleton vì RSA key không đổi trong runtime)
+        services.AddSingleton<RsaKeyService>();
         services.AddScoped<IJwtTokenService, JwtTokenService>();
         services.AddScoped<IPasswordHasher, BCryptPasswordHasher>();
 

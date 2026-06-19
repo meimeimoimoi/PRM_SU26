@@ -13,6 +13,8 @@ public interface IUnitOfWork : IDisposable
     IDiningSessionRepository DiningSessions { get; }
     IPaymentRepository Payments { get; }
     IReviewRepository Reviews { get; }
+    IRefreshTokenRepository RefreshTokens { get; }
+    IPasswordResetTokenRepository PasswordResetTokens { get; }
 
     Task<int> SaveChangesAsync(CancellationToken ct = default);
 }

@@ -12,6 +12,7 @@
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="9.0.2" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="9.0.2" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="Moq" Version="4.20.72" />
     <PackageReference Include="xunit" Version="2.9.3" />
     <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
   </ItemGroup>
@@ -22,6 +23,9 @@
 
   <ItemGroup>
     <ProjectReference Include="..\SmartDine.API\SmartDine.API.csproj" />
+    <ProjectReference Include="..\SmartDine.Application\SmartDine.Application.csproj" />
+    <ProjectReference Include="..\SmartDine.Domain\SmartDine.Domain.csproj" />
+    <ProjectReference Include="..\SmartDine.Infrastructure\SmartDine.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>

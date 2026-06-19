@@ -1,17 +1,14 @@
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
 using SmartDine.Application.Constants;
 using SmartDine.Application.DTOs.Auth;
 using SmartDine.Domain.Entities;
 using SmartDine.Domain.Exceptions;
 using SmartDine.Domain.Interfaces;
-using System;
-using System.Threading.Tasks;
 
 namespace SmartDine.Application.Services;
 
-/// <summary>
-/// Service xử lý authentication cho cả Nhân viên (User) và Khách hàng (Customer).
-/// </summary>
-public class AuthService 
+public class AuthService
 {
     private readonly IUnitOfWork _uow;
     private readonly IJwtTokenService _jwtService;
@@ -26,43 +23,35 @@ public class AuthService
 
     public async Task<TokenResponse> LoginAsync(LoginRequest request)
     {
-        // 1. Kiểm tra tài khoản Nhân viên (User) trước
         var user = await _uow.Users.GetByEmailAsync(request.Email);
-        if (user == null)
-        {
-            throw new ResourceNotFoundException(ValidationMessages.NOT_FOUND);
-        }
         if (user != null && user.IsActive)
         {
             if (!_passwordHasher.VerifyPassword(request.Password, user.PasswordHash))
                 throw new BusinessRuleViolationException(ValidationMessages.EMAIL_OR_PASSSWORD_INVALID);
 
-            return GenerateTokenResponse(user.Id, user.Email, user.FullName, user.Role);
+            return await GenerateTokenResponseAsync(user.Id, user.Email, user.FullName, user.Role, "USER");
         }
 
-        // 2. Nếu không phải nhân viên, kiểm tra tài khoản Khách hàng (Customer)
         var customer = await _uow.Customers.GetByEmailAsync(request.Email);
         if (customer != null)
         {
             if (customer.PasswordHash == null || !_passwordHasher.VerifyPassword(request.Password, customer.PasswordHash))
-                throw new BusinessRuleViolationException("Email hoặc mật khẩu không đúng.");
+                throw new BusinessRuleViolationException(ValidationMessages.EMAIL_OR_PASSSWORD_INVALID);
 
-            return GenerateTokenResponse(customer.Id, customer.Email ?? string.Empty, customer.FullName ?? "Customer", "CUSTOMER");
+            return await GenerateTokenResponseAsync(customer.Id, customer.Email ?? string.Empty, customer.FullName ?? "Customer", "CUSTOMER", "CUSTOMER");
         }
 
-        throw new BusinessRuleViolationException("Email hoặc mật khẩu không đúng.");
+        throw new BusinessRuleViolationException(ValidationMessages.EMAIL_OR_PASSSWORD_INVALID);
     }
 
     public async Task<TokenResponse> RegisterAsync(RegisterRequest request)
     {
-        // Kiểm tra email trùng ở cả 2 bảng
         if (await _uow.Users.ExistsAsync(request.Email) || await _uow.Customers.GetByEmailAsync(request.Email) != null)
-            throw new BusinessRuleViolationException("Email đã được sử dụng.");
+            throw new BusinessRuleViolationException(ValidationMessages.EMAIL_ALREADY_EXISTS);
 
-        if (await _uow.Customers.GetByPhoneAsync(request.PhoneNumber) != null)
-            throw new BusinessRuleViolationException("Số điện thoại đã được sử dụng.");
+        if (!string.IsNullOrEmpty(request.PhoneNumber) && await _uow.Customers.GetByPhoneAsync(request.PhoneNumber) != null)
+            throw new BusinessRuleViolationException(ValidationMessages.PHONE_ALREADY_EXISTS);
 
-        // Tạo Customer profile mới
         var customer = new Customer
         {
             FullName = request.FullName,
@@ -78,7 +67,137 @@ public class AuthService
         await _uow.Customers.AddAsync(customer);
         await _uow.SaveChangesAsync();
 
-        return GenerateTokenResponse(customer.Id, customer.Email, customer.FullName, "CUSTOMER");
+        return await GenerateTokenResponseAsync(customer.Id, customer.Email, customer.FullName, "CUSTOMER", "CUSTOMER");
+    }
+
+    public async Task<TokenResponse> RefreshTokenAsync(RefreshTokenRequest request)
+    {
+        var principal = _jwtService.GetPrincipalFromExpiredToken(request.AccessToken)
+            ?? throw new BusinessRuleViolationException(ValidationMessages.ACCESS_TOKEN_INVALID);
+
+        var jwtId = principal.FindFirst(JwtRegisteredClaimNames.Jti)?.Value
+            ?? throw new BusinessRuleViolationException(ValidationMessages.ACCESS_TOKEN_INVALID);
+
+        var storedToken = await _uow.RefreshTokens.GetByTokenAsync(request.RefreshToken)
+            ?? throw new BusinessRuleViolationException(ValidationMessages.REFRESH_TOKEN_NOT_FOUND);
+
+        if (storedToken.ExpiresAt < DateTime.UtcNow)
+            throw new BusinessRuleViolationException(ValidationMessages.REFRESH_TOKEN_EXPIRED);
+
+        if (storedToken.JwtId != jwtId)
+            throw new BusinessRuleViolationException(ValidationMessages.REFRESH_TOKEN_MISMATCH);
+
+        storedToken.IsRevoked = true;
+        storedToken.RevokedAt = DateTime.UtcNow;
+
+        var userId = int.Parse(principal.FindFirst(ClaimTypes.NameIdentifier)!.Value);
+        var email = principal.FindFirst(ClaimTypes.Email)!.Value;
+        var fullName = principal.FindFirst(ClaimTypes.Name)!.Value;
+        var role = principal.FindFirst(ClaimTypes.Role)!.Value;
+
+        var (accessToken, newJwtId) = _jwtService.GenerateAccessToken(userId, email, fullName, role);
+        var newRefreshToken = _jwtService.GenerateRefreshToken();
+
+        var refreshTokenEntity = new RefreshToken
+        {
+            Token = newRefreshToken,
+            JwtId = newJwtId,
+            UserType = storedToken.UserType,
+            UserId = userId,
+            ExpiresAt = DateTime.UtcNow.AddDays(7),
+        };
+
+        storedToken.ReplacedByToken = newRefreshToken;
+
+        await _uow.RefreshTokens.AddAsync(refreshTokenEntity);
+        await _uow.SaveChangesAsync();
+
+        return new TokenResponse
+        {
+            AccessToken = accessToken,
+            RefreshToken = newRefreshToken,
+            ExpiresIn = 3600,
+            User = new UserInfoResponse
+            {
+                Id = userId,
+                FullName = fullName,
+                Email = email,
+                Role = role
+            }
+        };
+    }
+
+    public async Task<ForgotPasswordResponse> ForgotPasswordAsync(ForgotPasswordRequest request)
+    {
+        int userId;
+        string userType;
+
+        var user = await _uow.Users.GetByEmailAsync(request.Email);
+        if (user != null)
+        {
+            userId = user.Id;
+            userType = "USER";
+        }
+        else
+        {
+            var customer = await _uow.Customers.GetByEmailAsync(request.Email);
+            if (customer == null)
+            {
+                return new ForgotPasswordResponse { Message = ValidationMessages.FORGOT_PASSWORD_MESSAGE };
+            }
+            userId = customer.Id;
+            userType = "CUSTOMER";
+        }
+
+        await _uow.PasswordResetTokens.InvalidateAllByUserAsync(userId, userType);
+
+        var resetToken = _jwtService.GeneratePasswordResetToken();
+        var tokenEntity = new PasswordResetToken
+        {
+            Token = resetToken,
+            Email = request.Email,
+            UserType = userType,
+            UserId = userId,
+            ExpiresAt = DateTime.UtcNow.AddMinutes(15),
+        };
+
+        await _uow.PasswordResetTokens.AddAsync(tokenEntity);
+        await _uow.SaveChangesAsync();
+
+        return new ForgotPasswordResponse
+        {
+            Message = ValidationMessages.FORGOT_PASSWORD_MESSAGE,
+            ResetToken = resetToken
+        };
+    }
+
+    public async Task ResetPasswordAsync(ResetPasswordRequest request)
+    {
+        if (request.NewPassword != request.ConfirmPassword)
+            throw new BusinessRuleViolationException(ValidationMessages.PASSWORD_CONFIRM_MISMATCH);
+
+        var tokenEntity = await _uow.PasswordResetTokens.GetByTokenAsync(request.Token)
+            ?? throw new BusinessRuleViolationException(ValidationMessages.RESET_TOKEN_INVALID);
+
+        var newHash = _passwordHasher.HashPassword(request.NewPassword);
+
+        if (tokenEntity.UserType == "USER")
+        {
+            var user = await _uow.Users.GetByIdAsync(tokenEntity.UserId)
+                ?? throw new EntityNotFoundException("User", tokenEntity.UserId);
+            user.PasswordHash = newHash;
+        }
+        else
+        {
+            var customer = await _uow.Customers.GetByIdAsync(tokenEntity.UserId)
+                ?? throw new EntityNotFoundException("Customer", tokenEntity.UserId);
+            customer.PasswordHash = newHash;
+        }
+
+        tokenEntity.IsUsed = true;
+
+        await _uow.RefreshTokens.RevokeAllByUserAsync(tokenEntity.UserId, tokenEntity.UserType);
+        await _uow.SaveChangesAsync();
     }
 
     public async Task<UserInfoResponse> GetCurrentUserAsync(int id, string role)
@@ -115,16 +234,28 @@ public class AuthService
         throw new EntityNotFoundException("User/Customer", id);
     }
 
-    private TokenResponse GenerateTokenResponse(int id, string email, string fullName, string role)
+    private async Task<TokenResponse> GenerateTokenResponseAsync(int id, string email, string fullName, string role, string userType)
     {
-        var accessToken = _jwtService.GenerateAccessToken(id, email, fullName, role);
+        var (accessToken, jwtId) = _jwtService.GenerateAccessToken(id, email, fullName, role);
         var refreshToken = _jwtService.GenerateRefreshToken();
+
+        var refreshTokenEntity = new RefreshToken
+        {
+            Token = refreshToken,
+            JwtId = jwtId,
+            UserType = userType,
+            UserId = id,
+            ExpiresAt = DateTime.UtcNow.AddDays(7),
+        };
+
+        await _uow.RefreshTokens.AddAsync(refreshTokenEntity);
+        await _uow.SaveChangesAsync();
 
         return new TokenResponse
         {
             AccessToken = accessToken,
             RefreshToken = refreshToken,
-            ExpiresIn = 3600, // 60 minutes
+            ExpiresIn = 3600,
             User = new UserInfoResponse
             {
                 Id = id,

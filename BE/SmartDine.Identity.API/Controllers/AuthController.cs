@@ -18,7 +18,6 @@ public class AuthController : ControllerBase
         _authService = authService;
     }
 
-    /// <summary>POST /api/v1/auth/login — Đăng nhập</summary>
     [HttpPost("login")]
     public async Task<IActionResult> Login([FromBody] LoginRequest request)
     {
@@ -26,7 +25,6 @@ public class AuthController : ControllerBase
         return Ok(ApiResponse<TokenResponse>.Ok(result, "Đăng nhập thành công"));
     }
 
-    /// <summary>POST /api/v1/auth/register — Đăng ký tài khoản khách hàng</summary>
     [HttpPost("register")]
     public async Task<IActionResult> Register([FromBody] RegisterRequest request)
     {
@@ -34,7 +32,27 @@ public class AuthController : ControllerBase
         return Created("", ApiResponse<TokenResponse>.Ok(result, "Đăng ký thành công"));
     }
 
-    /// <summary>GET /api/v1/auth/me — Lấy thông tin user hiện tại</summary>
+    [HttpPost("refresh-token")]
+    public async Task<IActionResult> RefreshToken([FromBody] RefreshTokenRequest request)
+    {
+        var result = await _authService.RefreshTokenAsync(request);
+        return Ok(ApiResponse<TokenResponse>.Ok(result, "Làm mới token thành công"));
+    }
+
+    [HttpPost("forgot-password")]
+    public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordRequest request)
+    {
+        var result = await _authService.ForgotPasswordAsync(request);
+        return Ok(ApiResponse<ForgotPasswordResponse>.Ok(result));
+    }
+
+    [HttpPost("reset-password")]
+    public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordRequest request)
+    {
+        await _authService.ResetPasswordAsync(request);
+        return Ok(ApiResponse<object>.Ok(null!, "Đặt lại mật khẩu thành công"));
+    }
+
     [HttpGet("me")]
     [Authorize]
     public async Task<IActionResult> GetCurrentUser()
