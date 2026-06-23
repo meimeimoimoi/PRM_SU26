@@ -14,6 +14,7 @@ public class UnitOfWork : IUnitOfWork
     public IDiningSessionRepository DiningSessions { get; }
     public IPaymentRepository Payments { get; }
     public IReviewRepository Reviews { get; }
+    public ITableReservationRepository TableReservations { get; }
     public IRefreshTokenRepository RefreshTokens { get; }
     public IPasswordResetTokenRepository PasswordResetTokens { get; }
 
@@ -28,6 +29,7 @@ public class UnitOfWork : IUnitOfWork
         DiningSessions = new DiningSessionRepository(context);
         Payments = new PaymentRepository(context);
         Reviews = new ReviewRepository(context);
+        TableReservations = new TableReservationRepository(context);
         RefreshTokens = new RefreshTokenRepository(context);
         PasswordResetTokens = new PasswordResetTokenRepository(context);
     }

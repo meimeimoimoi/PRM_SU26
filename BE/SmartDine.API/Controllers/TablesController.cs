@@ -18,41 +18,22 @@ public class TablesController : ControllerBase
         _tableService = tableService;
     }
 
-    /// <summary>GET /api/v1/tables — Danh sách tất cả bàn</summary>
+    /// <summary>GET /api/v1/tables — Danh sách bàn ăn (filter theo status, capacity)</summary>
     [HttpGet]
     [Authorize(Roles = "STAFF,MANAGER")]
-    public async Task<IActionResult> GetAll()
+    public async Task<IActionResult> GetAll([FromQuery] string? status, [FromQuery] int? capacity)
     {
-        var result = await _tableService.GetAllAsync();
+        var result = await _tableService.GetAllAsync(status, capacity);
         return Ok(ApiResponse<List<TableResponse>>.Ok(result));
     }
 
-    /// <summary>GET /api/v1/tables/{id} — Chi tiết bàn</summary>
-    [HttpGet("{id:int}")]
-    public async Task<IActionResult> GetById(int id)
+    /// <summary>POST /api/v1/tables/{id}/scan — Khách quét QR tại bàn</summary>
+    [HttpPost("{id:int}/scan")]
+    [Authorize(Roles = "CUSTOMER,GUEST")]
+    public async Task<IActionResult> ScanTable(int id, [FromBody] ScanTableRequest request)
     {
-        var result = await _tableService.GetByIdAsync(id);
-        if (result == null)
-            return NotFound(ApiResponse<object>.Fail("Không tìm thấy bàn"));
-        return Ok(ApiResponse<TableResponse>.Ok(result));
-    }
-
-    /// <summary>GET /api/v1/tables/available — Bàn trống</summary>
-    [HttpGet("available")]
-    [Authorize(Roles = "STAFF,MANAGER")]
-    public async Task<IActionResult> GetAvailable()
-    {
-        var result = await _tableService.GetAvailableAsync();
-        return Ok(ApiResponse<List<TableResponse>>.Ok(result));
-    }
-
-    /// <summary>POST /api/v1/tables — Thêm bàn mới (Manager only)</summary>
-    [HttpPost]
-    [Authorize(Roles = "MANAGER")]
-    public async Task<IActionResult> Create([FromBody] CreateTableRequest request)
-    {
-        var result = await _tableService.CreateAsync(request);
-        return Created("", ApiResponse<TableResponse>.Ok(result, "Thêm bàn thành công"));
+        var result = await _tableService.ScanTableAsync(id, request);
+        return Ok(ApiResponse<ScanTableResponse>.Ok(result, result.Message));
     }
 
     /// <summary>PATCH /api/v1/tables/{id}/status — Cập nhật trạng thái bàn</summary>
@@ -61,6 +42,24 @@ public class TablesController : ControllerBase
     public async Task<IActionResult> UpdateStatus(int id, [FromBody] UpdateTableStatusRequest request)
     {
         var result = await _tableService.UpdateStatusAsync(id, request.Status);
-        return Ok(ApiResponse<TableResponse>.Ok(result, "Cập nhật trạng thái bàn thành công"));
+        return Ok(ApiResponse<UpdateTableStatusResponse>.Ok(result, "Cập nhật trạng thái bàn thành công"));
+    }
+
+    /// <summary>POST /api/v1/tables/reservations — Đặt bàn trước</summary>
+    [HttpPost("reservations")]
+    [Authorize(Roles = "CUSTOMER,STAFF,MANAGER")]
+    public async Task<IActionResult> CreateReservation([FromBody] CreateReservationRequest request)
+    {
+        var result = await _tableService.CreateReservationAsync(request);
+        return Created("", ApiResponse<ReservationResponse>.Ok(result, "Đặt bàn thành công"));
+    }
+
+    /// <summary>PATCH /api/v1/tables/reservations/{id}/status — Cập nhật trạng thái đặt bàn</summary>
+    [HttpPatch("reservations/{id:int}/status")]
+    [Authorize(Roles = "STAFF,MANAGER")]
+    public async Task<IActionResult> UpdateReservationStatus(int id, [FromBody] UpdateReservationStatusRequest request)
+    {
+        var result = await _tableService.UpdateReservationStatusAsync(id, request.Status);
+        return Ok(ApiResponse<UpdateReservationStatusResponse>.Ok(result, "Cập nhật trạng thái đặt bàn thành công"));
     }
 }
