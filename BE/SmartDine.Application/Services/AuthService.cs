@@ -8,6 +8,22 @@ using SmartDine.Domain.Interfaces;
 
 namespace SmartDine.Application.Services;
 
+/// <summary>
+/// Service xử lý toàn bộ nghiệp vụ xác thực và quản lý phiên đăng nhập.
+///
+/// Chịu trách nhiệm:
+///   - Login cho User (nhân viên) và Customer (khách hàng) — cùng 1 endpoint.
+///   - Register cho Customer (nhân viên được tạo bởi Manager qua kênh khác).
+///   - Refresh token rotation (revoke cũ, cấp mới).
+///   - Forgot/Reset password flow.
+///   - Guest login (khách vãng lai vào bàn không cần tài khoản).
+///   - Logout (revoke tất cả refresh token).
+///
+/// Dependencies:
+///   - IUnitOfWork: truy cập Users, Customers, RefreshTokens, PasswordResetTokens, Tables, DiningSessions.
+///   - IJwtTokenService: tạo/validate JWT (RSA256).
+///   - IPasswordHasher: hash/verify mật khẩu (BCrypt).
+/// </summary>
 public class AuthService
 {
     private readonly IUnitOfWork _uow;
@@ -21,8 +37,30 @@ public class AuthService
         _passwordHasher = passwordHasher;
     }
 
+    // ═══════════════════════════════════════════════════════════════
+    // POST /api/v1/auth/login
+    // ═══════════════════════════════════════════════════════════════
+    /// <summary>
+    /// Xác thực email + password, trả về cặp AccessToken + RefreshToken.
+    ///
+    /// Luồng:
+    ///   1. Tìm email trong bảng Users (nhân viên) trước.
+    ///      - Tìm thấy + IsActive → verify password BCrypt → cấp token với role (STAFF/CHEF/MANAGER).
+    ///      - Tìm thấy nhưng IsActive = false → rơi xuống bước 2 (không tiết lộ tài khoản bị khóa).
+    ///   2. Tìm email trong bảng Customers (khách hàng).
+    ///      - Tìm thấy → verify password → cấp token với role = CUSTOMER.
+    ///   3. Không tìm thấy ở cả 2 bảng → throw lỗi chung (chống user enumeration).
+    ///
+    /// Bảo mật: luôn trả cùng 1 error message dù email sai hay password sai.
+    ///
+    /// Error cases:
+    ///   - Email không tồn tại → BusinessRuleViolationException (422).
+    ///   - Password sai → BusinessRuleViolationException (422).
+    ///   - Tài khoản User bị vô hiệu hóa → BusinessRuleViolationException (422).
+    /// </summary>
     public async Task<TokenResponse> LoginAsync(LoginRequest request)
     {
+        // Ưu tiên tìm trong Users (nhân viên) trước
         var user = await _uow.Users.GetByEmailAsync(request.Email);
         if (user != null && user.IsActive)
         {
@@ -32,6 +70,7 @@ public class AuthService
             return await GenerateTokenResponseAsync(user.Id, user.Email, user.FullName, user.Role, "USER");
         }
 
+        // Fallback: tìm trong Customers (khách hàng)
         var customer = await _uow.Customers.GetByEmailAsync(request.Email);
         if (customer != null)
         {
@@ -41,11 +80,29 @@ public class AuthService
             return await GenerateTokenResponseAsync(customer.Id, customer.Email ?? string.Empty, customer.FullName ?? "Customer", "CUSTOMER", "CUSTOMER");
         }
 
+        // Không tìm thấy → trả lỗi chung (chống enumeration)
         throw new BusinessRuleViolationException(ValidationMessages.EMAIL_OR_PASSSWORD_INVALID);
     }
 
+    // ═══════════════════════════════════════════════════════════════
+    // POST /api/v1/auth/register
+    // ═══════════════════════════════════════════════════════════════
+    /// <summary>
+    /// Đăng ký tài khoản Customer mới, tự động login sau khi tạo thành công.
+    ///
+    /// Luồng:
+    ///   1. Check email trùng trong cả bảng Users lẫn Customers (toàn hệ thống).
+    ///   2. Check phone trùng (nếu có) trong Customers.
+    ///   3. Tạo Customer với PasswordHash (BCrypt), MembershipLevel = BRONZE.
+    ///   4. SaveChanges → sinh cặp token → trả về TokenResponse (tự động login).
+    ///
+    /// Error cases:
+    ///   - Email đã tồn tại (User hoặc Customer) → BusinessRuleViolationException (422).
+    ///   - Phone đã tồn tại → BusinessRuleViolationException (422).
+    /// </summary>
     public async Task<TokenResponse> RegisterAsync(RegisterRequest request)
     {
+        // Check trùng email trên cả 2 bảng
         if (await _uow.Users.ExistsAsync(request.Email) || await _uow.Customers.GetByEmailAsync(request.Email) != null)
             throw new BusinessRuleViolationException(ValidationMessages.EMAIL_ALREADY_EXISTS);
 
@@ -67,17 +124,43 @@ public class AuthService
         await _uow.Customers.AddAsync(customer);
         await _uow.SaveChangesAsync();
 
+        // Tự động login: tạo token ngay sau register
         return await GenerateTokenResponseAsync(customer.Id, customer.Email, customer.FullName, "CUSTOMER", "CUSTOMER");
     }
 
+    // ═══════════════════════════════════════════════════════════════
+    // POST /api/v1/auth/refresh-token
+    // ═══════════════════════════════════════════════════════════════
+    /// <summary>
+    /// Làm mới cặp token khi AccessToken hết hạn (Token Rotation).
+    ///
+    /// Luồng:
+    ///   1. Parse expired AccessToken → lấy ClaimsPrincipal (ValidateLifetime=false, vẫn verify RSA256).
+    ///   2. Lấy jti claim từ token → dùng làm key liên kết với RefreshToken trong DB.
+    ///   3. Tìm RefreshToken trong DB theo token string → validate:
+    ///      - Token tồn tại? (chống dùng token bịa).
+    ///      - Chưa hết hạn? (7 ngày).
+    ///      - JwtId khớp? (đảm bảo đúng cặp token, chống mix-match).
+    ///   4. Revoke RefreshToken cũ (IsRevoked=true, RevokedAt, ReplacedByToken).
+    ///   5. Tạo cặp AccessToken + RefreshToken mới → lưu RefreshToken mới vào DB.
+    ///   6. Trả về TokenResponse mới cho client.
+    ///
+    /// Error cases:
+    ///   - AccessToken không parse được / bị tamper → BusinessRuleViolationException (422).
+    ///   - RefreshToken không tồn tại trong DB → BusinessRuleViolationException (422).
+    ///   - RefreshToken hết hạn → BusinessRuleViolationException (422).
+    ///   - JwtId không khớp (sai cặp) → BusinessRuleViolationException (422).
+    /// </summary>
     public async Task<TokenResponse> RefreshTokenAsync(RefreshTokenRequest request)
     {
+        // Bước 1-2: Parse expired token, lấy jti
         var principal = _jwtService.GetPrincipalFromExpiredToken(request.AccessToken)
             ?? throw new BusinessRuleViolationException(ValidationMessages.ACCESS_TOKEN_INVALID);
 
         var jwtId = principal.FindFirst(JwtRegisteredClaimNames.Jti)?.Value
             ?? throw new BusinessRuleViolationException(ValidationMessages.ACCESS_TOKEN_INVALID);
 
+        // Bước 3: Tìm và validate RefreshToken trong DB
         var storedToken = await _uow.RefreshTokens.GetByTokenAsync(request.RefreshToken)
             ?? throw new BusinessRuleViolationException(ValidationMessages.REFRESH_TOKEN_NOT_FOUND);
 
@@ -87,9 +170,11 @@ public class AuthService
         if (storedToken.JwtId != jwtId)
             throw new BusinessRuleViolationException(ValidationMessages.REFRESH_TOKEN_MISMATCH);
 
+        // Bước 4: Revoke token cũ
         storedToken.IsRevoked = true;
         storedToken.RevokedAt = DateTime.UtcNow;
 
+        // Bước 5: Tạo cặp token mới
         var userId = int.Parse(principal.FindFirst(ClaimTypes.NameIdentifier)!.Value);
         var email = principal.FindFirst(ClaimTypes.Email)!.Value;
         var fullName = principal.FindFirst(ClaimTypes.Name)!.Value;
@@ -107,6 +192,7 @@ public class AuthService
             ExpiresAt = DateTime.UtcNow.AddDays(7),
         };
 
+        // Ghi nhận token chain: cũ → mới
         storedToken.ReplacedByToken = newRefreshToken;
 
         await _uow.RefreshTokens.AddAsync(refreshTokenEntity);
@@ -127,6 +213,21 @@ public class AuthService
         };
     }
 
+    // ═══════════════════════════════════════════════════════════════
+    // POST /api/v1/auth/forgot-password
+    // ═══════════════════════════════════════════════════════════════
+    /// <summary>
+    /// Khởi tạo flow đặt lại mật khẩu — tạo reset token có thời hạn 15 phút.
+    ///
+    /// Luồng:
+    ///   1. Tìm email trong Users, rồi Customers.
+    ///   2. Nếu không tìm thấy → vẫn trả response thành công (chống email enumeration).
+    ///   3. Invalidate tất cả reset token cũ của user này (tránh token cũ còn dùng được).
+    ///   4. Tạo token mới (32 bytes random, base64) + lưu vào DB với expiry 15 phút.
+    ///   5. Trả về ResetToken trong response (dev mode — production sẽ gửi qua email).
+    ///
+    /// Bảo mật: Response luôn giống nhau dù email có tồn tại hay không.
+    /// </summary>
     public async Task<ForgotPasswordResponse> ForgotPasswordAsync(ForgotPasswordRequest request)
     {
         int userId;
@@ -143,12 +244,14 @@ public class AuthService
             var customer = await _uow.Customers.GetByEmailAsync(request.Email);
             if (customer == null)
             {
+                // Email không tồn tại → trả message giống hệt (chống enumeration)
                 return new ForgotPasswordResponse { Message = ValidationMessages.FORGOT_PASSWORD_MESSAGE };
             }
             userId = customer.Id;
             userType = "CUSTOMER";
         }
 
+        // Vô hiệu hóa tất cả reset token cũ
         await _uow.PasswordResetTokens.InvalidateAllByUserAsync(userId, userType);
 
         var resetToken = _jwtService.GeneratePasswordResetToken();
@@ -171,6 +274,25 @@ public class AuthService
         };
     }
 
+    // ═══════════════════════════════════════════════════════════════
+    // POST /api/v1/auth/reset-password
+    // ═══════════════════════════════════════════════════════════════
+    /// <summary>
+    /// Đặt lại mật khẩu bằng reset token nhận từ forgot-password flow.
+    ///
+    /// Luồng:
+    ///   1. Validate NewPassword == ConfirmPassword.
+    ///   2. Tìm PasswordResetToken trong DB → validate chưa hết hạn + chưa dùng.
+    ///   3. Hash mật khẩu mới (BCrypt) → cập nhật vào User/Customer.PasswordHash.
+    ///   4. Đánh dấu token IsUsed = true (single-use).
+    ///   5. Revoke tất cả RefreshToken của user → force re-login trên mọi thiết bị.
+    ///      Lý do: nếu mật khẩu cũ bị lộ, attacker có thể đang giữ refresh token hợp lệ.
+    ///
+    /// Error cases:
+    ///   - Password không khớp ConfirmPassword → BusinessRuleViolationException (422).
+    ///   - Token không tồn tại / hết hạn / đã dùng → BusinessRuleViolationException (422).
+    ///   - User/Customer không tồn tại (bị xóa) → EntityNotFoundException (404).
+    /// </summary>
     public async Task ResetPasswordAsync(ResetPasswordRequest request)
     {
         if (request.NewPassword != request.ConfirmPassword)
@@ -196,10 +318,26 @@ public class AuthService
 
         tokenEntity.IsUsed = true;
 
+        // Force re-login: revoke tất cả session cũ
         await _uow.RefreshTokens.RevokeAllByUserAsync(tokenEntity.UserId, tokenEntity.UserType);
         await _uow.SaveChangesAsync();
     }
 
+    // ═══════════════════════════════════════════════════════════════
+    // GET /api/v1/auth/me
+    // ═══════════════════════════════════════════════════════════════
+    /// <summary>
+    /// Lấy thông tin user hiện tại từ JWT claims (userId + role).
+    ///
+    /// Luồng:
+    ///   1. Controller parse JWT → lấy userId (claim NameIdentifier) + role.
+    ///   2. Nếu role = CUSTOMER → tìm trong bảng Customers.
+    ///   3. Ngược lại (STAFF/CHEF/MANAGER) → tìm trong bảng Users.
+    ///   4. Trả về UserInfoResponse (id, fullName, email, role, avatarUrl).
+    ///
+    /// Error cases:
+    ///   - User/Customer bị xóa hoặc không tồn tại → EntityNotFoundException (404).
+    /// </summary>
     public async Task<UserInfoResponse> GetCurrentUserAsync(int id, string role)
     {
         if (role == "CUSTOMER")
@@ -234,6 +372,23 @@ public class AuthService
         throw new EntityNotFoundException("User/Customer", id);
     }
 
+    // ═══════════════════════════════════════════════════════════════
+    // POST /api/v1/auth/login-guest
+    // ═══════════════════════════════════════════════════════════════
+    /// <summary>
+    /// Đăng nhập cho khách vãng lai — không cần tài khoản, chỉ cần biết bàn nào.
+    ///
+    /// Luồng:
+    ///   1. Tìm bàn theo TableId → 404 nếu không tồn tại.
+    ///   2. Kiểm tra bàn đã có DiningSession ACTIVE chưa:
+    ///      a. Có → dùng session hiện tại (khách mới join bàn đang ăn).
+    ///      b. Không → chuyển bàn OCCUPIED + tạo DiningSession mới.
+    ///   3. Tạo JWT với role=GUEST, userId=sessionId (không phải customerId).
+    ///      Token GUEST có quyền hạn giới hạn: chỉ xem menu + gọi món tại bàn.
+    ///
+    /// Error cases:
+    ///   - Bàn không tồn tại → EntityNotFoundException (404).
+    /// </summary>
     public async Task<GuestLoginResponse> LoginGuestAsync(GuestLoginRequest request)
     {
         var table = await _uow.Tables.GetByIdAsync(request.TableId)
@@ -244,10 +399,12 @@ public class AuthService
 
         if (existingSession != null)
         {
+            // Bàn đã có khách → join session hiện tại
             session = existingSession;
         }
         else
         {
+            // Bàn trống → mở bàn + tạo session mới
             table.Status = "OCCUPIED";
 
             session = new DiningSession
@@ -263,6 +420,7 @@ public class AuthService
             await _uow.SaveChangesAsync();
         }
 
+        // JWT cho guest: userId = sessionId, role = GUEST
         var guestName = request.GuestName ?? "Guest";
         var (accessToken, _) = _jwtService.GenerateAccessToken(session.Id, "", guestName, "GUEST");
 
@@ -276,6 +434,18 @@ public class AuthService
         };
     }
 
+    // ═══════════════════════════════════════════════════════════════
+    // POST /api/v1/auth/logout
+    // ═══════════════════════════════════════════════════════════════
+    /// <summary>
+    /// Đăng xuất — revoke tất cả RefreshToken của user.
+    ///
+    /// Luồng:
+    ///   1. Controller parse JWT → lấy userId + userType (USER/CUSTOMER/GUEST).
+    ///   2. Revoke tất cả RefreshToken trong DB (IsRevoked=true).
+    ///   3. AccessToken hiện tại vẫn valid cho đến khi hết hạn (stateless JWT).
+    ///      Nhưng client sẽ không thể refresh khi token hết hạn → buộc phải login lại.
+    /// </summary>
     public async Task<LogoutResponse> LogoutAsync(int userId, string userType)
     {
         await _uow.RefreshTokens.RevokeAllByUserAsync(userId, userType);
@@ -287,6 +457,19 @@ public class AuthService
         };
     }
 
+    // ═══════════════════════════════════════════════════════════════
+    // Private Helper
+    // ═══════════════════════════════════════════════════════════════
+    /// <summary>
+    /// Helper tạo cặp AccessToken + RefreshToken và lưu RefreshToken vào DB.
+    /// Dùng chung cho Login và Register (tránh duplicate code).
+    ///
+    /// Luồng:
+    ///   1. JwtTokenService tạo AccessToken (JWT RSA256) → trả (token, jwtId).
+    ///   2. JwtTokenService tạo RefreshToken (random 64 bytes → base64).
+    ///   3. Lưu RefreshToken vào DB kèm JwtId (liên kết cặp token), ExpiresAt = 7 ngày.
+    ///   4. Trả TokenResponse cho client.
+    /// </summary>
     private async Task<TokenResponse> GenerateTokenResponseAsync(int id, string email, string fullName, string role, string userType)
     {
         var (accessToken, jwtId) = _jwtService.GenerateAccessToken(id, email, fullName, role);
