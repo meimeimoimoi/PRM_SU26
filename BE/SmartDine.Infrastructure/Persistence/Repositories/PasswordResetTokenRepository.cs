@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using SmartDine.Domain.Entities;
+using SmartDine.Domain.Enums;
 using SmartDine.Domain.Interfaces;
 
 namespace SmartDine.Infrastructure.Persistence.Repositories;
@@ -11,7 +12,7 @@ public class PasswordResetTokenRepository : GenericRepository<PasswordResetToken
     public async Task<PasswordResetToken?> GetByTokenAsync(string token) =>
         await _dbSet.FirstOrDefaultAsync(p => p.Token == token && !p.IsUsed && p.ExpiresAt > DateTime.UtcNow);
 
-    public async Task InvalidateAllByUserAsync(int userId, string userType)
+    public async Task InvalidateAllByUserAsync(int userId, UserType userType)
     {
         var tokens = await _dbSet.Where(p => p.UserId == userId && p.UserType == userType && !p.IsUsed).ToListAsync();
         foreach (var token in tokens)

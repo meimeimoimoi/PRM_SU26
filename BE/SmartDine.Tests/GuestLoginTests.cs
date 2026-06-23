@@ -2,6 +2,7 @@ using Moq;
 using SmartDine.Application.DTOs.Auth;
 using SmartDine.Application.Services;
 using SmartDine.Domain.Entities;
+using SmartDine.Domain.Enums;
 using SmartDine.Domain.Exceptions;
 using SmartDine.Domain.Interfaces;
 
@@ -48,7 +49,7 @@ public class GuestLoginTests
     [Fact]
     public async Task LoginGuest_NewSessionAtAvailableTable_CreatesSessionAndReturnsToken()
     {
-        var table = new Table { Id = 5, TableNumber = 12, Status = "AVAILABLE", Capacity = 4 };
+        var table = new Table { Id = 5, TableNumber = 12, Status = TableStatus.AVAILABLE, Capacity = 4 };
         _tableRepoMock.Setup(r => r.GetByIdAsync(5)).ReturnsAsync(table);
         _sessionRepoMock.Setup(r => r.GetActiveByTableIdAsync(5)).ReturnsAsync((DiningSession?)null);
         _sessionRepoMock.Setup(r => r.AddAsync(It.IsAny<DiningSession>()))
@@ -73,7 +74,7 @@ public class GuestLoginTests
     [Fact]
     public async Task LoginGuest_NewSession_SetsTableStatusToOccupied()
     {
-        var table = new Table { Id = 3, TableNumber = 7, Status = "AVAILABLE" };
+        var table = new Table { Id = 3, TableNumber = 7, Status = TableStatus.AVAILABLE };
         _tableRepoMock.Setup(r => r.GetByIdAsync(3)).ReturnsAsync(table);
         _sessionRepoMock.Setup(r => r.GetActiveByTableIdAsync(3)).ReturnsAsync((DiningSession?)null);
         _sessionRepoMock.Setup(r => r.AddAsync(It.IsAny<DiningSession>()))
@@ -87,13 +88,13 @@ public class GuestLoginTests
             GuestName = "Khách"
         });
 
-        Assert.Equal("OCCUPIED", table.Status);
+        Assert.Equal(TableStatus.OCCUPIED, table.Status);
     }
 
     [Fact]
     public async Task LoginGuest_NewSession_PersistsGuestInfoInSession()
     {
-        var table = new Table { Id = 1, TableNumber = 1, Status = "AVAILABLE" };
+        var table = new Table { Id = 1, TableNumber = 1, Status = TableStatus.AVAILABLE };
         _tableRepoMock.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(table);
         _sessionRepoMock.Setup(r => r.GetActiveByTableIdAsync(1)).ReturnsAsync((DiningSession?)null);
 
@@ -114,14 +115,14 @@ public class GuestLoginTests
         Assert.NotNull(capturedSession);
         Assert.Equal("Nguyễn Văn A", capturedSession!.GuestName);
         Assert.Equal("0901234567", capturedSession.GuestPhone);
-        Assert.Equal("ACTIVE", capturedSession.Status);
+        Assert.Equal(DiningSessionStatus.ACTIVE, capturedSession.Status);
         Assert.Equal(1, capturedSession.TableId);
     }
 
     [Fact]
     public async Task LoginGuest_NewSession_CallsSaveChanges()
     {
-        var table = new Table { Id = 1, TableNumber = 1, Status = "AVAILABLE" };
+        var table = new Table { Id = 1, TableNumber = 1, Status = TableStatus.AVAILABLE };
         _tableRepoMock.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(table);
         _sessionRepoMock.Setup(r => r.GetActiveByTableIdAsync(1)).ReturnsAsync((DiningSession?)null);
         _sessionRepoMock.Setup(r => r.AddAsync(It.IsAny<DiningSession>()))
@@ -140,14 +141,14 @@ public class GuestLoginTests
     [Fact]
     public async Task LoginGuest_ExistingActiveSession_ReusesSessionWithoutCreatingNew()
     {
-        var table = new Table { Id = 5, TableNumber = 12, Status = "OCCUPIED" };
+        var table = new Table { Id = 5, TableNumber = 12, Status = TableStatus.OCCUPIED };
         var existingSession = new DiningSession
         {
             Id = 99,
             TableId = 5,
             GuestName = "Khách trước",
             GuestPhone = "0900000000",
-            Status = "ACTIVE"
+            Status = DiningSessionStatus.ACTIVE
         };
 
         _tableRepoMock.Setup(r => r.GetByIdAsync(5)).ReturnsAsync(table);
@@ -170,8 +171,8 @@ public class GuestLoginTests
     [Fact]
     public async Task LoginGuest_ExistingActiveSession_DoesNotCallSaveChanges()
     {
-        var table = new Table { Id = 5, TableNumber = 12, Status = "OCCUPIED" };
-        var existingSession = new DiningSession { Id = 99, TableId = 5, Status = "ACTIVE" };
+        var table = new Table { Id = 5, TableNumber = 12, Status = TableStatus.OCCUPIED };
+        var existingSession = new DiningSession { Id = 99, TableId = 5, Status = DiningSessionStatus.ACTIVE };
 
         _tableRepoMock.Setup(r => r.GetByIdAsync(5)).ReturnsAsync(table);
         _sessionRepoMock.Setup(r => r.GetActiveByTableIdAsync(5)).ReturnsAsync(existingSession);
@@ -214,7 +215,7 @@ public class GuestLoginTests
     [Fact]
     public async Task LoginGuest_NullGuestName_UsesGuestAsDefaultInToken()
     {
-        var table = new Table { Id = 1, TableNumber = 1, Status = "AVAILABLE" };
+        var table = new Table { Id = 1, TableNumber = 1, Status = TableStatus.AVAILABLE };
         _tableRepoMock.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(table);
         _sessionRepoMock.Setup(r => r.GetActiveByTableIdAsync(1)).ReturnsAsync((DiningSession?)null);
         _sessionRepoMock.Setup(r => r.AddAsync(It.IsAny<DiningSession>()))
@@ -237,7 +238,7 @@ public class GuestLoginTests
     [Fact]
     public async Task LoginGuest_NullGuestName_StoresNullInSession()
     {
-        var table = new Table { Id = 1, TableNumber = 1, Status = "AVAILABLE" };
+        var table = new Table { Id = 1, TableNumber = 1, Status = TableStatus.AVAILABLE };
         _tableRepoMock.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(table);
         _sessionRepoMock.Setup(r => r.GetActiveByTableIdAsync(1)).ReturnsAsync((DiningSession?)null);
 
@@ -257,7 +258,7 @@ public class GuestLoginTests
     [Fact]
     public async Task LoginGuest_EmptyStringGuestName_UsesEmptyStringNotDefault()
     {
-        var table = new Table { Id = 1, TableNumber = 1, Status = "AVAILABLE" };
+        var table = new Table { Id = 1, TableNumber = 1, Status = TableStatus.AVAILABLE };
         _tableRepoMock.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(table);
         _sessionRepoMock.Setup(r => r.GetActiveByTableIdAsync(1)).ReturnsAsync((DiningSession?)null);
         _sessionRepoMock.Setup(r => r.AddAsync(It.IsAny<DiningSession>()))
@@ -284,8 +285,8 @@ public class GuestLoginTests
     [Fact]
     public async Task LoginGuest_MultipleGuestsAtSameTable_AllGetSameSessionId()
     {
-        var table = new Table { Id = 5, TableNumber = 12, Status = "AVAILABLE" };
-        var session = new DiningSession { Id = 200, TableId = 5, Status = "ACTIVE", GuestName = "Khách 1" };
+        var table = new Table { Id = 5, TableNumber = 12, Status = TableStatus.AVAILABLE };
+        var session = new DiningSession { Id = 200, TableId = 5, Status = DiningSessionStatus.ACTIVE, GuestName = "Khách 1" };
 
         _tableRepoMock.Setup(r => r.GetByIdAsync(5)).ReturnsAsync(table);
 
@@ -323,7 +324,7 @@ public class GuestLoginTests
     [Fact]
     public async Task LoginGuest_ResponseContainsCorrectTableNumber()
     {
-        var table = new Table { Id = 3, TableNumber = 42, Status = "AVAILABLE", Capacity = 6 };
+        var table = new Table { Id = 3, TableNumber = 42, Status = TableStatus.AVAILABLE, Capacity = 6 };
         _tableRepoMock.Setup(r => r.GetByIdAsync(3)).ReturnsAsync(table);
         _sessionRepoMock.Setup(r => r.GetActiveByTableIdAsync(3)).ReturnsAsync((DiningSession?)null);
         _sessionRepoMock.Setup(r => r.AddAsync(It.IsAny<DiningSession>()))
@@ -343,7 +344,7 @@ public class GuestLoginTests
     [Fact]
     public async Task LoginGuest_RoleAlwaysGuest_RegardlessOfInput()
     {
-        var table = new Table { Id = 1, TableNumber = 1, Status = "AVAILABLE" };
+        var table = new Table { Id = 1, TableNumber = 1, Status = TableStatus.AVAILABLE };
         _tableRepoMock.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(table);
         _sessionRepoMock.Setup(r => r.GetActiveByTableIdAsync(1)).ReturnsAsync((DiningSession?)null);
         _sessionRepoMock.Setup(r => r.AddAsync(It.IsAny<DiningSession>()))
@@ -364,7 +365,7 @@ public class GuestLoginTests
     [Fact]
     public async Task LoginGuest_DoesNotCreateRefreshToken_GuestCannotRefreshSession()
     {
-        var table = new Table { Id = 1, TableNumber = 1, Status = "AVAILABLE" };
+        var table = new Table { Id = 1, TableNumber = 1, Status = TableStatus.AVAILABLE };
         _tableRepoMock.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(table);
         _sessionRepoMock.Setup(r => r.GetActiveByTableIdAsync(1)).ReturnsAsync((DiningSession?)null);
         _sessionRepoMock.Setup(r => r.AddAsync(It.IsAny<DiningSession>()))
@@ -390,7 +391,7 @@ public class GuestLoginTests
     [Fact]
     public async Task LoginGuest_GeneratesTokenWithEmptyEmail()
     {
-        var table = new Table { Id = 1, TableNumber = 1, Status = "AVAILABLE" };
+        var table = new Table { Id = 1, TableNumber = 1, Status = TableStatus.AVAILABLE };
         _tableRepoMock.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(table);
         _sessionRepoMock.Setup(r => r.GetActiveByTableIdAsync(1)).ReturnsAsync((DiningSession?)null);
         _sessionRepoMock.Setup(r => r.AddAsync(It.IsAny<DiningSession>()))
@@ -416,7 +417,7 @@ public class GuestLoginTests
     [Fact]
     public async Task LoginGuest_UsesSessionIdAsIdentifier_NotUserId()
     {
-        var table = new Table { Id = 5, TableNumber = 12, Status = "AVAILABLE" };
+        var table = new Table { Id = 5, TableNumber = 12, Status = TableStatus.AVAILABLE };
         _tableRepoMock.Setup(r => r.GetByIdAsync(5)).ReturnsAsync(table);
         _sessionRepoMock.Setup(r => r.GetActiveByTableIdAsync(5)).ReturnsAsync((DiningSession?)null);
         _sessionRepoMock.Setup(r => r.AddAsync(It.IsAny<DiningSession>()))

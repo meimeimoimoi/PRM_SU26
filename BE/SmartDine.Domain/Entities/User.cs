@@ -1,3 +1,5 @@
+using SmartDine.Domain.Enums;
+
 namespace SmartDine.Domain.Entities;
 
 /// <summary>
@@ -17,6 +19,6 @@ public class User : BaseEntity
     public string FullName { get; set; } = string.Empty;
     public string Email { get; set; } = string.Empty;
     public string PasswordHash { get; set; } = string.Empty;
-    public string Role { get; set; } = "STAFF";
+    public UserRole Role { get; set; } = UserRole.STAFF;
     public bool IsActive { get; set; } = true;
 }

@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using SmartDine.Domain.Entities;
+using SmartDine.Domain.Enums;
 using SmartDine.Domain.Interfaces;
 using System;
 using System.Collections.Generic;
@@ -20,18 +21,21 @@ public class OrderRepository : GenericRepository<Order>, IOrderRepository
                     .Skip((page - 1) * pageSize).Take(pageSize)
                     .ToListAsync();
 
-    public async Task<IReadOnlyList<Order>> GetByStatusAsync(string status) =>
-        await _dbSet.Include(o => o.OrderDetails).ThenInclude(d => d.MenuItem)
+    public async Task<IReadOnlyList<Order>> GetByStatusAsync(string status)
+    {
+        var parsed = Enum.Parse<OrderStatus>(status, true);
+        return await _dbSet.Include(o => o.OrderDetails).ThenInclude(d => d.MenuItem)
                     .Include(o => o.Session).ThenInclude(s => s.Table)
-                    .Where(o => o.Status == status)
+                    .Where(o => o.Status == parsed)
                     .OrderBy(o => o.CreatedAt)
                     .ToListAsync();
+    }
 
     public async Task<IReadOnlyList<Order>> GetActiveOrdersAsync() =>
         await _dbSet.Include(o => o.OrderDetails).ThenInclude(d => d.MenuItem)
                     .Include(o => o.Session).ThenInclude(s => s.Table)
                     .Include(o => o.Session).ThenInclude(s => s.Customer)
-                    .Where(o => o.Status != "COMPLETED" && o.Status != "CANCELLED")
+                    .Where(o => o.Status != OrderStatus.COMPLETED && o.Status != OrderStatus.CANCELLED)
                     .OrderBy(o => o.CreatedAt)
                     .ToListAsync();
 

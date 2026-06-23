@@ -1,3 +1,5 @@
+using SmartDine.Domain.Enums;
+
 namespace SmartDine.Domain.Entities;
 
 /// <summary>
@@ -18,7 +20,7 @@ public class PasswordResetToken : BaseEntity
 {
     public string Token { get; set; } = string.Empty;
     public string Email { get; set; } = string.Empty;
-    public string UserType { get; set; } = "CUSTOMER";
+    public UserType UserType { get; set; } = Enums.UserType.CUSTOMER;
     public int UserId { get; set; }
     public DateTime ExpiresAt { get; set; }
     public bool IsUsed { get; set; } = false;

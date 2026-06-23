@@ -81,11 +81,11 @@ public class TableService
         var table = await _uow.Tables.GetByIdAsync(tableId)
             ?? throw new EntityNotFoundException("Table", tableId);
 
-        if (table.Status == TableStatus.MAINTENANCE.ToString())
+        if (table.Status == TableStatus.MAINTENANCE)
             throw new BusinessRuleViolationException(
                 string.Format(ValidationMessages.TABLE_MAINTENANCE_CANNOT_SERVE, table.TableNumber));
 
-        if (table.Status == TableStatus.RESERVED.ToString())
+        if (table.Status == TableStatus.RESERVED)
             throw new BusinessRuleViolationException(
                 string.Format(ValidationMessages.TABLE_RESERVED, table.TableNumber));
 
@@ -105,7 +105,7 @@ public class TableService
             {
                 SessionId = existingSession.Id,
                 TableId = tableId,
-                Status = existingSession.Status,
+                Status = existingSession.Status.ToString(),
                 IsNewSession = false,
                 Message = string.Format(ValidationMessages.SCAN_JOINED_SESSION, table.TableNumber)
             };
@@ -116,19 +116,19 @@ public class TableService
         {
             CustomerId = request.CustomerId,
             TableId = tableId,
-            Status = "ACTIVE",
+            Status = DiningSessionStatus.ACTIVE,
             StartedAt = DateTime.UtcNow
         };
 
         await _uow.DiningSessions.AddAsync(newSession);
-        table.Status = TableStatus.OCCUPIED.ToString();
+        table.Status = TableStatus.OCCUPIED;
         await _uow.SaveChangesAsync();
 
         return new ScanTableResponse
         {
             SessionId = newSession.Id,
             TableId = tableId,
-            Status = newSession.Status,
+            Status = newSession.Status.ToString(),
             IsNewSession = true,
             Message = string.Format(ValidationMessages.SCAN_NEW_SESSION, table.TableNumber)
         };
@@ -166,28 +166,28 @@ public class TableService
         var currentStatus = table.Status;
 
         // Side-effect: đóng phiên ăn khi chuyển OCCUPIED → AVAILABLE
-        if (newStatus == TableStatus.AVAILABLE && currentStatus == TableStatus.OCCUPIED.ToString())
+        if (newStatus == TableStatus.AVAILABLE && currentStatus == TableStatus.OCCUPIED)
         {
             var activeSession = await _uow.DiningSessions.GetActiveByTableIdAsync(id);
             if (activeSession != null)
             {
-                activeSession.Status = "CLOSED";
+                activeSession.Status = DiningSessionStatus.CLOSED;
                 activeSession.EndedAt = DateTime.UtcNow;
             }
         }
 
         // Bàn bảo trì không thể nhận khách trực tiếp
-        if (newStatus == TableStatus.OCCUPIED && currentStatus == TableStatus.MAINTENANCE.ToString())
+        if (newStatus == TableStatus.OCCUPIED && currentStatus == TableStatus.MAINTENANCE)
             throw new BusinessRuleViolationException(
                 string.Format(ValidationMessages.TABLE_MAINTENANCE_CANNOT_OCCUPIED, table.TableNumber));
 
-        table.Status = newStatus.ToString();
+        table.Status = newStatus;
         await _uow.SaveChangesAsync();
 
         return new UpdateTableStatusResponse
         {
             TableId = table.Id,
-            Status = table.Status,
+            Status = table.Status.ToString(),
             UpdatedAt = table.UpdatedAt ?? DateTime.UtcNow
         };
     }
@@ -225,7 +225,7 @@ public class TableService
         var table = await _uow.Tables.GetByIdAsync(request.TableId)
             ?? throw new EntityNotFoundException("Table", request.TableId);
 
-        if (table.Status == TableStatus.MAINTENANCE.ToString())
+        if (table.Status == TableStatus.MAINTENANCE)
             throw new BusinessRuleViolationException(
                 string.Format(ValidationMessages.RESERVATION_TABLE_MAINTENANCE, table.TableNumber));
 
@@ -263,7 +263,7 @@ public class TableService
             GuestPhone = request.GuestPhone,
             PartySize = request.PartySize,
             ReservationTime = request.ReservationTime,
-            Status = "PENDING",
+            Status = ReservationStatus.PENDING,
             Notes = request.Notes,
             ReservedAt = DateTime.UtcNow
         };
@@ -281,7 +281,7 @@ public class TableService
             GuestPhone = reservation.GuestPhone,
             PartySize = reservation.PartySize,
             ReservationTime = reservation.ReservationTime,
-            Status = reservation.Status,
+            Status = reservation.Status.ToString(),
             Notes = reservation.Notes
         };
     }
@@ -317,19 +317,18 @@ public class TableService
         var reservation = await _uow.TableReservations.GetByIdAsync(reservationId)
             ?? throw new EntityNotFoundException("TableReservation", reservationId);
 
-        var validStatuses = new[] { "PENDING", "CONFIRMED", "CHECKED_IN", "CANCELLED", "NO_SHOW" };
-        if (!validStatuses.Contains(status))
+        if (!Enum.TryParse<ReservationStatus>(status, true, out var newReservationStatus))
             throw new BusinessRuleViolationException(
-                string.Format(ValidationMessages.RESERVATION_STATUS_INVALID, string.Join(", ", validStatuses)));
+                string.Format(ValidationMessages.RESERVATION_STATUS_INVALID, string.Join(", ", Enum.GetNames<ReservationStatus>())));
 
         // Trạng thái kết thúc → không cho phép thay đổi nữa
-        if (reservation.Status == "CHECKED_IN")
+        if (reservation.Status == ReservationStatus.CHECKED_IN)
             throw new BusinessRuleViolationException(ValidationMessages.RESERVATION_ALREADY_CHECKED_IN);
 
-        if (reservation.Status == "CANCELLED")
+        if (reservation.Status == ReservationStatus.CANCELLED)
             throw new BusinessRuleViolationException(ValidationMessages.RESERVATION_ALREADY_CANCELLED);
 
-        if (reservation.Status == "NO_SHOW")
+        if (reservation.Status == ReservationStatus.NO_SHOW)
             throw new BusinessRuleViolationException(ValidationMessages.RESERVATION_ALREADY_NO_SHOW);
 
         var table = await _uow.Tables.GetByIdAsync(reservation.TableId)
@@ -338,19 +337,19 @@ public class TableService
         string? newTableStatus = null;
 
         // Side-effect: khi khách đến (CHECKED_IN) → mở bàn + tạo phiên ăn
-        if (status == "CHECKED_IN")
+        if (newReservationStatus == ReservationStatus.CHECKED_IN)
         {
-            if (table.Status == TableStatus.OCCUPIED.ToString())
+            if (table.Status == TableStatus.OCCUPIED)
                 throw new BusinessRuleViolationException(
                     string.Format(ValidationMessages.TABLE_OCCUPIED_CANNOT_CHECKIN, table.TableNumber));
 
-            if (table.Status == TableStatus.MAINTENANCE.ToString())
+            if (table.Status == TableStatus.MAINTENANCE)
                 throw new BusinessRuleViolationException(
                     string.Format(ValidationMessages.TABLE_MAINTENANCE_CANNOT_CHECKIN, table.TableNumber));
 
             // Chuyển bàn sang OCCUPIED
-            table.Status = TableStatus.OCCUPIED.ToString();
-            newTableStatus = table.Status;
+            table.Status = TableStatus.OCCUPIED;
+            newTableStatus = table.Status.ToString();
 
             // Tạo phiên ăn mới cho nhóm khách đã đặt trước
             var newSession = new DiningSession
@@ -359,19 +358,19 @@ public class TableService
                 TableId = reservation.TableId,
                 GuestName = reservation.GuestName,
                 GuestPhone = reservation.GuestPhone,
-                Status = "ACTIVE",
+                Status = DiningSessionStatus.ACTIVE,
                 StartedAt = DateTime.UtcNow
             };
             await _uow.DiningSessions.AddAsync(newSession);
         }
 
-        reservation.Status = status;
+        reservation.Status = newReservationStatus;
         await _uow.SaveChangesAsync();
 
         return new UpdateReservationStatusResponse
         {
             ReservationId = reservation.Id,
-            Status = reservation.Status,
+            Status = reservation.Status.ToString(),
             TableStatus = newTableStatus
         };
     }
@@ -389,7 +388,7 @@ public class TableService
         Id = table.Id,
         TableNumber = table.TableNumber,
         Capacity = table.Capacity,
-        Status = table.Status,
+        Status = table.Status.ToString(),
         QrCode = table.QrCode
     };
 }

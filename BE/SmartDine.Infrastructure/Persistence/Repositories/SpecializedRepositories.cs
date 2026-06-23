@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using SmartDine.Domain.Entities;
+using SmartDine.Domain.Enums;
 using SmartDine.Domain.Interfaces;
 using System;
 using System.Collections.Generic;
@@ -73,8 +74,11 @@ public class TableRepository : GenericRepository<Table>, ITableRepository
     /// Lọc bàn theo đúng 1 trạng thái, sắp xếp theo số bàn tăng dần.
     /// SQL: SELECT * FROM dining_tables WHERE status = @status AND is_deleted = false ORDER BY table_number.
     /// </summary>
-    public async Task<IReadOnlyList<Table>> GetByStatusAsync(string status) =>
-        await _dbSet.Where(t => t.Status == status).OrderBy(t => t.TableNumber).ToListAsync();
+    public async Task<IReadOnlyList<Table>> GetByStatusAsync(string status)
+    {
+        var parsed = Enum.Parse<TableStatus>(status, true);
+        return await _dbSet.Where(t => t.Status == parsed).OrderBy(t => t.TableNumber).ToListAsync();
+    }
 
     /// <summary>
     /// Tìm bàn theo số bàn vật lý. Trả null nếu không tồn tại.
@@ -95,7 +99,10 @@ public class TableRepository : GenericRepository<Table>, ITableRepository
     {
         var query = _dbSet.AsQueryable();
         if (!string.IsNullOrEmpty(status))
-            query = query.Where(t => t.Status == status);
+        {
+            var parsed = Enum.Parse<TableStatus>(status, true);
+            query = query.Where(t => t.Status == parsed);
+        }
         if (capacity.HasValue)
             query = query.Where(t => t.Capacity >= capacity.Value);
         return await query.OrderBy(t => t.TableNumber).ToListAsync();
@@ -146,8 +153,8 @@ public class TableReservationRepository : GenericRepository<TableReservation>, I
         var windowStart = reservationTime.AddHours(-2);
         var windowEnd = reservationTime.AddHours(2);
         return await _dbSet.Where(r => r.TableId == tableId
-                                    && r.Status != "CANCELLED"
-                                    && r.Status != "NO_SHOW"
+                                    && r.Status != ReservationStatus.CANCELLED
+                                    && r.Status != ReservationStatus.NO_SHOW
                                     && r.ReservationTime >= windowStart
                                     && r.ReservationTime <= windowEnd)
                            .ToListAsync();
@@ -161,12 +168,12 @@ public class DiningSessionRepository : GenericRepository<DiningSession>, IDining
     public async Task<IReadOnlyList<DiningSession>> GetActiveSessionsAsync() =>
         await _dbSet.Include(d => d.Customer)
                     .Include(d => d.Table)
-                    .Where(d => d.Status == "ACTIVE")
+                    .Where(d => d.Status == DiningSessionStatus.ACTIVE)
                     .ToListAsync();
 
     public async Task<DiningSession?> GetActiveByTableIdAsync(int tableId) =>
         await _dbSet.Include(d => d.Orders)
-                    .FirstOrDefaultAsync(d => d.TableId == tableId && d.Status == "ACTIVE");
+                    .FirstOrDefaultAsync(d => d.TableId == tableId && d.Status == DiningSessionStatus.ACTIVE);
 }
 
 public class PaymentRepository : GenericRepository<Payment>, IPaymentRepository

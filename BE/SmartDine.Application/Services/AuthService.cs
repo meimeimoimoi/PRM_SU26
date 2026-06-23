@@ -3,6 +3,7 @@ using System.Security.Claims;
 using SmartDine.Application.Constants;
 using SmartDine.Application.DTOs.Auth;
 using SmartDine.Domain.Entities;
+using SmartDine.Domain.Enums;
 using SmartDine.Domain.Exceptions;
 using SmartDine.Domain.Interfaces;
 
@@ -67,7 +68,7 @@ public class AuthService
             if (!_passwordHasher.VerifyPassword(request.Password, user.PasswordHash))
                 throw new BusinessRuleViolationException(ValidationMessages.EMAIL_OR_PASSSWORD_INVALID);
 
-            return await GenerateTokenResponseAsync(user.Id, user.Email, user.FullName, user.Role, "USER");
+            return await GenerateTokenResponseAsync(user.Id, user.Email, user.FullName, user.Role.ToString(), UserType.USER);
         }
 
         // Fallback: tìm trong Customers (khách hàng)
@@ -77,7 +78,7 @@ public class AuthService
             if (customer.PasswordHash == null || !_passwordHasher.VerifyPassword(request.Password, customer.PasswordHash))
                 throw new BusinessRuleViolationException(ValidationMessages.EMAIL_OR_PASSSWORD_INVALID);
 
-            return await GenerateTokenResponseAsync(customer.Id, customer.Email ?? string.Empty, customer.FullName ?? "Customer", "CUSTOMER", "CUSTOMER");
+            return await GenerateTokenResponseAsync(customer.Id, customer.Email ?? string.Empty, customer.FullName ?? "Customer", UserRole.CUSTOMER.ToString(), UserType.CUSTOMER);
         }
 
         // Không tìm thấy → trả lỗi chung (chống enumeration)
@@ -116,7 +117,7 @@ public class AuthService
             Phone = request.PhoneNumber,
             PasswordHash = _passwordHasher.HashPassword(request.Password),
             LoyaltyPoints = 0,
-            MembershipLevel = "BRONZE",
+            MembershipLevel = LoyaltyTier.BRONZE,
             TotalSpent = 0.00m,
             VisitCount = 0
         };
@@ -125,7 +126,7 @@ public class AuthService
         await _uow.SaveChangesAsync();
 
         // Tự động login: tạo token ngay sau register
-        return await GenerateTokenResponseAsync(customer.Id, customer.Email, customer.FullName, "CUSTOMER", "CUSTOMER");
+        return await GenerateTokenResponseAsync(customer.Id, customer.Email, customer.FullName, UserRole.CUSTOMER.ToString(), UserType.CUSTOMER);
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -231,13 +232,13 @@ public class AuthService
     public async Task<ForgotPasswordResponse> ForgotPasswordAsync(ForgotPasswordRequest request)
     {
         int userId;
-        string userType;
+        UserType userType;
 
         var user = await _uow.Users.GetByEmailAsync(request.Email);
         if (user != null)
         {
             userId = user.Id;
-            userType = "USER";
+            userType = UserType.USER;
         }
         else
         {
@@ -248,7 +249,7 @@ public class AuthService
                 return new ForgotPasswordResponse { Message = ValidationMessages.FORGOT_PASSWORD_MESSAGE };
             }
             userId = customer.Id;
-            userType = "CUSTOMER";
+            userType = UserType.CUSTOMER;
         }
 
         // Vô hiệu hóa tất cả reset token cũ
@@ -303,7 +304,7 @@ public class AuthService
 
         var newHash = _passwordHasher.HashPassword(request.NewPassword);
 
-        if (tokenEntity.UserType == "USER")
+        if (tokenEntity.UserType == UserType.USER)
         {
             var user = await _uow.Users.GetByIdAsync(tokenEntity.UserId)
                 ?? throw new EntityNotFoundException("User", tokenEntity.UserId);
@@ -340,7 +341,7 @@ public class AuthService
     /// </summary>
     public async Task<UserInfoResponse> GetCurrentUserAsync(int id, string role)
     {
-        if (role == "CUSTOMER")
+        if (role == UserRole.CUSTOMER.ToString())
         {
             var customer = await _uow.Customers.GetByIdAsync(id);
             if (customer != null)
@@ -350,7 +351,7 @@ public class AuthService
                     Id = customer.Id,
                     FullName = customer.FullName ?? "Customer",
                     Email = customer.Email ?? string.Empty,
-                    Role = "CUSTOMER"
+                    Role = UserRole.CUSTOMER.ToString()
                 };
             }
         }
@@ -364,7 +365,7 @@ public class AuthService
                     Id = user.Id,
                     FullName = user.FullName,
                     Email = user.Email,
-                    Role = user.Role
+                    Role = user.Role.ToString()
                 };
             }
         }
@@ -405,14 +406,14 @@ public class AuthService
         else
         {
             // Bàn trống → mở bàn + tạo session mới
-            table.Status = "OCCUPIED";
+            table.Status = TableStatus.OCCUPIED;
 
             session = new DiningSession
             {
                 TableId = table.Id,
                 GuestName = request.GuestName,
                 GuestPhone = request.GuestPhone,
-                Status = "ACTIVE",
+                Status = DiningSessionStatus.ACTIVE,
                 StartedAt = DateTime.UtcNow
             };
 
@@ -422,7 +423,7 @@ public class AuthService
 
         // JWT cho guest: userId = sessionId, role = GUEST
         var guestName = request.GuestName ?? "Guest";
-        var (accessToken, _) = _jwtService.GenerateAccessToken(session.Id, "", guestName, "GUEST");
+        var (accessToken, _) = _jwtService.GenerateAccessToken(session.Id, "", guestName, UserRole.GUEST.ToString());
 
         return new GuestLoginResponse
         {
@@ -430,7 +431,7 @@ public class AuthService
             SessionId = session.Id,
             TableId = table.Id,
             TableNumber = table.TableNumber,
-            Role = "GUEST"
+            Role = UserRole.GUEST.ToString()
         };
     }
 
@@ -446,7 +447,7 @@ public class AuthService
     ///   3. AccessToken hiện tại vẫn valid cho đến khi hết hạn (stateless JWT).
     ///      Nhưng client sẽ không thể refresh khi token hết hạn → buộc phải login lại.
     /// </summary>
-    public async Task<LogoutResponse> LogoutAsync(int userId, string userType)
+    public async Task<LogoutResponse> LogoutAsync(int userId, UserType userType)
     {
         await _uow.RefreshTokens.RevokeAllByUserAsync(userId, userType);
         await _uow.SaveChangesAsync();
@@ -470,7 +471,7 @@ public class AuthService
     ///   3. Lưu RefreshToken vào DB kèm JwtId (liên kết cặp token), ExpiresAt = 7 ngày.
     ///   4. Trả TokenResponse cho client.
     /// </summary>
-    private async Task<TokenResponse> GenerateTokenResponseAsync(int id, string email, string fullName, string role, string userType)
+    private async Task<TokenResponse> GenerateTokenResponseAsync(int id, string email, string fullName, string role, UserType userType)
     {
         var (accessToken, jwtId) = _jwtService.GenerateAccessToken(id, email, fullName, role);
         var refreshToken = _jwtService.GenerateRefreshToken();

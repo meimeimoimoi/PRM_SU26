@@ -1,10 +1,8 @@
 namespace SmartDine.Domain.Enums;
 
-public enum UserRole
+public enum UserType
 {
+    USER,
     CUSTOMER,
-    STAFF,
-    CHEF,
-    MANAGER,
     GUEST
 }

@@ -2,6 +2,7 @@ using Moq;
 using SmartDine.Application.DTOs.Auth;
 using SmartDine.Application.Services;
 using SmartDine.Domain.Entities;
+using SmartDine.Domain.Enums;
 using SmartDine.Domain.Exceptions;
 using SmartDine.Domain.Interfaces;
 using System.IdentityModel.Tokens.Jwt;
@@ -44,7 +45,7 @@ public class AuthServiceTests
     [Fact]
     public async Task Login_WithValidUserCredentials_ReturnsTokenResponse()
     {
-        var user = new User { Id = 1, Email = "staff@test.com", FullName = "Staff", PasswordHash = "hashed", Role = "STAFF", IsActive = true };
+        var user = new User { Id = 1, Email = "staff@test.com", FullName = "Staff", PasswordHash = "hashed", Role = UserRole.STAFF, IsActive = true };
         _userRepoMock.Setup(r => r.GetByEmailAsync("staff@test.com")).ReturnsAsync(user);
         _passwordHasherMock.Setup(p => p.VerifyPassword("pass123", "hashed")).Returns(true);
         _jwtMock.Setup(j => j.GenerateAccessToken(1, "staff@test.com", "Staff", "STAFF")).Returns(("access_token", "jwt_id"));
@@ -174,7 +175,7 @@ public class AuthServiceTests
             Token = "old_refresh",
             JwtId = "jwt_id_1",
             UserId = 1,
-            UserType = "USER",
+            UserType = UserType.USER,
             ExpiresAt = DateTime.UtcNow.AddDays(1)
         };
         _refreshTokenRepoMock.Setup(r => r.GetByTokenAsync("old_refresh")).ReturnsAsync(storedToken);
@@ -248,7 +249,7 @@ public class AuthServiceTests
         var result = await _authService.ForgotPasswordAsync(new ForgotPasswordRequest { Email = "staff@test.com" });
 
         Assert.Equal("reset_token_123", result.ResetToken);
-        _passwordResetTokenRepoMock.Verify(r => r.InvalidateAllByUserAsync(1, "USER"), Times.Once);
+        _passwordResetTokenRepoMock.Verify(r => r.InvalidateAllByUserAsync(1, UserType.USER), Times.Once);
     }
 
     [Fact]
@@ -286,7 +287,7 @@ public class AuthServiceTests
         {
             Token = "valid_token",
             UserId = 1,
-            UserType = "USER",
+            UserType = UserType.USER,
             ExpiresAt = DateTime.UtcNow.AddMinutes(10),
             IsUsed = false
         };
@@ -304,7 +305,7 @@ public class AuthServiceTests
 
         Assert.Equal("new_hash", user.PasswordHash);
         Assert.True(tokenEntity.IsUsed);
-        _refreshTokenRepoMock.Verify(r => r.RevokeAllByUserAsync(1, "USER"), Times.Once);
+        _refreshTokenRepoMock.Verify(r => r.RevokeAllByUserAsync(1, UserType.USER), Times.Once);
     }
 
     [Fact]
@@ -338,7 +339,7 @@ public class AuthServiceTests
     [Fact]
     public async Task GetCurrentUser_WithValidUserId_ReturnsUserInfo()
     {
-        var user = new User { Id = 1, FullName = "Staff", Email = "staff@test.com", Role = "STAFF" };
+        var user = new User { Id = 1, FullName = "Staff", Email = "staff@test.com", Role = UserRole.STAFF };
         _userRepoMock.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(user);
 
         var result = await _authService.GetCurrentUserAsync(1, "STAFF");

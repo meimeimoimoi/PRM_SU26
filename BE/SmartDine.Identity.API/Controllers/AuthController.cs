@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using SmartDine.Application.Constants;
 using SmartDine.Application.DTOs.Auth;
+using SmartDine.Domain.Enums;
 using SmartDine.Application.DTOs.Common;
 using SmartDine.Application.Services;
 
@@ -105,7 +106,9 @@ public class AuthController : ControllerBase
     {
         var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
         var role = User.FindFirstValue(ClaimTypes.Role)!;
-        var userType = role == "CUSTOMER" ? "CUSTOMER" : role == "GUEST" ? "GUEST" : "USER";
+        var userType = role == UserRole.CUSTOMER.ToString() ? UserType.CUSTOMER
+                     : role == UserRole.GUEST.ToString() ? UserType.GUEST
+                     : UserType.USER;
         var result = await _authService.LogoutAsync(userId, userType);
         return Ok(ApiResponse<LogoutResponse>.Ok(result));
     }

@@ -2,7 +2,7 @@ namespace SmartDine.Domain.Enums;
 
 public enum PromotionType
 {
-    PERCENTAGE,
+    PERCENT,
     FIXED,
     BUY_X_GET_Y
 }

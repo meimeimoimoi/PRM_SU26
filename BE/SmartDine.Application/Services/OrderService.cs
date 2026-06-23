@@ -1,5 +1,6 @@
 using SmartDine.Application.DTOs.Orders;
 using SmartDine.Domain.Entities;
+using SmartDine.Domain.Enums;
 using SmartDine.Domain.Exceptions;
 using SmartDine.Domain.Interfaces;
 using System;
@@ -32,7 +33,7 @@ public class OrderService
         var session = await _uow.DiningSessions.GetByIdAsync(request.DiningSessionId)
             ?? throw new EntityNotFoundException("Dining Session", request.DiningSessionId);
 
-        if (session.Status != "ACTIVE")
+        if (session.Status != DiningSessionStatus.ACTIVE)
             throw new BusinessRuleViolationException("Dining Session này đã đóng.");
 
         // Validate menu items exist
@@ -50,7 +51,7 @@ public class OrderService
         var order = new Order
         {
             SessionId = session.Id,
-            Status = "PENDING"
+            Status = OrderStatus.PENDING
         };
 
         // Create order items
@@ -63,7 +64,7 @@ public class OrderService
                 Quantity = itemRequest.Quantity,
                 UnitPrice = menuItem.Price,
                 Notes = itemRequest.Notes,
-                Status = "WAITING"
+                Status = OrderDetailStatus.WAITING
             });
         }
 
@@ -88,7 +89,10 @@ public class OrderService
         var order = await _uow.Orders.GetByIdAsync(orderId)
             ?? throw new EntityNotFoundException("Order", orderId);
 
-        order.UpdateStatus(newStatus); // Domain business rule validation
+        if (!Enum.TryParse<OrderStatus>(newStatus, true, out var parsedStatus))
+            throw new BusinessRuleViolationException($"Invalid order status: {newStatus}");
+
+        order.UpdateStatus(parsedStatus);
         await _uow.SaveChangesAsync();
 
         // Gửi thông báo thời gian thực đến khách hàng tại bàn ăn
@@ -147,7 +151,7 @@ public class OrderService
             TotalAmount = order.TotalAmount,
             DiscountAmount = order.DiscountAmount,
             FinalAmount = order.FinalAmount,
-            Status = order.Status,
+            Status = order.Status.ToString(),
             CreatedAt = order.CreatedAt,
             Items = order.OrderDetails.Select(i =>
             {
@@ -160,7 +164,7 @@ public class OrderService
                     UnitPrice = i.UnitPrice,
                     Quantity = i.Quantity,
                     Notes = i.Notes,
-                    Status = i.Status
+                    Status = i.Status.ToString()
                 };
             }).ToList()
         };

@@ -1,3 +1,5 @@
+using SmartDine.Domain.Enums;
+
 namespace SmartDine.Domain.Entities;
 
 /// <summary>
@@ -20,7 +22,7 @@ public class RefreshToken : BaseEntity
 {
     public string Token { get; set; } = string.Empty;
     public string JwtId { get; set; } = string.Empty;
-    public string UserType { get; set; } = "USER";
+    public UserType UserType { get; set; } = Enums.UserType.USER;
     public int UserId { get; set; }
     public DateTime ExpiresAt { get; set; }
     public bool IsRevoked { get; set; } = false;

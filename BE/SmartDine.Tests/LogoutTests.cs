@@ -2,6 +2,7 @@ using Moq;
 using SmartDine.Application.Constants;
 using SmartDine.Application.Services;
 using SmartDine.Domain.Entities;
+using SmartDine.Domain.Enums;
 using SmartDine.Domain.Interfaces;
 
 namespace SmartDine.Tests;
@@ -41,28 +42,28 @@ public class LogoutTests
     [Fact]
     public async Task Logout_Staff_RevokesAllRefreshTokensAndReturnsMessage()
     {
-        var result = await _authService.LogoutAsync(1, "USER");
+        var result = await _authService.LogoutAsync(1, UserType.USER);
 
         Assert.Equal(ValidationMessages.LOGOUT_SUCCESS, result.Message);
-        _refreshTokenRepoMock.Verify(r => r.RevokeAllByUserAsync(1, "USER"), Times.Once);
+        _refreshTokenRepoMock.Verify(r => r.RevokeAllByUserAsync(1, UserType.USER), Times.Once);
         _uowMock.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
     public async Task Logout_Customer_RevokesWithCustomerUserType()
     {
-        var result = await _authService.LogoutAsync(10, "CUSTOMER");
+        var result = await _authService.LogoutAsync(10, UserType.CUSTOMER);
 
         Assert.Equal(ValidationMessages.LOGOUT_SUCCESS, result.Message);
-        _refreshTokenRepoMock.Verify(r => r.RevokeAllByUserAsync(10, "CUSTOMER"), Times.Once);
+        _refreshTokenRepoMock.Verify(r => r.RevokeAllByUserAsync(10, UserType.CUSTOMER), Times.Once);
     }
 
     [Fact]
     public async Task Logout_Manager_RevokesWithUserType()
     {
-        var result = await _authService.LogoutAsync(2, "USER");
+        var result = await _authService.LogoutAsync(2, UserType.USER);
 
-        _refreshTokenRepoMock.Verify(r => r.RevokeAllByUserAsync(2, "USER"), Times.Once);
+        _refreshTokenRepoMock.Verify(r => r.RevokeAllByUserAsync(2, UserType.USER), Times.Once);
         _uowMock.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 
@@ -73,10 +74,10 @@ public class LogoutTests
     {
         // Guest login never creates refresh tokens, so RevokeAllByUserAsync
         // will be a no-op but should not throw.
-        var result = await _authService.LogoutAsync(99, "GUEST");
+        var result = await _authService.LogoutAsync(99, UserType.GUEST);
 
         Assert.Equal(ValidationMessages.LOGOUT_SUCCESS, result.Message);
-        _refreshTokenRepoMock.Verify(r => r.RevokeAllByUserAsync(99, "GUEST"), Times.Once);
+        _refreshTokenRepoMock.Verify(r => r.RevokeAllByUserAsync(99, UserType.GUEST), Times.Once);
     }
 
     // ===== EDGE CASES =====
@@ -85,7 +86,7 @@ public class LogoutTests
     public async Task Logout_UserWithNoActiveTokens_StillSucceeds()
     {
         // User already logged out everywhere, or tokens already expired.
-        var result = await _authService.LogoutAsync(5, "USER");
+        var result = await _authService.LogoutAsync(5, UserType.USER);
 
         Assert.NotNull(result);
         Assert.Equal(ValidationMessages.LOGOUT_SUCCESS, result.Message);
@@ -94,18 +95,18 @@ public class LogoutTests
     [Fact]
     public async Task Logout_AlwaysCallsSaveChanges()
     {
-        await _authService.LogoutAsync(1, "USER");
-        await _authService.LogoutAsync(2, "CUSTOMER");
-        await _authService.LogoutAsync(3, "GUEST");
+        await _authService.LogoutAsync(1, UserType.USER);
+        await _authService.LogoutAsync(2, UserType.CUSTOMER);
+        await _authService.LogoutAsync(3, UserType.GUEST);
 
         _uowMock.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Exactly(3));
     }
 
     [Theory]
-    [InlineData("USER")]
-    [InlineData("CUSTOMER")]
-    [InlineData("GUEST")]
-    public async Task Logout_AllUserTypes_ReturnsConsistentMessage(string userType)
+    [InlineData(UserType.USER)]
+    [InlineData(UserType.CUSTOMER)]
+    [InlineData(UserType.GUEST)]
+    public async Task Logout_AllUserTypes_ReturnsConsistentMessage(UserType userType)
     {
         var result = await _authService.LogoutAsync(1, userType);
 
@@ -127,11 +128,11 @@ public class LogoutTests
         // Current implementation only revokes refresh tokens in PostgreSQL,
         // not the access token itself. This is a security gap.
 
-        await _authService.LogoutAsync(1, "USER");
+        await _authService.LogoutAsync(1, UserType.USER);
 
         // Verify only refresh tokens are revoked — access token is NOT blacklisted.
         // There is no call to any cache/Redis service to invalidate the JWT itself.
-        _refreshTokenRepoMock.Verify(r => r.RevokeAllByUserAsync(1, "USER"), Times.Once);
+        _refreshTokenRepoMock.Verify(r => r.RevokeAllByUserAsync(1, UserType.USER), Times.Once);
         _uowMock.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 
@@ -146,7 +147,7 @@ public class LogoutTests
         var user = new User
         {
             Id = 1, Email = "staff@test.com", FullName = "Staff",
-            PasswordHash = "hashed", Role = "STAFF", IsActive = true
+            PasswordHash = "hashed", Role = UserRole.STAFF, IsActive = true
         };
         _userRepoMock.Setup(r => r.GetByEmailAsync("staff@test.com")).ReturnsAsync(user);
         _passwordHasherMock.Setup(p => p.VerifyPassword("pass", "hashed")).Returns(true);
@@ -162,7 +163,7 @@ public class LogoutTests
             Email = "staff@test.com", Password = "pass"
         });
 
-        await _authService.LogoutAsync(1, "USER");
+        await _authService.LogoutAsync(1, UserType.USER);
 
         var login2 = await _authService.LoginAsync(new Application.DTOs.Auth.LoginRequest
         {
@@ -171,7 +172,7 @@ public class LogoutTests
 
         Assert.NotEqual(login1.AccessToken, login2.AccessToken);
         Assert.NotEqual(login1.RefreshToken, login2.RefreshToken);
-        _refreshTokenRepoMock.Verify(r => r.RevokeAllByUserAsync(1, "USER"), Times.Once);
+        _refreshTokenRepoMock.Verify(r => r.RevokeAllByUserAsync(1, UserType.USER), Times.Once);
     }
 
     // ===== SCENARIO: Logout nhiều lần liên tục =====
@@ -179,10 +180,10 @@ public class LogoutTests
     [Fact]
     public async Task Logout_CalledMultipleTimes_NoErrorOnSecondCall()
     {
-        var result1 = await _authService.LogoutAsync(1, "USER");
-        var result2 = await _authService.LogoutAsync(1, "USER");
+        var result1 = await _authService.LogoutAsync(1, UserType.USER);
+        var result2 = await _authService.LogoutAsync(1, UserType.USER);
 
         Assert.Equal(result1.Message, result2.Message);
-        _refreshTokenRepoMock.Verify(r => r.RevokeAllByUserAsync(1, "USER"), Times.Exactly(2));
+        _refreshTokenRepoMock.Verify(r => r.RevokeAllByUserAsync(1, UserType.USER), Times.Exactly(2));
     }
 }

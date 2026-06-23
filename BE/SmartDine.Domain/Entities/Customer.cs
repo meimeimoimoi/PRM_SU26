@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using SmartDine.Domain.Enums;
 
 namespace SmartDine.Domain.Entities;
 
@@ -27,7 +28,7 @@ public class Customer : BaseEntity
     public string? Email { get; set; }
     public string? PasswordHash { get; set; }
     public int LoyaltyPoints { get; set; } = 0;
-    public string MembershipLevel { get; set; } = "BRONZE";
+    public LoyaltyTier MembershipLevel { get; set; } = LoyaltyTier.BRONZE;
     public decimal TotalSpent { get; set; } = 0.00m;
     public int VisitCount { get; set; } = 0;
     public DateTime? LastLoginAt { get; set; }

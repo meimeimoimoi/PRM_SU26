@@ -85,7 +85,9 @@ public class SmartDineDbContext : DbContext
         modelBuilder.Entity<SessionParticipant>().HasQueryFilter(e => !e.IsDeleted);
         modelBuilder.Entity<RecommendationLog>().HasQueryFilter(e => !e.IsDeleted);
         modelBuilder.Entity<RefreshToken>().HasQueryFilter(e => !e.IsDeleted);
+        modelBuilder.Entity<RefreshToken>().Property(r => r.UserType).HasConversion<string>().HasMaxLength(20);
         modelBuilder.Entity<PasswordResetToken>().HasQueryFilter(e => !e.IsDeleted);
+        modelBuilder.Entity<PasswordResetToken>().Property(p => p.UserType).HasConversion<string>().HasMaxLength(20);
     }
 
     /// <summary>

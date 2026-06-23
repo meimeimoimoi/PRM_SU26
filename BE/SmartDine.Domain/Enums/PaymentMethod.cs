@@ -3,7 +3,7 @@ namespace SmartDine.Domain.Enums;
 public enum PaymentMethod
 {
     CASH,
-    CARD,
-    EWALLET,
+    CREDIT_CARD,
+    E_WALLET,
     QR
 }

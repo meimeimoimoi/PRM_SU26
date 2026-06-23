@@ -1,4 +1,5 @@
 using System;
+using SmartDine.Domain.Enums;
 
 namespace SmartDine.Domain.Entities;
 
@@ -33,6 +34,6 @@ public class TableReservation : BaseEntity
     public int PartySize { get; set; }
     public DateTime ReservedAt { get; set; } = DateTime.UtcNow;
     public DateTime ReservationTime { get; set; }
-    public string Status { get; set; } = "PENDING";
+    public ReservationStatus Status { get; set; } = ReservationStatus.PENDING;
     public string? Notes { get; set; }
 }

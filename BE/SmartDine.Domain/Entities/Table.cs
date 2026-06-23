@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using SmartDine.Domain.Enums;
 
 namespace SmartDine.Domain.Entities;
 
@@ -22,7 +23,7 @@ public class Table : BaseEntity
     public int TableNumber { get; set; }
     public int Capacity { get; set; }
     public string? QrCode { get; set; }
-    public string Status { get; set; } = "AVAILABLE";
+    public TableStatus Status { get; set; } = TableStatus.AVAILABLE;
 
     // Navigation
     public List<DiningSession> DiningSessions { get; set; } = new();

@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using SmartDine.Domain.Entities;
+using SmartDine.Domain.Enums;
 using SmartDine.Domain.Interfaces;
 
 namespace SmartDine.Infrastructure.Persistence;
@@ -80,11 +81,11 @@ public class DbSeeder
         {
             var tables = new List<Table>
             {
-                new() { TableNumber = 1, Capacity = 2, Status = "AVAILABLE", QrCode = "smartdine://table/1" },
-                new() { TableNumber = 2, Capacity = 4, Status = "AVAILABLE", QrCode = "smartdine://table/2" },
-                new() { TableNumber = 3, Capacity = 4, Status = "AVAILABLE", QrCode = "smartdine://table/3" },
-                new() { TableNumber = 4, Capacity = 6, Status = "AVAILABLE", QrCode = "smartdine://table/4" },
-                new() { TableNumber = 5, Capacity = 8, Status = "AVAILABLE", QrCode = "smartdine://table/5" }
+                new() { TableNumber = 1, Capacity = 2, Status = TableStatus.AVAILABLE, QrCode = "smartdine://table/1" },
+                new() { TableNumber = 2, Capacity = 4, Status = TableStatus.AVAILABLE, QrCode = "smartdine://table/2" },
+                new() { TableNumber = 3, Capacity = 4, Status = TableStatus.AVAILABLE, QrCode = "smartdine://table/3" },
+                new() { TableNumber = 4, Capacity = 6, Status = TableStatus.AVAILABLE, QrCode = "smartdine://table/4" },
+                new() { TableNumber = 5, Capacity = 8, Status = TableStatus.AVAILABLE, QrCode = "smartdine://table/5" }
             };
 
             await _context.Tables.AddRangeAsync(tables);
@@ -99,7 +100,7 @@ public class DbSeeder
                 FullName = "SmartDine Admin",
                 Email = "admin@smartdine.com",
                 PasswordHash = _passwordHasher.HashPassword("Password123!"),
-                Role = "MANAGER",
+                Role = UserRole.MANAGER,
                 IsActive = true
             };
 
@@ -108,7 +109,7 @@ public class DbSeeder
                 FullName = "Nguyễn Văn Nhân Viên",
                 Email = "staff@smartdine.com",
                 PasswordHash = _passwordHasher.HashPassword("Password123!"),
-                Role = "STAFF",
+                Role = UserRole.STAFF,
                 IsActive = true
             };
 
@@ -117,7 +118,7 @@ public class DbSeeder
                 FullName = "Trần Bếp Trưởng",
                 Email = "chef@smartdine.com",
                 PasswordHash = _passwordHasher.HashPassword("Password123!"),
-                Role = "CHEF",
+                Role = UserRole.CHEF,
                 IsActive = true
             };
 
@@ -135,7 +136,7 @@ public class DbSeeder
                 Phone = "0900000001",
                 PasswordHash = _passwordHasher.HashPassword("Password123!"),
                 LoyaltyPoints = 100,
-                MembershipLevel = "SILVER",
+                MembershipLevel = LoyaltyTier.SILVER,
                 TotalSpent = 500000.00m,
                 VisitCount = 5
             };
@@ -150,7 +151,7 @@ public class DbSeeder
                 TableId = firstTable.Id,
                 GuestName = defaultCustomer.FullName,
                 GuestPhone = defaultCustomer.Phone,
-                Status = "ACTIVE",
+                Status = DiningSessionStatus.ACTIVE,
                 TotalSpent = 0.00m
             };
 

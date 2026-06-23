@@ -8,6 +8,7 @@ using SmartDine.Application.DTOs.Menu;
 using SmartDine.Application.DTOs.Orders;
 using SmartDine.Application.DTOs.Tables;
 using SmartDine.Domain.Entities;
+using SmartDine.Domain.Enums;
 using SmartDine.Infrastructure.Persistence;
 
 namespace SmartDine.Tests;
@@ -321,7 +322,7 @@ public class IntegrationTests : IClassFixture<CustomWebApplicationFactory<Progra
                 TableId = table.Id,
                 GuestName = customer.FullName,
                 GuestPhone = customer.Phone,
-                Status = "ACTIVE",
+                Status = DiningSessionStatus.ACTIVE,
                 TotalSpent = 0.00m
             };
             db.DiningSessions.Add(session);
