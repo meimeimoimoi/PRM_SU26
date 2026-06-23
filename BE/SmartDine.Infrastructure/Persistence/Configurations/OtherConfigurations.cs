@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using SmartDine.Domain.Entities;
+using SmartDine.Domain.Enums;
 
 namespace SmartDine.Infrastructure.Persistence.Configurations;
 
@@ -13,7 +14,7 @@ public class TableConfiguration : IEntityTypeConfiguration<Table>
         builder.Property(t => t.TableNumber).IsRequired();
         builder.Property(t => t.Capacity).IsRequired();
         builder.Property(t => t.QrCode).HasMaxLength(255);
-        builder.Property(t => t.Status).HasConversion<string>().HasMaxLength(20).HasDefaultValue("AVAILABLE");
+        builder.Property(t => t.Status).HasConversion<string>().HasMaxLength(20).HasDefaultValue(TableStatus.AVAILABLE);
 
         builder.HasIndex(t => t.TableNumber).IsUnique();
     }
@@ -27,7 +28,7 @@ public class DiningSessionConfiguration : IEntityTypeConfiguration<DiningSession
         builder.HasKey(d => d.Id);
         builder.Property(d => d.GuestName).HasMaxLength(100);
         builder.Property(d => d.GuestPhone).HasMaxLength(20);
-        builder.Property(d => d.Status).HasConversion<string>().HasMaxLength(20).HasDefaultValue("ACTIVE");
+        builder.Property(d => d.Status).HasConversion<string>().HasMaxLength(20).HasDefaultValue(DiningSessionStatus.ACTIVE);
         builder.Property(d => d.TotalSpent).HasPrecision(12, 2);
 
         builder.HasOne(d => d.Customer)
@@ -88,7 +89,7 @@ public class PaymentConfiguration : IEntityTypeConfiguration<Payment>
         builder.HasKey(p => p.Id);
         builder.Property(p => p.Amount).HasPrecision(12, 2).IsRequired();
         builder.Property(p => p.PaymentMethod).HasConversion<string>().HasMaxLength(50).IsRequired();
-        builder.Property(p => p.PaymentStatus).HasConversion<string>().HasMaxLength(20).HasDefaultValue("SUCCESS");
+        builder.Property(p => p.PaymentStatus).HasConversion<string>().HasMaxLength(20).HasDefaultValue(PaymentStatus.SUCCESS);
 
         builder.HasOne(p => p.Order)
                .WithMany(o => o.Payments)
@@ -105,7 +106,7 @@ public class ReviewConfiguration : IEntityTypeConfiguration<Review>
         builder.HasKey(r => r.Id);
         builder.Property(r => r.Rating).IsRequired();
         builder.Property(r => r.Comment).HasColumnType("text");
-        builder.Property(r => r.Status).HasConversion<string>().HasMaxLength(20).HasDefaultValue("PENDING");
+        builder.Property(r => r.Status).HasConversion<string>().HasMaxLength(20).HasDefaultValue(ReviewStatus.PENDING);
 
         builder.HasIndex(r => new { r.CustomerId, r.MenuItemId }).IsUnique();
 
@@ -201,7 +202,7 @@ public class CustomerConfiguration : IEntityTypeConfiguration<Customer>
         builder.Property(c => c.Phone).HasMaxLength(20);
         builder.Property(c => c.Email).HasMaxLength(100);
         builder.Property(c => c.PasswordHash).HasMaxLength(255);
-        builder.Property(c => c.MembershipLevel).HasConversion<string>().HasMaxLength(20).HasDefaultValue("BRONZE");
+        builder.Property(c => c.MembershipLevel).HasConversion<string>().HasMaxLength(20).HasDefaultValue(LoyaltyTier.BRONZE);
         builder.Property(c => c.TotalSpent).HasPrecision(12, 2).HasDefaultValue(0.00m);
         builder.Property(c => c.VisitCount).HasDefaultValue(0);
 

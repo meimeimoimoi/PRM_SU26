@@ -165,6 +165,9 @@ public class AuthService
         var storedToken = await _uow.RefreshTokens.GetByTokenAsync(request.RefreshToken)
             ?? throw new BusinessRuleViolationException(ValidationMessages.REFRESH_TOKEN_NOT_FOUND);
 
+        if (storedToken.IsRevoked)
+            throw new BusinessRuleViolationException(ValidationMessages.REFRESH_TOKEN_NOT_FOUND);
+
         if (storedToken.ExpiresAt < DateTime.UtcNow)
             throw new BusinessRuleViolationException(ValidationMessages.REFRESH_TOKEN_EXPIRED);
 
@@ -302,6 +305,12 @@ public class AuthService
         var tokenEntity = await _uow.PasswordResetTokens.GetByTokenAsync(request.Token)
             ?? throw new BusinessRuleViolationException(ValidationMessages.RESET_TOKEN_INVALID);
 
+        if (tokenEntity.IsUsed)
+            throw new BusinessRuleViolationException(ValidationMessages.RESET_TOKEN_INVALID);
+
+        if (tokenEntity.ExpiresAt < DateTime.UtcNow)
+            throw new BusinessRuleViolationException(ValidationMessages.RESET_TOKEN_INVALID);
+
         var newHash = _passwordHasher.HashPassword(request.NewPassword);
 
         if (tokenEntity.UserType == UserType.USER)
@@ -354,6 +363,17 @@ public class AuthService
                     Role = UserRole.CUSTOMER.ToString()
                 };
             }
+        }
+        else if (role == UserRole.GUEST.ToString())
+        {
+            // GUEST token dùng sessionId làm NameIdentifier → trả info tối thiểu
+            return new UserInfoResponse
+            {
+                Id = id,
+                FullName = "Guest",
+                Email = string.Empty,
+                Role = UserRole.GUEST.ToString()
+            };
         }
         else
         {
