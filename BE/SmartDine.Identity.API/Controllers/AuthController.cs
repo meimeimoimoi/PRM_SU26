@@ -53,6 +53,24 @@ public class AuthController : ControllerBase
         return Ok(ApiResponse<object>.Ok(null!, "Đặt lại mật khẩu thành công"));
     }
 
+    [HttpPost("login-guest")]
+    public async Task<IActionResult> LoginGuest([FromBody] GuestLoginRequest request)
+    {
+        var result = await _authService.LoginGuestAsync(request);
+        return Ok(ApiResponse<GuestLoginResponse>.Ok(result, "Đăng nhập khách thành công"));
+    }
+
+    [HttpPost("logout")]
+    [Authorize]
+    public async Task<IActionResult> Logout()
+    {
+        var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        var role = User.FindFirstValue(ClaimTypes.Role)!;
+        var userType = role == "CUSTOMER" ? "CUSTOMER" : role == "GUEST" ? "GUEST" : "USER";
+        var result = await _authService.LogoutAsync(userId, userType);
+        return Ok(ApiResponse<LogoutResponse>.Ok(result));
+    }
+
     [HttpGet("me")]
     [Authorize]
     public async Task<IActionResult> GetCurrentUser()

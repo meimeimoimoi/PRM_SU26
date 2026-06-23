@@ -20,6 +20,11 @@ public static class ValidationMessages
     public const string RESET_TOKEN_INVALID = "RESET_TOKEN_INVALID";
     public const string FORGOT_PASSWORD_MESSAGE = "FORGOT_PASSWORD_EMAIL_SENT";
 
+    // ===== Guest =====
+    public const string TABLE_NOT_FOUND = "TABLE_NOT_FOUND";
+    public const string TABLE_NOT_AVAILABLE = "TABLE_NOT_AVAILABLE";
+    public const string LOGOUT_SUCCESS = "Đăng xuất thành công, token đã được thu hồi.";
+
     // ===== General =====
     public const string NOT_FOUND = "NOT_FOUND";
 

@@ -54,3 +54,24 @@ public class UserInfoResponse
     public string Role { get; set; } = string.Empty;
     public string? AvatarUrl { get; set; }
 }
+
+public class GuestLoginRequest
+{
+    public int TableId { get; set; }
+    public string? GuestName { get; set; }
+    public string? GuestPhone { get; set; }
+}
+
+public class GuestLoginResponse
+{
+    public string Token { get; set; } = string.Empty;
+    public int SessionId { get; set; }
+    public int TableId { get; set; }
+    public int TableNumber { get; set; }
+    public string Role { get; set; } = "GUEST";
+}
+
+public class LogoutResponse
+{
+    public string Message { get; set; } = string.Empty;
+}

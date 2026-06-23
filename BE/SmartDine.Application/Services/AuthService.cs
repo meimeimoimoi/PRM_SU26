@@ -234,6 +234,59 @@ public class AuthService
         throw new EntityNotFoundException("User/Customer", id);
     }
 
+    public async Task<GuestLoginResponse> LoginGuestAsync(GuestLoginRequest request)
+    {
+        var table = await _uow.Tables.GetByIdAsync(request.TableId)
+            ?? throw new EntityNotFoundException("Table", request.TableId);
+
+        var existingSession = await _uow.DiningSessions.GetActiveByTableIdAsync(request.TableId);
+        DiningSession session;
+
+        if (existingSession != null)
+        {
+            session = existingSession;
+        }
+        else
+        {
+            table.Status = "OCCUPIED";
+
+            session = new DiningSession
+            {
+                TableId = table.Id,
+                GuestName = request.GuestName,
+                GuestPhone = request.GuestPhone,
+                Status = "ACTIVE",
+                StartedAt = DateTime.UtcNow
+            };
+
+            await _uow.DiningSessions.AddAsync(session);
+            await _uow.SaveChangesAsync();
+        }
+
+        var guestName = request.GuestName ?? "Guest";
+        var (accessToken, _) = _jwtService.GenerateAccessToken(session.Id, "", guestName, "GUEST");
+
+        return new GuestLoginResponse
+        {
+            Token = accessToken,
+            SessionId = session.Id,
+            TableId = table.Id,
+            TableNumber = table.TableNumber,
+            Role = "GUEST"
+        };
+    }
+
+    public async Task<LogoutResponse> LogoutAsync(int userId, string userType)
+    {
+        await _uow.RefreshTokens.RevokeAllByUserAsync(userId, userType);
+        await _uow.SaveChangesAsync();
+
+        return new LogoutResponse
+        {
+            Message = ValidationMessages.LOGOUT_SUCCESS
+        };
+    }
+
     private async Task<TokenResponse> GenerateTokenResponseAsync(int id, string email, string fullName, string role, string userType)
     {
         var (accessToken, jwtId) = _jwtService.GenerateAccessToken(id, email, fullName, role);
