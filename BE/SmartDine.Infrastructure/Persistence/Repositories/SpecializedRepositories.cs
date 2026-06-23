@@ -38,6 +38,43 @@ public class MenuItemRepository : GenericRepository<MenuItem>, IMenuItemReposito
 
     public async Task<IReadOnlyList<MenuItem>> GetByIdsAsync(List<int> ids) =>
         await _dbSet.Where(m => ids.Contains(m.Id)).ToListAsync();
+
+    public async Task<(IReadOnlyList<MenuItem> Items, int TotalCount)> GetPagedFilteredAsync(
+        int? categoryId, string? search, int page, int pageSize)
+    {
+        var query = _dbSet.Include(m => m.Category)
+                          .Include(m => m.Statistics)
+                          .Where(m => m.IsAvailable);
+
+        if (categoryId.HasValue)
+            query = query.Where(m => m.CategoryId == categoryId.Value);
+
+        if (!string.IsNullOrWhiteSpace(search))
+            query = query.Where(m => m.Name.ToLower().Contains(search.ToLower()) ||
+                                     (m.Description != null && m.Description.ToLower().Contains(search.ToLower())));
+
+        var totalCount = await query.CountAsync();
+
+        var items = await query.OrderBy(m => m.Category.Name).ThenBy(m => m.Name)
+                               .Skip((page - 1) * pageSize)
+                               .Take(pageSize)
+                               .ToListAsync();
+
+        return (items, totalCount);
+    }
+
+    public async Task<MenuItem?> GetByIdWithDetailsAsync(int id) =>
+        await _dbSet.Include(m => m.Category)
+                    .Include(m => m.Statistics)
+                    .Include(m => m.Reviews).ThenInclude(r => r.Customer)
+                    .FirstOrDefaultAsync(m => m.Id == id);
+
+    public async Task<IReadOnlyList<MenuItem>> GetByCategoryIdsAsync(List<int> categoryIds, int count) =>
+        await _dbSet.Include(m => m.Category)
+                    .Where(m => m.IsAvailable && categoryIds.Contains(m.CategoryId))
+                    .OrderByDescending(m => m.OrderDetails.Count)
+                    .Take(count)
+                    .ToListAsync();
 }
 
 public class UserRepository : GenericRepository<User>, IUserRepository

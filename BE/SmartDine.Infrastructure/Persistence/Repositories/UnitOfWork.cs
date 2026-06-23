@@ -1,3 +1,4 @@
+using SmartDine.Domain.Entities;
 using SmartDine.Domain.Interfaces;
 
 namespace SmartDine.Infrastructure.Persistence.Repositories;
@@ -17,6 +18,10 @@ public class UnitOfWork : IUnitOfWork
     public ITableReservationRepository TableReservations { get; }
     public IRefreshTokenRepository RefreshTokens { get; }
     public IPasswordResetTokenRepository PasswordResetTokens { get; }
+    public IRepository<CustomerActivity> CustomerActivities { get; }
+    public IRepository<MenuItemStatistics> MenuItemStatisticsRepo { get; }
+    public IRepository<BusinessContextLog> BusinessContextLogs { get; }
+    public IRepository<RecommendationLog> RecommendationLogs { get; }
 
     public UnitOfWork(SmartDineDbContext context)
     {
@@ -32,6 +37,10 @@ public class UnitOfWork : IUnitOfWork
         TableReservations = new TableReservationRepository(context);
         RefreshTokens = new RefreshTokenRepository(context);
         PasswordResetTokens = new PasswordResetTokenRepository(context);
+        CustomerActivities = new GenericRepository<CustomerActivity>(context);
+        MenuItemStatisticsRepo = new GenericRepository<MenuItemStatistics>(context);
+        BusinessContextLogs = new GenericRepository<BusinessContextLog>(context);
+        RecommendationLogs = new GenericRepository<RecommendationLog>(context);
     }
 
     public async Task<int> SaveChangesAsync(CancellationToken ct = default) =>

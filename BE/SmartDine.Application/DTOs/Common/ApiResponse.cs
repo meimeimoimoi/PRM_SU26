@@ -34,3 +34,24 @@ public class PaginatedResponse<T>
     public bool HasNext => Page < TotalPages;
     public bool HasPrevious => Page > 1;
 }
+
+/// <summary>
+/// Paginated API response — data + pagination cùng cấp.
+/// </summary>
+public class PaginatedApiResponse<T>
+{
+    public bool Success { get; set; }
+    public List<T> Data { get; set; } = new();
+    public PaginationMeta Pagination { get; set; } = new();
+    public DateTime Timestamp { get; set; } = DateTime.UtcNow;
+
+    public static PaginatedApiResponse<T> Ok(List<T> data, int total, int page, int totalPages) =>
+        new() { Success = true, Data = data, Pagination = new() { Total = total, Page = page, TotalPages = totalPages } };
+}
+
+public class PaginationMeta
+{
+    public int Total { get; set; }
+    public int Page { get; set; }
+    public int TotalPages { get; set; }
+}

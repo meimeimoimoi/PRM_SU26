@@ -1,11 +1,31 @@
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using SmartDine.Application.Constants;
 using SmartDine.Application.DTOs.Common;
 using SmartDine.Application.DTOs.Menu;
 using SmartDine.Application.Services;
 
 namespace SmartDine.Menu.API.Controllers;
 
+/// <summary>
+/// Controller quản lý thực đơn món ăn (menu_items).
+///
+/// Endpoints:
+///   API 1 — GET    /api/v1/menu-items                    → Danh sách phân trang + AI cá nhân hóa.
+///   API 2 — GET    /api/v1/menu-items/{id}               → Chi tiết món + ghi VIEW activity.
+///   API 3 — POST   /api/v1/menu-items                    → Tạo món mới (MANAGER).
+///   API 4 — PATCH  /api/v1/menu-items/{id}               → Cập nhật thông tin / bật-tắt (MANAGER, CHEF).
+///   API 5 — DELETE /api/v1/menu-items/{id}               → Xóa mềm (MANAGER).
+///   API 6 — GET    /api/v1/menu-items/ai-recommendations → Gợi ý AI (CUSTOMER, GUEST).
+///
+/// Authentication:
+///   - API 1, 2: Public — ai cũng truy cập được, nhưng nếu có token thì
+///     Backend dùng customerId để cá nhân hóa + ghi activity.
+///   - API 3, 5: [Authorize(Roles = "MANAGER")] — chỉ quản lý.
+///   - API 4: [Authorize(Roles = "MANAGER,CHEF")] — quản lý hoặc đầu bếp.
+///   - API 6: [Authorize(Roles = "CUSTOMER,GUEST")] — khách hàng.
+/// </summary>
 [ApiController]
 [Route("api/v1/menu-items")]
 public class MenuItemsController : ControllerBase
@@ -17,67 +37,176 @@ public class MenuItemsController : ControllerBase
         _menuService = menuService;
     }
 
-    /// <summary>GET /api/v1/menu-items — Danh sách thực đơn (public)</summary>
+    // ═══════════════════════════════════════════════════════════════
+    // API 1: GET /api/v1/menu-items?category_id=2&search=lẩu&page=1&limit=10
+    // ═══════════════════════════════════════════════════════════════
+    /// <summary>
+    /// Lấy danh sách thực đơn phân trang, lọc theo danh mục.
+    /// Nếu request gửi kèm token của Khách hàng thành viên,
+    /// Backend ngầm cá nhân hóa thứ tự hiển thị (ưu tiên món hợp khẩu vị).
+    ///
+    /// Luồng dữ liệu:
+    ///   Request → Controller (extract JWT nếu có) → MenuService.GetPagedAsync()
+    ///     → MenuItemRepository.GetPagedFilteredAsync() → DB query (WHERE + OFFSET/LIMIT)
+    ///     → (nếu có customerId) PersonalizeOrderAsync() → reorder kết quả
+    ///   → PaginatedApiResponse → Client.
+    /// </summary>
     [HttpGet]
-    public async Task<IActionResult> GetAll([FromQuery] string? search)
+    public async Task<IActionResult> GetAll(
+        [FromQuery(Name = "category_id")] int? categoryId,
+        [FromQuery] string? search,
+        [FromQuery] int page = 1,
+        [FromQuery] int limit = 10)
     {
-        var result = string.IsNullOrEmpty(search)
-            ? await _menuService.GetAllAsync()
-            : await _menuService.SearchAsync(search);
-        return Ok(ApiResponse<List<MenuItemResponse>>.Ok(result));
+        if (page < 1) page = 1;
+        if (limit < 1) limit = 10;
+        if (limit > 50) limit = 50;
+
+        var customerId = GetCustomerIdFromToken();
+
+        var (items, totalCount, totalPages) = await _menuService.GetPagedAsync(
+            categoryId, search, page, limit, customerId);
+
+        return Ok(PaginatedApiResponse<MenuItemSummaryResponse>.Ok(items, totalCount, page, totalPages));
     }
 
-    /// <summary>GET /api/v1/menu-items/{id} — Chi tiết món ăn (public)</summary>
+    // ═══════════════════════════════════════════════════════════════
+    // API 6: GET /api/v1/menu-items/ai-recommendations?limit=5
+    // (Đặt TRƯỚC route {id:int} để tránh conflict routing)
+    // ═══════════════════════════════════════════════════════════════
+    /// <summary>
+    /// Gợi ý món ngon từ AI — cổng API chuyên dụng cho Carousel "Món ngon gợi ý cho bạn".
+    /// Model AI quét business_context_logs + customer_activities để đề xuất tối ưu.
+    ///
+    /// Luồng dữ liệu:
+    ///   Request (JWT token) → Controller (extract customerId)
+    ///     → MenuService.GetAiRecommendationsAsync()
+    ///       → BusinessContextLogs (thời tiết, ngày lễ, cuối tuần)
+    ///       → CustomerActivities (VIEW, ORDER history)
+    ///       → Rule-based engine → merge + dedup
+    ///       → Ghi RecommendationLog (tracking AI performance)
+    ///   → AiRecommendationResponse { recommendation_id, data[] } → Client.
+    /// </summary>
+    [HttpGet("ai-recommendations")]
+    [Authorize(Roles = "CUSTOMER,GUEST")]
+    public async Task<IActionResult> GetAiRecommendations([FromQuery] int limit = 5)
+    {
+        if (limit < 1) limit = 1;
+        if (limit > 20) limit = 20;
+
+        var customerId = GetCustomerIdFromToken();
+        var result = await _menuService.GetAiRecommendationsAsync(customerId, limit);
+        return Ok(ApiResponse<AiRecommendationResponse>.Ok(result));
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // API 2: GET /api/v1/menu-items/{id}
+    // ═══════════════════════════════════════════════════════════════
+    /// <summary>
+    /// Xem chi tiết thông tin món ăn kèm đánh giá (Reviews).
+    /// TRIGGER ẨN: hệ thống tự động ghi 1 hành động VIEW vào customer_activities
+    /// và tăng total_views trong menu_item_statistics.
+    ///
+    /// Luồng dữ liệu:
+    ///   Request → Controller (extract customerId nếu có token)
+    ///     → MenuService.GetByIdDetailAsync()
+    ///       → MenuItemRepository.GetByIdWithDetailsAsync() → Include(Category, Statistics, Reviews.Customer)
+    ///       → TrackViewActivityAsync() → INSERT customer_activities + UPDATE menu_item_statistics
+    ///     → MenuItemDetailResponse { id, name, price, average_rating, total_views, reviews[] }
+    ///   → ApiResponse → Client.
+    /// </summary>
     [HttpGet("{id:int}")]
     public async Task<IActionResult> GetById(int id)
     {
-        var result = await _menuService.GetByIdAsync(id);
-        if (result == null)
-            return NotFound(ApiResponse<object>.Fail("Không tìm thấy món ăn"));
-        return Ok(ApiResponse<MenuItemResponse>.Ok(result));
+        var customerId = GetCustomerIdFromToken();
+        var result = await _menuService.GetByIdDetailAsync(id, customerId);
+        return Ok(ApiResponse<MenuItemDetailResponse>.Ok(result));
     }
 
-    /// <summary>GET /api/v1/menu-items/popular — Top món phổ biến (public)</summary>
-    [HttpGet("popular")]
-    public async Task<IActionResult> GetPopular([FromQuery] int count = 10)
-    {
-        var result = await _menuService.GetPopularAsync(count);
-        return Ok(ApiResponse<List<MenuItemResponse>>.Ok(result));
-    }
-
-    /// <summary>POST /api/v1/menu-items — Tạo món mới (Manager only)</summary>
+    // ═══════════════════════════════════════════════════════════════
+    // API 3: POST /api/v1/menu-items
+    // ═══════════════════════════════════════════════════════════════
+    /// <summary>
+    /// Quản lý thêm món ăn mới vào thực đơn.
+    ///
+    /// Luồng dữ liệu:
+    ///   Request (JWT MANAGER) + Body { category_id, name, description, price, image_url }
+    ///     → Controller → MenuService.CreateAsync()
+    ///       → Validate (name required, price > 0)
+    ///       → INSERT menu_items + INSERT menu_item_statistics (initial)
+    ///     → MenuItemCreatedResponse { id, name, created_at }
+    ///   → ApiResponse (201 Created) → Client.
+    /// </summary>
     [HttpPost]
     [Authorize(Roles = "MANAGER")]
     public async Task<IActionResult> Create([FromBody] CreateMenuItemRequest request)
     {
         var result = await _menuService.CreateAsync(request);
-        return Created("", ApiResponse<MenuItemResponse>.Ok(result, "Tạo món thành công"));
+        return Created("", ApiResponse<MenuItemCreatedResponse>.Ok(result, ValidationMessages.MENU_ITEM_CREATED_SUCCESS));
     }
 
-    /// <summary>PUT /api/v1/menu-items/{id} — Cập nhật món (Manager only)</summary>
-    [HttpPut("{id:int}")]
-    [Authorize(Roles = "MANAGER")]
-    public async Task<IActionResult> Update(int id, [FromBody] UpdateMenuItemRequest request)
+    // ═══════════════════════════════════════════════════════════════
+    // API 4: PATCH /api/v1/menu-items/{id}
+    // ═══════════════════════════════════════════════════════════════
+    /// <summary>
+    /// Cập nhật thông tin món hoặc bật/tắt nhanh trạng thái is_available.
+    /// Partial update (PATCH): chỉ gửi field cần thay đổi.
+    /// Đầu bếp dùng trên iPad khi hết nguyên liệu đột ngột.
+    ///
+    /// Luồng dữ liệu:
+    ///   Request (JWT MANAGER/CHEF) + Body { is_available: false }
+    ///     → Controller → MenuService.PatchAsync()
+    ///       → Load entity → apply chỉ các field non-null từ request → SaveChanges
+    ///     → MenuItemUpdatedResponse { id, name, is_available, updated_at }
+    ///   → ApiResponse → Client.
+    /// </summary>
+    [HttpPatch("{id:int}")]
+    [Authorize(Roles = "MANAGER,CHEF")]
+    public async Task<IActionResult> Patch(int id, [FromBody] PatchMenuItemRequest request)
     {
-        var result = await _menuService.UpdateAsync(id, request);
-        return Ok(ApiResponse<MenuItemResponse>.Ok(result, "Cập nhật thành công"));
+        var result = await _menuService.PatchAsync(id, request);
+        return Ok(ApiResponse<MenuItemUpdatedResponse>.Ok(result, ValidationMessages.MENU_ITEM_UPDATED_SUCCESS));
     }
 
-    /// <summary>DELETE /api/v1/menu-items/{id} — Xóa món (Manager only)</summary>
+    // ═══════════════════════════════════════════════════════════════
+    // API 5: DELETE /api/v1/menu-items/{id}
+    // ═══════════════════════════════════════════════════════════════
+    /// <summary>
+    /// Xóa mềm món ăn khỏi thực đơn.
+    /// Giữ lại trong DB để không gãy dữ liệu lịch sử đơn hàng cũ.
+    ///
+    /// Luồng dữ liệu:
+    ///   Request (JWT MANAGER) + Param id
+    ///     → Controller → MenuService.DeleteAsync()
+    ///       → Validate tồn tại → SET IsDeleted=true, UpdatedAt=UtcNow
+    ///     → ApiResponse { success, message } → Client.
+    /// </summary>
     [HttpDelete("{id:int}")]
     [Authorize(Roles = "MANAGER")]
     public async Task<IActionResult> Delete(int id)
     {
         await _menuService.DeleteAsync(id);
-        return NoContent();
+        return Ok(ApiResponse<object>.Ok(null!, ValidationMessages.MENU_ITEM_DELETED_SUCCESS));
     }
 
-    /// <summary>PATCH /api/v1/menu-items/{id}/availability — Toggle trạng thái</summary>
-    [HttpPatch("{id:int}/availability")]
-    [Authorize(Roles = "MANAGER,CHEF")]
-    public async Task<IActionResult> ToggleAvailability(int id)
+    // ═══════════════════════════════════════════════════════════════
+    // Helper
+    // ═══════════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// Extract customerId từ JWT token nếu user đã authenticate và role là CUSTOMER.
+    /// Trả null nếu anonymous hoặc không phải CUSTOMER.
+    /// </summary>
+    private int? GetCustomerIdFromToken()
     {
-        var result = await _menuService.ToggleAvailabilityAsync(id);
-        return Ok(ApiResponse<MenuItemResponse>.Ok(result));
+        if (User.Identity?.IsAuthenticated != true)
+            return null;
+
+        var role = User.FindFirst(ClaimTypes.Role)?.Value;
+        if (role != "CUSTOMER")
+            return null;
+
+        var idClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        return int.TryParse(idClaim, out var id) ? id : null;
     }
 }

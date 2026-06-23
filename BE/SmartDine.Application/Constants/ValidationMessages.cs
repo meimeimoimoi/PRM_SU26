@@ -64,6 +64,15 @@ public static class ValidationMessages
     // ===== Menu =====
     public const string MENU_ITEM_NOT_FOUND = "MENU_ITEM_NOT_FOUND";
     public const string NO_MENU_ITEMS = "NO_MENU_ITEMS";
+    public const string MENU_ITEM_CREATED_SUCCESS = "Tạo món ăn mới thành công.";
+    public const string MENU_ITEM_UPDATED_SUCCESS = "Cập nhật thông tin món ăn thành công.";
+    public const string MENU_ITEM_DELETED_SUCCESS = "Món ăn đã được đưa vào danh mục ngừng kinh doanh (Soft Delete).";
+    public const string MENU_ITEM_NAME_REQUIRED = "Tên món ăn không được để trống.";
+    public const string MENU_ITEM_PRICE_INVALID = "Giá món ăn phải lớn hơn 0.";
+    public const string MENU_CATEGORY_NOT_FOUND = "MENU_CATEGORY_NOT_FOUND";
+    public const string MENU_ITEM_DUPLICATE_NAME = "Tên món ăn '{0}' đã tồn tại trong danh mục này.";
+    public const string MENU_ITEM_PATCH_EMPTY = "Phải cung cấp ít nhất một trường để cập nhật.";
+    public const string AI_RECOMMENDATION_NO_CONTEXT = "Không có dữ liệu ngữ cảnh kinh doanh để đề xuất.";
 
     // ===== Order =====
     public const string ORDER_NOT_FOUND = "ORDER_NOT_FOUND";
