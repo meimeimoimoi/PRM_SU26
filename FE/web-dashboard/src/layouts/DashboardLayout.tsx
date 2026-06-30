@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Link, useLocation, Outlet } from 'react-router-dom';
 import { Layout, Menu, Typography, Avatar, Dropdown, Space, Input } from 'antd';
 import { 
@@ -11,7 +11,8 @@ import {
   UserOutlined,
   BellOutlined,
   HistoryOutlined,
-  SearchOutlined
+  SearchOutlined,
+  FireOutlined
 } from '@ant-design/icons';
 import { useSelector, useDispatch } from 'react-redux';
 import { selectCurrentUser, logout } from '@/store/slices/authSlice';
@@ -24,7 +25,62 @@ const DashboardLayout: React.FC = () => {
   const dispatch = useDispatch();
   const location = useLocation();
 
-  // Determine active menu key based on pathname
+  const sidebarMenuItems = useMemo(() => {
+    if (!user) return [];
+    const role = user.role.toUpperCase();
+    const items = [];
+
+    if (role === 'MANAGER') {
+      items.push({ 
+        key: 'dashboard', 
+        icon: <AppstoreOutlined style={{ fontSize: 16 }} />, 
+        label: <Link to="/dashboard">Dashboard</Link> 
+      });
+    }
+
+    if (role === 'MANAGER') {
+      items.push({ 
+        key: 'tables', 
+        icon: <TableOutlined style={{ fontSize: 16 }} />, 
+        label: <Link to="/tables">Table Management</Link> 
+      });
+    }
+
+    if (role === 'MANAGER' || role === 'CUSTOMER') {
+      items.push({ 
+        key: 'menu', 
+        icon: <CoffeeOutlined style={{ fontSize: 16 }} />, 
+        label: <Link to="/menu">Menu Management</Link> 
+      });
+    }
+
+    if (role === 'MANAGER') {
+      items.push({ 
+        key: 'staff', 
+        icon: <TeamOutlined style={{ fontSize: 16 }} />, 
+        label: <Link to="/staff">Staff</Link> 
+      });
+    }
+
+    if (role === 'MANAGER') {
+      items.push({ 
+        key: 'transactions', 
+        icon: <HistoryOutlined style={{ fontSize: 16 }} />, 
+        label: <Link to="/transactions">Transactions</Link> 
+      });
+    }
+
+    if (role === 'MANAGER' || role === 'STAFF') {
+      items.push({ 
+        key: 'staff-dashboard', 
+        icon: <FireOutlined style={{ fontSize: 16 }} />, 
+        label: <Link to="/staff-dashboard">Kitchen & Billing</Link> 
+      });
+    }
+
+    return items;
+  }, [user]);
+
   const getSelectedKey = () => {
     const path = location.pathname;
     if (path.includes('/dashboard')) return 'dashboard';
@@ -32,11 +88,11 @@ const DashboardLayout: React.FC = () => {
     if (path.includes('/menu')) return 'menu';
     if (path.includes('/staff')) return 'staff';
     if (path.includes('/transactions')) return 'transactions';
+    if (path.includes('/staff-dashboard')) return 'staff-dashboard';
     if (path.includes('/settings')) return 'settings';
     return 'dashboard'; // Default key
   };
 
-  // Determine page header title based on current path
   const getPageTitle = () => {
     const path = location.pathname;
     if (path.includes('/dashboard')) return 'RestoAdmin Dashboard';
@@ -44,6 +100,7 @@ const DashboardLayout: React.FC = () => {
     if (path.includes('/menu')) return 'Menu Management';
     if (path.includes('/staff')) return 'Staff Management';
     if (path.includes('/transactions')) return 'Order & Transaction History';
+    if (path.includes('/staff-dashboard')) return 'Kitchen & Billing Dashboard';
     if (path.includes('/settings')) return 'System Settings';
     return 'SmartDine Admin';
   };
@@ -106,10 +163,10 @@ const DashboardLayout: React.FC = () => {
             )}
             <div>
               <div style={{ fontWeight: 700, color: '#1a202c', fontSize: '15px', lineHeight: 1.2 }}>
-                {isTransactions ? 'RestoAdmin' : 'SmartDine Admin'}
+                {user?.fullName || 'SmartDine User'}
               </div>
-              <div style={{ color: '#718096', fontSize: '11px', marginTop: 2 }}>
-                {isTransactions ? 'Enterprise Suite' : 'Restaurant Manager'}
+              <div style={{ color: '#718096', fontSize: '11px', marginTop: 2, textTransform: 'capitalize' }}>
+                {user?.role ? user.role.toLowerCase() : 'Restaurant Guest'}
               </div>
             </div>
           </div>
@@ -121,51 +178,26 @@ const DashboardLayout: React.FC = () => {
               mode="inline"
               selectedKeys={[selectedKey]}
               style={{ borderRight: 0 }}
-              items={[
-                { 
-                  key: 'dashboard', 
-                  icon: <AppstoreOutlined style={{ fontSize: 16 }} />, 
-                  label: <Link to="/dashboard">Dashboard</Link> 
-                },
-                { 
-                  key: 'tables', 
-                  icon: <TableOutlined style={{ fontSize: 16 }} />, 
-                  label: <Link to="/tables">Table Management</Link> 
-                },
-                { 
-                  key: 'menu', 
-                  icon: <CoffeeOutlined style={{ fontSize: 16 }} />, 
-                  label: <Link to="/menu">Menu Management</Link> 
-                },
-                { 
-                  key: 'staff', 
-                  icon: <TeamOutlined style={{ fontSize: 16 }} />, 
-                  label: <Link to="/staff">Staff</Link> 
-                },
-                { 
-                  key: 'transactions', 
-                  icon: <HistoryOutlined style={{ fontSize: 16 }} />, 
-                  label: <Link to="/transactions">Transactions</Link> 
-                },
-              ]}
+              items={sidebarMenuItems}
             />
           </div>
           
-          {/* Settings & Logout items */}
           <div style={{ borderTop: '1px solid #f5f5f5', paddingTop: 8 }}>
-            <Menu
-              theme="light"
-              mode="inline"
-              selectedKeys={[selectedKey]}
-              style={{ borderRight: 0 }}
-              items={[
-                { 
-                  key: 'settings', 
-                  icon: <SettingOutlined style={{ fontSize: 16 }} />, 
-                  label: <Link to="/settings">Settings</Link> 
-                },
-              ]}
-            />
+            {user && user.role !== 'CUSTOMER' && (
+              <Menu
+                theme="light"
+                mode="inline"
+                selectedKeys={[selectedKey]}
+                style={{ borderRight: 0 }}
+                items={[
+                  { 
+                    key: 'settings', 
+                    icon: <SettingOutlined style={{ fontSize: 16 }} />, 
+                    label: <Link to="/settings">Settings</Link> 
+                  },
+                ]}
+              />
+            )}
             {/* Custom Logout button matching mockup 3 */}
             <div 
               onClick={() => dispatch(logout())}

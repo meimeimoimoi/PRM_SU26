@@ -1,10 +1,25 @@
 using System;
 using System.Collections.Generic;
+using SmartDine.Domain.Enums;
 
 namespace SmartDine.Domain.Entities;
 
 /// <summary>
-/// Khách hàng thành viên (Diner).
+/// Entity đại diện cho khách hàng thành viên (customers).
+/// Khách đăng ký tài khoản để tích điểm, đặt bàn trước, xem lịch sử đơn hàng.
+///
+/// Hệ thống loyalty theo tổng chi tiêu:
+///   - BRONZE: mặc định khi mới đăng ký.
+///   - SILVER / GOLD / VIP: nâng cấp dựa trên TotalSpent và VisitCount.
+///
+/// Xác thực: Email + PasswordHash (BCrypt). PasswordHash nullable vì guest có thể
+/// được chuyển thành customer sau (upgrade từ phiên ăn vãng lai).
+///
+/// Quan hệ:
+///   - 1:N với DiningSession → lịch sử các lần ăn tại nhà hàng.
+///   - 1:N với Review → đánh giá món ăn.
+///   - 1:N với TableReservation → lịch đặt bàn trước.
+///   - 1:1 với CustomerStatistics → thống kê tổng hợp.
 /// </summary>
 public class Customer : BaseEntity
 {
@@ -13,7 +28,7 @@ public class Customer : BaseEntity
     public string? Email { get; set; }
     public string? PasswordHash { get; set; }
     public int LoyaltyPoints { get; set; } = 0;
-    public string MembershipLevel { get; set; } = "BRONZE"; // BRONZE, SILVER, GOLD, VIP
+    public LoyaltyTier MembershipLevel { get; set; } = LoyaltyTier.BRONZE;
     public decimal TotalSpent { get; set; } = 0.00m;
     public int VisitCount { get; set; } = 0;
     public DateTime? LastLoginAt { get; set; }

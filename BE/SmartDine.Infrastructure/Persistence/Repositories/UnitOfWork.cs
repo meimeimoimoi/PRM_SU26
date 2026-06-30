@@ -1,10 +1,8 @@
+using SmartDine.Domain.Entities;
 using SmartDine.Domain.Interfaces;
 
 namespace SmartDine.Infrastructure.Persistence.Repositories;
 
-/// <summary>
-/// Unit of Work — quản lý tất cả repositories trong 1 transaction.
-/// </summary>
 public class UnitOfWork : IUnitOfWork
 {
     private readonly SmartDineDbContext _context;
@@ -17,6 +15,15 @@ public class UnitOfWork : IUnitOfWork
     public IDiningSessionRepository DiningSessions { get; }
     public IPaymentRepository Payments { get; }
     public IReviewRepository Reviews { get; }
+    public ITableReservationRepository TableReservations { get; }
+    public IRefreshTokenRepository RefreshTokens { get; }
+    public IPasswordResetTokenRepository PasswordResetTokens { get; }
+    public IRepository<CustomerActivity> CustomerActivities { get; }
+    public IRepository<MenuItemStatistics> MenuItemStatisticsRepo { get; }
+    public IRepository<BusinessContextLog> BusinessContextLogs { get; }
+    public IRepository<RecommendationLog> RecommendationLogs { get; }
+    public IRepository<SessionParticipant> SessionParticipants { get; }
+
 
     public UnitOfWork(SmartDineDbContext context)
     {
@@ -29,6 +36,14 @@ public class UnitOfWork : IUnitOfWork
         DiningSessions = new DiningSessionRepository(context);
         Payments = new PaymentRepository(context);
         Reviews = new ReviewRepository(context);
+        TableReservations = new TableReservationRepository(context);
+        RefreshTokens = new RefreshTokenRepository(context);
+        PasswordResetTokens = new PasswordResetTokenRepository(context);
+        CustomerActivities = new GenericRepository<CustomerActivity>(context);
+        MenuItemStatisticsRepo = new GenericRepository<MenuItemStatistics>(context);
+        BusinessContextLogs = new GenericRepository<BusinessContextLog>(context);
+        RecommendationLogs = new GenericRepository<RecommendationLog>(context);
+        SessionParticipants = new GenericRepository<SessionParticipant>(context);
     }
 
     public async Task<int> SaveChangesAsync(CancellationToken ct = default) =>

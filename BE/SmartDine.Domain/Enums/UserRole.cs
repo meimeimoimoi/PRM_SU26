@@ -5,5 +5,6 @@ public enum UserRole
     CUSTOMER,
     STAFF,
     CHEF,
-    MANAGER
+    MANAGER,
+    GUEST
 }

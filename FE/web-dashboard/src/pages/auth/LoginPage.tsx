@@ -3,9 +3,10 @@ import { Form, Input, Button, Card, Typography, Alert, message } from 'antd';
 import { UserOutlined, LockOutlined } from '@ant-design/icons';
 import { useDispatch, useSelector } from 'react-redux';
 import { AppDispatch } from '@/store';
-import { loginUser, selectAuthLoading, selectAuthError, selectIsAuthenticated } from '@/store/slices/authSlice';
+import { loginUser, selectAuthLoading, selectAuthError, selectIsAuthenticated, selectCurrentUser } from '@/store/slices/authSlice';
 import { useNavigate } from 'react-router-dom';
-import './LoginPage.css'; // Import tệp styles riêng biệt
+import { getDefaultRoute } from '@/utils/roleUtils';
+import '@/styles/LoginPage.css'; // Import tệp styles riêng biệt
 
 const { Title, Text } = Typography;
 
@@ -15,20 +16,21 @@ const LoginPage: React.FC = () => {
   const loading = useSelector(selectAuthLoading);
   const error = useSelector(selectAuthError);
   const isAuthenticated = useSelector(selectIsAuthenticated);
+  const currentUser = useSelector(selectCurrentUser);
 
-  // If already authenticated, redirect to home page
+  // If already authenticated, redirect to role-specific homepage
   useEffect(() => {
-    if (isAuthenticated) {
-      navigate('/');
+    if (isAuthenticated && currentUser) {
+      navigate(getDefaultRoute(currentUser.role));
     }
-  }, [isAuthenticated, navigate]);
+  }, [isAuthenticated, currentUser, navigate]);
 
   const onFinish = async (values: any) => {
     try {
       const result = await dispatch(loginUser({ email: values.email, password: values.password })).unwrap();
       if (result.user) {
         message.success(`Chào mừng trở lại, ${result.user.fullName}!`);
-        navigate('/');
+        navigate(getDefaultRoute(result.user.role));
       }
     } catch (err: any) {
       // Error message is handled by redux and displayed in Alert

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using SmartDine.Domain.Enums;
 using SmartDine.Domain.Exceptions;
 
 namespace SmartDine.Domain.Entities;
@@ -16,7 +17,7 @@ public class Order : BaseEntity
     public decimal TotalAmount { get; set; }
     public decimal DiscountAmount { get; set; } = 0.00m;
     public decimal FinalAmount { get; set; }
-    public string Status { get; set; } = "PENDING"; // PENDING, COOKING, COMPLETED, CANCELLED
+    public OrderStatus Status { get; set; } = OrderStatus.PENDING;
 
     // Navigation
     public List<OrderDetail> OrderDetails { get; set; } = new();
@@ -37,14 +38,14 @@ public class Order : BaseEntity
     /// <summary>
     /// Cập nhật trạng thái với business validation.
     /// </summary>
-    public void UpdateStatus(string newStatus)
+    public void UpdateStatus(OrderStatus newStatus)
     {
-        var validTransitions = new Dictionary<string, string[]>
+        var validTransitions = new Dictionary<OrderStatus, OrderStatus[]>
         {
-            { "PENDING",   new[] { "COOKING", "COMPLETED", "CANCELLED" } },
-            { "COOKING",   new[] { "COMPLETED", "CANCELLED" } },
-            { "COMPLETED", Array.Empty<string>() },
-            { "CANCELLED", Array.Empty<string>() }
+            { OrderStatus.PENDING,   new[] { OrderStatus.COOKING, OrderStatus.COMPLETED, OrderStatus.CANCELLED } },
+            { OrderStatus.COOKING,   new[] { OrderStatus.COMPLETED, OrderStatus.CANCELLED } },
+            { OrderStatus.COMPLETED, Array.Empty<OrderStatus>() },
+            { OrderStatus.CANCELLED, Array.Empty<OrderStatus>() }
         };
 
         if (validTransitions.TryGetValue(Status, out var allowed) && allowed.Contains(newStatus))

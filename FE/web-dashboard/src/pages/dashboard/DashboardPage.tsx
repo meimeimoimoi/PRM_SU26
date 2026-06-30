@@ -8,7 +8,7 @@ import {
   ArrowUpOutlined 
 } from '@ant-design/icons';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import './DashboardPage.css';
+import '@/styles/DashboardPage.css';
 
 // ===== Mock Data =====
 const salesData = [

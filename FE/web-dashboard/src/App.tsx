@@ -9,13 +9,37 @@ import TableManagementPage from '@/pages/dashboard/TableManagementPage';
 import DashboardPage from '@/pages/dashboard/DashboardPage';
 import MenuManagementPage from '@/pages/dashboard/MenuManagementPage';
 import StaffManagementPage from '@/pages/dashboard/StaffManagementPage';
-import SettingsPage from '@/pages/dashboard/SettingsPage';
 import TransactionsPage from '@/pages/dashboard/TransactionsPage';
-import RestaurantDrawPage from '@/pages/draw_map/RestaurantDrawPage';
-// Protected Route Guard
-const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+import SettingsPage from '@/pages/dashboard/SettingsPage';
+import StaffDashboardPage from '@/pages/dashboard/StaffDashboardPage';
+
+import { selectCurrentUser } from '@/store/slices/authSlice';
+import { getDefaultRoute } from '@/utils/roleUtils';
+
+// Protected Route Guard checking both login and roles
+const RoleProtectedRoute: React.FC<{ children: React.ReactNode; allowedRoles: string[] }> = ({ children, allowedRoles }) => {
   const isAuthenticated = useSelector(selectIsAuthenticated);
-  return isAuthenticated ? <>{children}</> : <Navigate to="/login" replace />;
+  const currentUser = useSelector(selectCurrentUser);
+
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />;
+  }
+
+  if (currentUser && !allowedRoles.includes(currentUser.role)) {
+    // Redirect unauthorized roles to their default home page
+    return <Navigate to={getDefaultRoute(currentUser.role)} replace />;
+  }
+
+  return <>{children}</>;
+};
+
+// Dynamic index redirection based on user's role
+const RoleIndexRedirect: React.FC = () => {
+  const currentUser = useSelector(selectCurrentUser);
+  if (currentUser) {
+    return <Navigate to={getDefaultRoute(currentUser.role)} replace />;
+  }
+  return <Navigate to="/login" replace />;
 };
 
 const App: React.FC = () => {
@@ -37,26 +61,77 @@ const App: React.FC = () => {
           <Route
             path="/*"
             element={
-              <ProtectedRoute>
+              <RoleProtectedRoute allowedRoles={['MANAGER', 'STAFF', 'CUSTOMER']}>
                 <DashboardLayout />
-              </ProtectedRoute>
+              </RoleProtectedRoute>
             }
           >
-            <Route index element={<Navigate to="/dashboard" replace />} />
-            <Route path="dashboard" element={<DashboardPage />} />
-            <Route path="tables" element={<TableManagementPage />} />
-            <Route path="menu" element={<MenuManagementPage />} />
-            <Route path="staff" element={<StaffManagementPage />} />
-            <Route path="transactions" element={<TransactionsPage />} />
-            <Route path="settings" element={<SettingsPage />} />
-            <Route path="draw-map" element={<RestaurantDrawPage />} />
+            <Route index element={<RoleIndexRedirect />} />
+
+            <Route
+              path="dashboard"
+              element={
+                <RoleProtectedRoute allowedRoles={['MANAGER']}>
+                  <DashboardPage />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="tables"
+              element={
+                <RoleProtectedRoute allowedRoles={['MANAGER']}>
+                  <TableManagementPage />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="menu"
+              element={
+                <RoleProtectedRoute allowedRoles={['MANAGER', 'CUSTOMER']}>
+                  <MenuManagementPage />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="staff"
+              element={
+                <RoleProtectedRoute allowedRoles={['MANAGER']}>
+                  <StaffManagementPage />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="transactions"
+              element={
+                <RoleProtectedRoute allowedRoles={['MANAGER']}>
+                  <TransactionsPage />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="settings"
+              element={
+                <RoleProtectedRoute allowedRoles={['MANAGER', 'STAFF']}>
+                  <SettingsPage />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="staff-dashboard"
+              element={
+                <RoleProtectedRoute allowedRoles={['STAFF', 'MANAGER']}>
+                  <StaffDashboardPage />
+                </RoleProtectedRoute>
+              }
+            />
             {/* Fallback route within dashboard layout */}
-            <Route path="*" element={<Navigate to="/dashboard" replace />} />
+            <Route path="*" element={<RoleIndexRedirect />} />
           </Route>
         </Routes>
       </BrowserRouter>
     </ConfigProvider>
   );
 };
+
 
 export default App;

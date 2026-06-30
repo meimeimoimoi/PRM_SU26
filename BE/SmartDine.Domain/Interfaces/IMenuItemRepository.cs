@@ -9,4 +9,7 @@ public interface IMenuItemRepository : IRepository<MenuItem>
     Task<IReadOnlyList<MenuItem>> SearchAsync(string query);
     Task<IReadOnlyList<MenuItem>> GetPopularAsync(int count);
     Task<IReadOnlyList<MenuItem>> GetByIdsAsync(List<int> ids);
+    Task<(IReadOnlyList<MenuItem> Items, int TotalCount)> GetPagedFilteredAsync(int? categoryId, string? search, int page, int pageSize);
+    Task<MenuItem?> GetByIdWithDetailsAsync(int id);
+    Task<IReadOnlyList<MenuItem>> GetByCategoryIdsAsync(List<int> categoryIds, int count);
 }

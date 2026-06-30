@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using SmartDine.Domain.Enums;
 
 namespace SmartDine.Domain.Entities;
 
@@ -10,7 +11,7 @@ public class Promotion : BaseEntity
 {
     public string? Name { get; set; }
     public string? Description { get; set; }
-    public string DiscountType { get; set; } = "PERCENT"; // PERCENT, FIXED
+    public PromotionType DiscountType { get; set; } = PromotionType.PERCENT;
     public decimal DiscountValue { get; set; }
     public DateTime StartDate { get; set; }
     public DateTime EndDate { get; set; }

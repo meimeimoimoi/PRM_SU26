@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using SmartDine.Domain.Enums;
 
 namespace SmartDine.Domain.Entities;
 
@@ -14,7 +15,7 @@ public class RobotDeliveryBatch : BaseEntity
     public int TableId { get; set; }
     public Table Table { get; set; } = null!;
 
-    public string Status { get; set; } = "PENDING"; // PENDING, ASSIGNED, DELIVERING, DELIVERED, FAILED, CANCELLED
+    public DeliveryBatchStatus Status { get; set; } = DeliveryBatchStatus.PENDING;
     public DateTime? AssignedAt { get; set; }
     public DateTime? StartedAt { get; set; }
     public DateTime? CompletedAt { get; set; }

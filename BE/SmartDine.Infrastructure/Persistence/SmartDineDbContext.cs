@@ -43,6 +43,8 @@ public class SmartDineDbContext : DbContext
     public DbSet<OrderCombo> OrderCombos => Set<OrderCombo>();
     public DbSet<SessionParticipant> SessionParticipants => Set<SessionParticipant>();
     public DbSet<RecommendationLog> RecommendationLogs => Set<RecommendationLog>();
+    public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
+    public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -82,6 +84,10 @@ public class SmartDineDbContext : DbContext
         modelBuilder.Entity<OrderCombo>().HasQueryFilter(e => !e.IsDeleted);
         modelBuilder.Entity<SessionParticipant>().HasQueryFilter(e => !e.IsDeleted);
         modelBuilder.Entity<RecommendationLog>().HasQueryFilter(e => !e.IsDeleted);
+        modelBuilder.Entity<RefreshToken>().HasQueryFilter(e => !e.IsDeleted);
+        modelBuilder.Entity<RefreshToken>().Property(r => r.UserType).HasConversion<string>().HasMaxLength(20);
+        modelBuilder.Entity<PasswordResetToken>().HasQueryFilter(e => !e.IsDeleted);
+        modelBuilder.Entity<PasswordResetToken>().Property(p => p.UserType).HasConversion<string>().HasMaxLength(20);
     }
 
     /// <summary>

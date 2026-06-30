@@ -1,4 +1,5 @@
 using System;
+using SmartDine.Domain.Enums;
 
 namespace SmartDine.Domain.Entities;
 
@@ -7,7 +8,7 @@ namespace SmartDine.Domain.Entities;
 /// </summary>
 public class Notification : BaseEntity
 {
-    public string RecipientType { get; set; } = "CUSTOMER"; // CUSTOMER, USER
+    public UserType RecipientType { get; set; } = UserType.CUSTOMER;
     public int RecipientId { get; set; }
     public string NotificationType { get; set; } = string.Empty; // ORDER_CREATED, ORDER_READY, etc.
     public string Title { get; set; } = string.Empty;

@@ -21,16 +21,9 @@ import {
   ReloadOutlined 
 } from '@ant-design/icons';
 
-const { Option } = Select;
+import { StaffMember } from '@/types/staff';
 
-interface StaffMember {
-  id: string; // S-101
-  fullName: string;
-  email: string;
-  phone: string;
-  role: 'Admin' | 'Chef' | 'Staff';
-  isActive: boolean;
-}
+const { Option } = Select;
 
 const StaffManagementPage: React.FC = () => {
   const [searchText, setSearchText] = useState<string>('');
@@ -51,7 +44,7 @@ const StaffManagementPage: React.FC = () => {
       fullName: 'Robert Johnson',
       email: 'robert.j@smartdine.com',
       phone: '+1 (555) 837-1920',
-      role: 'Chef',
+      role: 'Staff',
       isActive: true
     },
     {
@@ -83,7 +76,7 @@ const StaffManagementPage: React.FC = () => {
       fullName: 'Michael Brown',
       email: 'michael.b@smartdine.com',
       phone: '+1 (555) 998-8776',
-      role: 'Chef',
+      role: 'Staff',
       isActive: true
     }
   ]);
@@ -225,10 +218,7 @@ const StaffManagementPage: React.FC = () => {
       render: (role: string) => {
         let color = '#e6f7ff';
         let textColor = '#1890ff';
-        if (role === 'Chef') {
-          color = '#fff7e6';
-          textColor = '#fa8c16';
-        } else if (role === 'Admin') {
+        if (role === 'Admin') {
           color = '#f0f5ff';
           textColor = '#2f54eb';
         }
@@ -356,7 +346,6 @@ const StaffManagementPage: React.FC = () => {
             >
               <Option value="ALL">All Roles</Option>
               <Option value="Admin">Admin</Option>
-              <Option value="Chef">Chef</Option>
               <Option value="Staff">Staff</Option>
             </Select>
           </div>
@@ -431,7 +420,6 @@ const StaffManagementPage: React.FC = () => {
           >
             <Select>
               <Option value="Admin">Admin (Quản trị viên)</Option>
-              <Option value="Chef">Chef (Đầu bếp)</Option>
               <Option value="Staff">Staff (Nhân viên phục vụ)</Option>
             </Select>
           </Form.Item>
@@ -493,7 +481,6 @@ const StaffManagementPage: React.FC = () => {
           >
             <Select>
               <Option value="Admin">Admin</Option>
-              <Option value="Chef">Chef</Option>
               <Option value="Staff">Staff</Option>
             </Select>
           </Form.Item>

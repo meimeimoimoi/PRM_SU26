@@ -1,8 +1,7 @@
+using SmartDine.Domain.Entities;
+
 namespace SmartDine.Domain.Interfaces;
 
-/// <summary>
-/// Unit of Work — quản lý transaction xuyên suốt nhiều repositories.
-/// </summary>
 public interface IUnitOfWork : IDisposable
 {
     IOrderRepository Orders { get; }
@@ -13,6 +12,15 @@ public interface IUnitOfWork : IDisposable
     IDiningSessionRepository DiningSessions { get; }
     IPaymentRepository Payments { get; }
     IReviewRepository Reviews { get; }
+    ITableReservationRepository TableReservations { get; }
+    IRefreshTokenRepository RefreshTokens { get; }
+    IPasswordResetTokenRepository PasswordResetTokens { get; }
+    IRepository<CustomerActivity> CustomerActivities { get; }
+    IRepository<MenuItemStatistics> MenuItemStatisticsRepo { get; }
+    IRepository<BusinessContextLog> BusinessContextLogs { get; }
+    IRepository<RecommendationLog> RecommendationLogs { get; }
+    IRepository<SessionParticipant> SessionParticipants { get; }
+
 
     Task<int> SaveChangesAsync(CancellationToken ct = default);
 }

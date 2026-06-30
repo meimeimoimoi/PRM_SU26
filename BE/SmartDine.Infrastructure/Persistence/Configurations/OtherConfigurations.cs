@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using SmartDine.Domain.Entities;
+using SmartDine.Domain.Enums;
 
 namespace SmartDine.Infrastructure.Persistence.Configurations;
 
@@ -13,7 +14,7 @@ public class TableConfiguration : IEntityTypeConfiguration<Table>
         builder.Property(t => t.TableNumber).IsRequired();
         builder.Property(t => t.Capacity).IsRequired();
         builder.Property(t => t.QrCode).HasMaxLength(255);
-        builder.Property(t => t.Status).HasMaxLength(20).HasDefaultValue("AVAILABLE");
+        builder.Property(t => t.Status).HasConversion<string>().HasMaxLength(20).HasDefaultValue(TableStatus.AVAILABLE);
 
         builder.HasIndex(t => t.TableNumber).IsUnique();
     }
@@ -27,7 +28,7 @@ public class DiningSessionConfiguration : IEntityTypeConfiguration<DiningSession
         builder.HasKey(d => d.Id);
         builder.Property(d => d.GuestName).HasMaxLength(100);
         builder.Property(d => d.GuestPhone).HasMaxLength(20);
-        builder.Property(d => d.Status).HasMaxLength(20).HasDefaultValue("ACTIVE");
+        builder.Property(d => d.Status).HasConversion<string>().HasMaxLength(20).HasDefaultValue(DiningSessionStatus.ACTIVE);
         builder.Property(d => d.TotalSpent).HasPrecision(12, 2);
 
         builder.HasOne(d => d.Customer)
@@ -51,7 +52,7 @@ public class OrderDetailConfiguration : IEntityTypeConfiguration<OrderDetail>
         builder.Property(od => od.Quantity).IsRequired();
         builder.Property(od => od.UnitPrice).HasPrecision(12, 2).IsRequired();
         builder.Property(od => od.Notes).HasMaxLength(255);
-        builder.Property(od => od.Status).HasMaxLength(20).IsRequired();
+        builder.Property(od => od.Status).HasConversion<string>().HasMaxLength(20).IsRequired();
 
         builder.HasOne(od => od.Order)
                .WithMany(o => o.OrderDetails)
@@ -87,8 +88,8 @@ public class PaymentConfiguration : IEntityTypeConfiguration<Payment>
         builder.ToTable("payments");
         builder.HasKey(p => p.Id);
         builder.Property(p => p.Amount).HasPrecision(12, 2).IsRequired();
-        builder.Property(p => p.PaymentMethod).HasMaxLength(50).IsRequired();
-        builder.Property(p => p.PaymentStatus).HasMaxLength(20).HasDefaultValue("SUCCESS");
+        builder.Property(p => p.PaymentMethod).HasConversion<string>().HasMaxLength(50).IsRequired();
+        builder.Property(p => p.PaymentStatus).HasConversion<string>().HasMaxLength(20).HasDefaultValue(PaymentStatus.SUCCESS);
 
         builder.HasOne(p => p.Order)
                .WithMany(o => o.Payments)
@@ -105,7 +106,7 @@ public class ReviewConfiguration : IEntityTypeConfiguration<Review>
         builder.HasKey(r => r.Id);
         builder.Property(r => r.Rating).IsRequired();
         builder.Property(r => r.Comment).HasColumnType("text");
-        builder.Property(r => r.Status).HasMaxLength(20).HasDefaultValue("PENDING");
+        builder.Property(r => r.Status).HasConversion<string>().HasMaxLength(20).HasDefaultValue(ReviewStatus.PENDING);
 
         builder.HasIndex(r => new { r.CustomerId, r.MenuItemId }).IsUnique();
 
@@ -129,7 +130,7 @@ public class PromotionConfiguration : IEntityTypeConfiguration<Promotion>
         builder.HasKey(p => p.Id);
         builder.Property(p => p.Name).HasMaxLength(100);
         builder.Property(p => p.Description).HasColumnType("text");
-        builder.Property(p => p.DiscountType).HasMaxLength(20).IsRequired();
+        builder.Property(p => p.DiscountType).HasConversion<string>().HasMaxLength(20).IsRequired();
         builder.Property(p => p.DiscountValue).HasPrecision(12, 2).IsRequired();
         builder.Property(p => p.IsActive).HasDefaultValue(true);
     }
@@ -141,7 +142,7 @@ public class NotificationConfiguration : IEntityTypeConfiguration<Notification>
     {
         builder.ToTable("notifications");
         builder.HasKey(n => n.Id);
-        builder.Property(n => n.RecipientType).HasMaxLength(20).IsRequired();
+        builder.Property(n => n.RecipientType).HasConversion<string>().HasMaxLength(20).IsRequired();
         builder.Property(n => n.NotificationType).HasMaxLength(50).IsRequired();
         builder.Property(n => n.Title).HasMaxLength(255).IsRequired();
         builder.Property(n => n.Message).HasColumnType("text").IsRequired();
@@ -201,7 +202,7 @@ public class CustomerConfiguration : IEntityTypeConfiguration<Customer>
         builder.Property(c => c.Phone).HasMaxLength(20);
         builder.Property(c => c.Email).HasMaxLength(100);
         builder.Property(c => c.PasswordHash).HasMaxLength(255);
-        builder.Property(c => c.MembershipLevel).HasMaxLength(20).HasDefaultValue("BRONZE");
+        builder.Property(c => c.MembershipLevel).HasConversion<string>().HasMaxLength(20).HasDefaultValue(LoyaltyTier.BRONZE);
         builder.Property(c => c.TotalSpent).HasPrecision(12, 2).HasDefaultValue(0.00m);
         builder.Property(c => c.VisitCount).HasDefaultValue(0);
 
@@ -218,7 +219,7 @@ public class TableReservationConfiguration : IEntityTypeConfiguration<TableReser
         builder.HasKey(tr => tr.Id);
         builder.Property(tr => tr.GuestName).HasMaxLength(100);
         builder.Property(tr => tr.GuestPhone).HasMaxLength(20);
-        builder.Property(tr => tr.Status).HasMaxLength(20).IsRequired();
+        builder.Property(tr => tr.Status).HasConversion<string>().HasMaxLength(20).IsRequired();
         builder.Property(tr => tr.Notes).HasMaxLength(255);
 
         builder.HasOne(tr => tr.Customer)
@@ -439,7 +440,7 @@ public class RobotConfiguration : IEntityTypeConfiguration<Robot>
         builder.HasKey(r => r.Id);
         builder.Property(r => r.RobotCode).HasMaxLength(50).IsRequired();
         builder.Property(r => r.RobotName).HasMaxLength(100).IsRequired();
-        builder.Property(r => r.Status).HasMaxLength(20).IsRequired();
+        builder.Property(r => r.Status).HasConversion<string>().HasMaxLength(20).IsRequired();
         builder.Property(r => r.CurrentLocation).HasMaxLength(100);
 
         builder.HasIndex(r => r.RobotCode).IsUnique();
@@ -452,7 +453,7 @@ public class RobotDeliveryBatchConfiguration : IEntityTypeConfiguration<RobotDel
     {
         builder.ToTable("robot_delivery_batches");
         builder.HasKey(b => b.Id);
-        builder.Property(b => b.Status).HasMaxLength(20).IsRequired();
+        builder.Property(b => b.Status).HasConversion<string>().HasMaxLength(20).IsRequired();
 
         builder.HasOne(b => b.Robot)
                .WithMany(r => r.DeliveryBatches)
@@ -511,16 +512,22 @@ public class SessionParticipantConfiguration : IEntityTypeConfiguration<SessionP
     {
         builder.ToTable("session_participants");
         builder.HasKey(sp => sp.Id);
+        builder.Property(sp => sp.GuestSessionId).HasMaxLength(100);
+        builder.Property(sp => sp.Role)
+               .HasConversion<string>()
+               .HasMaxLength(20);
 
         builder.HasOne(sp => sp.Session)
                .WithMany(s => s.Participants)
                .HasForeignKey(sp => sp.SessionId)
                .OnDelete(DeleteBehavior.Cascade);
 
+        // Nullable: GUEST participants không có CustomerId
         builder.HasOne(sp => sp.Customer)
                .WithMany(c => c.SessionParticipants)
                .HasForeignKey(sp => sp.CustomerId)
-               .OnDelete(DeleteBehavior.Cascade);
+               .IsRequired(false)
+               .OnDelete(DeleteBehavior.Restrict);
     }
 }
 

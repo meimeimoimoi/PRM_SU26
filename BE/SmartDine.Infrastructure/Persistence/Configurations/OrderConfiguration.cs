@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using SmartDine.Domain.Entities;
+using SmartDine.Domain.Enums;
 
 namespace SmartDine.Infrastructure.Persistence.Configurations;
 
@@ -13,7 +14,7 @@ public class OrderConfiguration : IEntityTypeConfiguration<Order>
         builder.Property(o => o.TotalAmount).HasPrecision(12, 2);
         builder.Property(o => o.DiscountAmount).HasPrecision(12, 2).HasDefaultValue(0.00m);
         builder.Property(o => o.FinalAmount).HasPrecision(12, 2);
-        builder.Property(o => o.Status).HasMaxLength(20).HasDefaultValue("PENDING");
+        builder.Property(o => o.Status).HasConversion<string>().HasMaxLength(20).HasDefaultValue(OrderStatus.PENDING);
 
         builder.HasIndex(o => o.Status);
         builder.HasIndex(o => o.SessionId);

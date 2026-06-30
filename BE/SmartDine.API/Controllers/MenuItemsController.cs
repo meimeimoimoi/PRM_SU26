@@ -51,7 +51,7 @@ public class MenuItemsController : ControllerBase
     public async Task<IActionResult> Create([FromBody] CreateMenuItemRequest request)
     {
         var result = await _menuService.CreateAsync(request);
-        return Created("", ApiResponse<MenuItemResponse>.Ok(result, "Tạo món thành công"));
+        return Created("", ApiResponse<MenuItemCreatedResponse>.Ok(result, "Tạo món thành công"));
     }
 
     /// <summary>PUT /api/v1/menu-items/{id} — Cập nhật món (Manager only)</summary>

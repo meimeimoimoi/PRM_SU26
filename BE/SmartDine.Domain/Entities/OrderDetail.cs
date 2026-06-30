@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using SmartDine.Domain.Enums;
 
 namespace SmartDine.Domain.Entities;
 
@@ -20,7 +21,7 @@ public class OrderDetail : BaseEntity
     public int Quantity { get; set; }
     public decimal UnitPrice { get; set; }
     public string? Notes { get; set; }
-    public string Status { get; set; } = "WAITING"; // WAITING, DOING, DONE, SERVED, CANCELLED, RETURNED
+    public OrderDetailStatus Status { get; set; } = OrderDetailStatus.WAITING;
 
     public int? AssignedChefId { get; set; }
     public User? AssignedChef { get; set; }

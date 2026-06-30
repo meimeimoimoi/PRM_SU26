@@ -1,3 +1,5 @@
+using SmartDine.Domain.Enums;
+
 namespace SmartDine.Domain.Entities;
 
 /// <summary>
@@ -13,5 +15,5 @@ public class Review : BaseEntity
 
     public int Rating { get; set; } // 1-5 stars
     public string? Comment { get; set; }
-    public string Status { get; set; } = "PENDING"; // PENDING, APPROVED, REJECTED, HIDDEN
+    public ReviewStatus Status { get; set; } = ReviewStatus.PENDING;
 }

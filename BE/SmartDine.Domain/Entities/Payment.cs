@@ -1,4 +1,5 @@
 using System;
+using SmartDine.Domain.Enums;
 
 namespace SmartDine.Domain.Entities;
 
@@ -11,7 +12,7 @@ public class Payment : BaseEntity
     public Order Order { get; set; } = null!;
 
     public decimal Amount { get; set; }
-    public string PaymentMethod { get; set; } = "CASH"; // CASH, CREDIT_CARD, E_WALLET
-    public string PaymentStatus { get; set; } = "SUCCESS"; // SUCCESS, PENDING, FAILED
+    public PaymentMethod PaymentMethod { get; set; } = Enums.PaymentMethod.CASH;
+    public PaymentStatus PaymentStatus { get; set; } = Enums.PaymentStatus.SUCCESS;
     public DateTime? PaidAt { get; set; }
 }
