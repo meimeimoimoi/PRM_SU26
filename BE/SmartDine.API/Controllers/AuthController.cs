@@ -5,6 +5,8 @@ using SmartDine.Application.Constants;
 using SmartDine.Application.DTOs.Auth;
 using SmartDine.Application.DTOs.Common;
 using SmartDine.Application.Services;
+using SmartDine.Domain.Constants;
+using SmartDine.Domain.Enums;
 
 namespace SmartDine.API.Controllers;
 
@@ -69,8 +71,15 @@ public class AuthController : ControllerBase
     [Authorize]
     public async Task<IActionResult> GetCurrentUser()
     {
-        var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
         var role = User.FindFirstValue(ClaimTypes.Role)!;
+
+        // GUEST: sub (NameIdentifier) là UUID định danh phiên đăng nhập, không phải số
+        // → phải lấy sessionId từ custom claim "session_id" thay vì int.Parse(sub).
+        var rawId = role == UserRole.GUEST.ToString()
+            ? User.FindFirstValue(JwtClaimTypes.SessionId)!
+            : User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+        var userId = int.Parse(rawId);
+
         var result = await _authService.GetCurrentUserAsync(userId, role);
         return Ok(ApiResponse<UserInfoResponse>.Ok(result));
     }

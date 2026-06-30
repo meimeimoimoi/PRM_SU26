@@ -21,6 +21,14 @@ public interface IJwtTokenService
     (string token, string jwtId) GenerateAccessToken(int id, string email, string fullName, string role);
 
     /// <summary>
+    /// Tạo JWT cho GUEST — mỗi lần gọi sinh ra một UUID riêng làm identity.
+    /// sub = guestUniqueId (UUID, unique per guest call).
+    /// Claim "session_id" = sessionId (số bàn / session thực tế).
+    /// Lý do: nhiều GUEST cùng bàn có sessionId giống nhau, cần UUID để phân biệt.
+    /// </summary>
+    (string token, string jwtId) GenerateGuestToken(string guestUniqueId, int sessionId, string guestName);
+
+    /// <summary>
     /// Tạo refresh token: random 64 bytes → base64 string.
     /// Không phải JWT, chỉ là chuỗi ngẫu nhiên lưu trong DB.
     /// Thời hạn 7 ngày (set bởi AuthService khi lưu vào DB).

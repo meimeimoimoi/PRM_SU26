@@ -3,6 +3,7 @@ using System.Security.Claims;
 using System.Security.Cryptography;
 using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
+using SmartDine.Domain.Constants;
 using SmartDine.Domain.Interfaces;
 
 namespace SmartDine.Infrastructure.Security;
@@ -55,6 +56,39 @@ public class JwtTokenService : IJwtTokenService
             new Claim(ClaimTypes.Email, email),
             new Claim(ClaimTypes.Name, fullName),
             new Claim(ClaimTypes.Role, role),
+        };
+
+        var rsaKey = _rsaKeyService.GetRsaKey();
+        var key = new RsaSecurityKey(rsaKey);
+        var creds = new SigningCredentials(key, SecurityAlgorithms.RsaSha256);
+
+        var token = new JwtSecurityToken(
+            issuer: _configuration["Jwt:Issuer"],
+            audience: _configuration["Jwt:Audience"],
+            claims: claims,
+            expires: DateTime.UtcNow.AddMinutes(
+                int.Parse(_configuration["Jwt:AccessTokenExpiryMinutes"] ?? "60")),
+            signingCredentials: creds
+        );
+
+        return (new JwtSecurityTokenHandler().WriteToken(token), jwtId);
+    }
+
+    /// <summary>
+    /// Tạo JWT cho GUEST với UUID làm sub — phân biệt được từng GUEST tại cùng một bàn.
+    /// Thêm custom claim "session_id" để service lấy sessionId khi cần mà không cần parse sub.
+    /// </summary>
+    public (string token, string jwtId) GenerateGuestToken(string guestUniqueId, int sessionId, string guestName)
+    {
+        var jwtId = Guid.NewGuid().ToString();
+
+        var claims = new[]
+        {
+            new Claim(JwtRegisteredClaimNames.Jti, jwtId),
+            new Claim(ClaimTypes.NameIdentifier, guestUniqueId),
+            new Claim(JwtClaimTypes.SessionId, sessionId.ToString()),
+            new Claim(ClaimTypes.Name, guestName),
+            new Claim(ClaimTypes.Role, "GUEST"),
         };
 
         var rsaKey = _rsaKeyService.GetRsaKey();
