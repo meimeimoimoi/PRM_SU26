@@ -15,6 +15,8 @@ import StaffDashboardPage from '@/pages/dashboard/StaffDashboardPage';
 
 import { selectCurrentUser } from '@/store/slices/authSlice';
 import { getDefaultRoute } from '@/utils/roleUtils';
+import RestaurantDrawPage from '@/pages/draw_map/RestaurantDrawPage';
+
 
 // Protected Route Guard checking both login and roles
 const RoleProtectedRoute: React.FC<{ children: React.ReactNode; allowedRoles: string[] }> = ({ children, allowedRoles }) => {
@@ -123,7 +125,7 @@ const App: React.FC = () => {
                   <StaffDashboardPage />
                 </RoleProtectedRoute>
               }
-            />
+            /> <Route path="draw-map" element={<RestaurantDrawPage />} />
             {/* Fallback route within dashboard layout */}
             <Route path="*" element={<RoleIndexRedirect />} />
           </Route>
