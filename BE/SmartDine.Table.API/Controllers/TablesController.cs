@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using SmartDine.Application.DTOs.Common;
@@ -56,6 +57,11 @@ public class TablesController : ControllerBase
     [Authorize(Roles = "CUSTOMER,GUEST")]
     public async Task<IActionResult> ScanTable(int id, [FromBody] ScanTableRequest request)
     {
+        // GUEST: guestSessionId = JWT sub claim (không phải customerId)
+        var role = User.FindFirst(ClaimTypes.Role)?.Value;
+        if (role == "GUEST")
+            request.GuestSessionId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
         var result = await _tableService.ScanTableAsync(id, request);
         return Ok(ApiResponse<ScanTableResponse>.Ok(result, result.Message));
     }
