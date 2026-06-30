@@ -74,6 +74,14 @@ public static class ValidationMessages
     public const string MENU_ITEM_PATCH_EMPTY = "Phải cung cấp ít nhất một trường để cập nhật.";
     public const string AI_RECOMMENDATION_NO_CONTEXT = "Không có dữ liệu ngữ cảnh kinh doanh để đề xuất.";
 
+    // ===== DiningSession =====
+    public const string DINING_SESSION_NOT_FOUND = "DINING_SESSION_NOT_FOUND";
+    public const string DINING_SESSION_NOT_ACTIVE = "Phiên ăn này đã kết thúc, không thể thực hiện thao tác.";
+    public const string DINING_SESSION_PARTICIPANT_NOT_FOUND = "Bạn không thuộc phiên ăn này.";
+    public const string DINING_SESSION_ALREADY_LEFT = "Bạn đã rời khỏi phiên ăn này trước đó.";
+    public const string DINING_SESSION_LEAVE_SUCCESS = "Đã rời khỏi nhóm gọi món tại bàn số {0} thành công.";
+    public const string DINING_SESSION_ACCESS_DENIED = "Bạn không có quyền xem thông tin của phiên ăn này.";
+
     // ===== Order =====
     public const string ORDER_NOT_FOUND = "ORDER_NOT_FOUND";
     public const string ORDER_ITEM_NOT_FOUND = "ORDER_ITEM_NOT_FOUND";
@@ -83,4 +91,12 @@ public static class ValidationMessages
     public const string ORDER_ITEM_OUT_OF_STOCK = "ORDER_ITEM_OUT_OF_STOCK";
     public const string ORDER_ITEM_DUPLICATE = "ORDER_ITEM_DUPLICATE";
     public const string ORDER_STATUS_INVALID = "ORDER_STATUS_INVALID";
+    public const string ORDER_SESSION_ACCESS_DENIED = "Bạn không thuộc phiên ăn này, không thể đặt món hoặc xem đơn.";
+
+    // ===== Coupon =====
+    public const string COUPON_NOT_FOUND = "Mã giảm giá không tồn tại hoặc đã ngừng áp dụng.";
+    public const string COUPON_EXPIRED = "Mã giảm giá đã hết hạn hoặc chưa đến thời gian áp dụng.";
+    public const string COUPON_NOT_OWNED = "Bạn không sở hữu mã giảm giá này.";
+    public const string COUPON_ALREADY_USED = "Mã giảm giá này đã được sử dụng.";
+    public const string COUPON_NOT_SUPPORTED_TYPE = "Loại khuyến mãi này hiện chưa được hỗ trợ áp dụng tự động.";
 }

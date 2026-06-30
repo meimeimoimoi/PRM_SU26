@@ -1,3 +1,4 @@
+using SmartDine.Application.Constants;
 using SmartDine.Application.DTOs.Orders;
 using SmartDine.Domain.Entities;
 using SmartDine.Domain.Enums;
@@ -11,7 +12,7 @@ using System.Threading.Tasks;
 namespace SmartDine.Application.Services;
 
 /// <summary>
-/// Service xử lý nghiệp vụ đặt món — tạo đơn, cập nhật status, lấy danh sách.
+/// Service xử lý nghiệp vụ đặt món — tạo đơn, áp coupon, cập nhật status, theo dõi tiến độ.
 /// </summary>
 public class OrderService
 {
@@ -24,17 +25,26 @@ public class OrderService
         _notificationService = notificationService;
     }
 
-    public async Task<OrderResponse> PlaceOrderAsync(int customerId, PlaceOrderRequest request)
+    // ═══════════════════════════════════════════════════════════════
+    // POST /api/v1/orders
+    // ═══════════════════════════════════════════════════════════════
+    /// <summary>
+    /// Đặt món: chuyển giỏ hàng hiện tại của phiên ăn thành Order chính thức.
+    ///
+    /// Identity: CUSTOMER → callerCustomerId; GUEST → callerGuestSessionId; STAFF → cả hai null + isStaff.
+    /// Ownership: CUSTOMER/GUEST chỉ đặt được cho session mình đang là participant active. STAFF không giới hạn.
+    /// Coupon: chỉ áp dụng khi caller là CUSTOMER (có callerCustomerId) — GUEST/STAFF gửi coupon_code sẽ bị bỏ qua.
+    /// </summary>
+    public async Task<OrderResponse> PlaceOrderAsync(
+        int? callerCustomerId, string? callerGuestSessionId, bool isStaff, PlaceOrderRequest request)
     {
-        var customer = await _uow.Customers.GetByIdAsync(customerId);
-        if (customer == null)
-            throw new BusinessRuleViolationException("Không tìm thấy thông tin khách hàng.");
-
-        var session = await _uow.DiningSessions.GetByIdAsync(request.DiningSessionId)
+        var session = await _uow.DiningSessions.GetByIdWithParticipantsAsync(request.DiningSessionId)
             ?? throw new EntityNotFoundException("Dining Session", request.DiningSessionId);
 
         if (session.Status != DiningSessionStatus.ACTIVE)
             throw new BusinessRuleViolationException("Dining Session này đã đóng.");
+
+        EnsureCallerIsParticipant(session.Participants, callerCustomerId, callerGuestSessionId, isStaff);
 
         // Validate menu items exist
         var menuItemIds = request.Items.Select(i => i.MenuItemId).ToList();
@@ -69,19 +79,49 @@ public class OrderService
         }
 
         order.CalculateTotal();
+
+        // Áp coupon — chỉ cho CUSTOMER tự đặt qua tài khoản mình (GUEST/STAFF: bỏ qua âm thầm)
+        if (!string.IsNullOrWhiteSpace(request.CouponCode) && callerCustomerId.HasValue)
+            await ApplyCouponAsync(order, callerCustomerId.Value, request.CouponCode);
+
         await _uow.Orders.AddAsync(order);
         await _uow.SaveChangesAsync();
 
         // Gửi thông báo thời gian thực đến nhà bếp
-        var table = await _uow.Tables.GetByIdAsync(session.TableId);
-        await _notificationService.NotifyNewOrderAsync(order.Id, table?.TableNumber ?? 0, order.FinalAmount);
+        await _notificationService.NotifyNewOrderAsync(order.Id, session.Table.TableNumber, order.FinalAmount);
 
-        // Nạp đầy đủ thông tin để map response
+        // session đã include Table + Customer + Participants → map response không cần query thêm
         order.Session = session;
-        order.Session.Table = table!;
-        order.Session.Customer = customer;
 
         return MapToResponse(order, menuItems);
+    }
+
+    private async Task ApplyCouponAsync(Order order, int customerId, string couponCode)
+    {
+        var promotion = await _uow.Coupons.GetActivePromotionByCodeAsync(couponCode)
+            ?? throw new BusinessRuleViolationException(ValidationMessages.COUPON_NOT_FOUND);
+
+        var now = DateTime.UtcNow;
+        if (now < promotion.StartDate || now > promotion.EndDate)
+            throw new BusinessRuleViolationException(ValidationMessages.COUPON_EXPIRED);
+
+        if (promotion.DiscountType != PromotionType.PERCENT && promotion.DiscountType != PromotionType.FIXED)
+            throw new BusinessRuleViolationException(ValidationMessages.COUPON_NOT_SUPPORTED_TYPE);
+
+        var customerCoupon = await _uow.Coupons.GetByCustomerAndPromotionAsync(customerId, promotion.Id)
+            ?? throw new BusinessRuleViolationException(ValidationMessages.COUPON_NOT_OWNED);
+
+        if (customerCoupon.IsUsed)
+            throw new BusinessRuleViolationException(ValidationMessages.COUPON_ALREADY_USED);
+
+        order.DiscountAmount = promotion.DiscountType == PromotionType.PERCENT
+            ? Math.Round(order.TotalAmount * promotion.DiscountValue / 100m, 2)
+            : promotion.DiscountValue;
+        order.CalculateTotal();
+
+        customerCoupon.IsUsed = true;
+        customerCoupon.UsedAt = now;
+        await _uow.Coupons.UpdateAsync(customerCoupon);
     }
 
     public async Task<OrderResponse> UpdateStatusAsync(int orderId, string newStatus)
@@ -113,6 +153,34 @@ public class OrderService
         return MapToResponse(order, menuItems);
     }
 
+    // ═══════════════════════════════════════════════════════════════
+    // GET /api/v1/orders/{id}/status
+    // ═══════════════════════════════════════════════════════════════
+    /// <summary>
+    /// Theo dõi tiến độ chế biến từng món trong đơn — dùng cho thanh trạng thái realtime phía Client.
+    /// Ownership: CUSTOMER/GUEST chỉ xem được đơn thuộc session mình đang là participant. STAFF/CHEF/MANAGER không giới hạn.
+    /// </summary>
+    public async Task<OrderStatusResponse> GetStatusAsync(
+        int orderId, int? callerCustomerId, string? callerGuestSessionId, bool isStaff)
+    {
+        var order = await _uow.Orders.GetByIdAsync(orderId)
+            ?? throw new EntityNotFoundException("Order", orderId);
+
+        EnsureCallerIsParticipant(order.Session.Participants, callerCustomerId, callerGuestSessionId, isStaff);
+
+        return new OrderStatusResponse
+        {
+            OrderId = order.Id,
+            Status = order.Status.ToString(),
+            Items = order.OrderDetails.Select(d => new OrderItemStatusResponse
+            {
+                Name = d.MenuItem?.Name ?? "Unknown",
+                Quantity = d.Quantity,
+                Status = d.Status.ToString()
+            }).ToList()
+        };
+    }
+
     public async Task<List<OrderResponse>> GetActiveOrdersAsync()
     {
         var orders = await _uow.Orders.GetActiveOrdersAsync();
@@ -138,6 +206,32 @@ public class OrderService
         return orders.Select(o => MapToResponse(o,
             o.OrderDetails.Select(i => i.MenuItem).Where(m => m != null).ToList()!))
             .ToList();
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // Helpers
+    // ═══════════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// Chặn truy cập trái phép: STAFF xem/đặt được mọi session; CUSTOMER/GUEST chỉ thao tác được
+    /// session mà chính họ đang là thành viên đang hoạt động (chưa rời). Cùng pattern với DiningSessionService.
+    /// </summary>
+    private static void EnsureCallerIsParticipant(
+        IEnumerable<SessionParticipant> participants,
+        int? callerCustomerId,
+        string? callerGuestSessionId,
+        bool isStaff)
+    {
+        if (isStaff)
+            return;
+
+        var isParticipant = participants.Any(p =>
+            p.IsActive &&
+            ((callerCustomerId.HasValue && p.CustomerId == callerCustomerId) ||
+             (!string.IsNullOrEmpty(callerGuestSessionId) && p.GuestSessionId == callerGuestSessionId)));
+
+        if (!isParticipant)
+            throw new UnauthorizedAccessException(ValidationMessages.ORDER_SESSION_ACCESS_DENIED);
     }
 
     private static OrderResponse MapToResponse(Order order, IReadOnlyList<MenuItem> menuItems)

@@ -8,6 +8,7 @@ public class PlaceOrderRequest
     public int TableId { get; set; }
     public int DiningSessionId { get; set; }
     public string? SpecialInstructions { get; set; }
+    public string? CouponCode { get; set; }
     public List<OrderDetailRequest> Items { get; set; } = new();
 }
 
@@ -47,5 +48,19 @@ public class OrderDetailResponse
     public int Quantity { get; set; }
     public decimal Total => UnitPrice * Quantity;
     public string? Notes { get; set; }
+    public string Status { get; set; } = "WAITING";
+}
+
+public class OrderStatusResponse
+{
+    public int OrderId { get; set; }
+    public string Status { get; set; } = "PENDING";
+    public List<OrderItemStatusResponse> Items { get; set; } = new();
+}
+
+public class OrderItemStatusResponse
+{
+    public string Name { get; set; } = string.Empty;
+    public int Quantity { get; set; }
     public string Status { get; set; } = "WAITING";
 }

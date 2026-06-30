@@ -19,6 +19,8 @@ public interface IUnitOfWork : IDisposable
     IRepository<MenuItemStatistics> MenuItemStatisticsRepo { get; }
     IRepository<BusinessContextLog> BusinessContextLogs { get; }
     IRepository<RecommendationLog> RecommendationLogs { get; }
+    IRepository<SessionParticipant> SessionParticipants { get; }
+    ICouponRepository Coupons { get; }
 
     Task<int> SaveChangesAsync(CancellationToken ct = default);
 }

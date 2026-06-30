@@ -19,6 +19,7 @@ public class GuestLoginTests
     private readonly Mock<IUserRepository> _userRepoMock;
     private readonly Mock<ICustomerRepository> _customerRepoMock;
     private readonly Mock<IPasswordResetTokenRepository> _passwordResetTokenRepoMock;
+    private readonly Mock<IRepository<SessionParticipant>> _participantRepoMock;
     private readonly AuthService _authService;
 
     public GuestLoginTests()
@@ -32,6 +33,7 @@ public class GuestLoginTests
         _userRepoMock = new Mock<IUserRepository>();
         _customerRepoMock = new Mock<ICustomerRepository>();
         _passwordResetTokenRepoMock = new Mock<IPasswordResetTokenRepository>();
+        _participantRepoMock = new Mock<IRepository<SessionParticipant>>();
 
         _uowMock.Setup(u => u.Tables).Returns(_tableRepoMock.Object);
         _uowMock.Setup(u => u.DiningSessions).Returns(_sessionRepoMock.Object);
@@ -39,6 +41,9 @@ public class GuestLoginTests
         _uowMock.Setup(u => u.Users).Returns(_userRepoMock.Object);
         _uowMock.Setup(u => u.Customers).Returns(_customerRepoMock.Object);
         _uowMock.Setup(u => u.PasswordResetTokens).Returns(_passwordResetTokenRepoMock.Object);
+        _uowMock.Setup(u => u.SessionParticipants).Returns(_participantRepoMock.Object);
+        _participantRepoMock.Setup(r => r.AddAsync(It.IsAny<SessionParticipant>()))
+            .ReturnsAsync((SessionParticipant p) => p);
         _uowMock.Setup(u => u.SaveChangesAsync(It.IsAny<CancellationToken>())).ReturnsAsync(1);
 
         _authService = new AuthService(_uowMock.Object, _jwtMock.Object, _passwordHasherMock.Object);
@@ -54,7 +59,7 @@ public class GuestLoginTests
         _sessionRepoMock.Setup(r => r.GetActiveByTableIdAsync(5)).ReturnsAsync((DiningSession?)null);
         _sessionRepoMock.Setup(r => r.AddAsync(It.IsAny<DiningSession>()))
             .ReturnsAsync((DiningSession s) => { s.Id = 120; return s; });
-        _jwtMock.Setup(j => j.GenerateAccessToken(120, "", "Anh Hoàng", "GUEST"))
+        _jwtMock.Setup(j => j.GenerateGuestToken(It.IsAny<string>(), 120, "Anh Hoàng"))
             .Returns(("guest_token_abc", "jti_guest"));
 
         var result = await _authService.LoginGuestAsync(new GuestLoginRequest
@@ -79,7 +84,7 @@ public class GuestLoginTests
         _sessionRepoMock.Setup(r => r.GetActiveByTableIdAsync(3)).ReturnsAsync((DiningSession?)null);
         _sessionRepoMock.Setup(r => r.AddAsync(It.IsAny<DiningSession>()))
             .ReturnsAsync((DiningSession s) => s);
-        _jwtMock.Setup(j => j.GenerateAccessToken(It.IsAny<int>(), "", It.IsAny<string>(), "GUEST"))
+        _jwtMock.Setup(j => j.GenerateGuestToken(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<string>()))
             .Returns(("token", "jti"));
 
         await _authService.LoginGuestAsync(new GuestLoginRequest
@@ -102,7 +107,7 @@ public class GuestLoginTests
         _sessionRepoMock.Setup(r => r.AddAsync(It.IsAny<DiningSession>()))
             .Callback<DiningSession>(s => capturedSession = s)
             .ReturnsAsync((DiningSession s) => s);
-        _jwtMock.Setup(j => j.GenerateAccessToken(It.IsAny<int>(), "", It.IsAny<string>(), "GUEST"))
+        _jwtMock.Setup(j => j.GenerateGuestToken(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<string>()))
             .Returns(("token", "jti"));
 
         await _authService.LoginGuestAsync(new GuestLoginRequest
@@ -127,13 +132,15 @@ public class GuestLoginTests
         _sessionRepoMock.Setup(r => r.GetActiveByTableIdAsync(1)).ReturnsAsync((DiningSession?)null);
         _sessionRepoMock.Setup(r => r.AddAsync(It.IsAny<DiningSession>()))
             .ReturnsAsync((DiningSession s) => s);
-        _jwtMock.Setup(j => j.GenerateAccessToken(It.IsAny<int>(), "", It.IsAny<string>(), "GUEST"))
+        _jwtMock.Setup(j => j.GenerateGuestToken(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<string>()))
             .Returns(("token", "jti"));
 
         await _authService.LoginGuestAsync(new GuestLoginRequest { TableId = 1, GuestName = "Test" });
 
-        _uowMock.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
+        // SaveChanges được gọi 2 lần: 1 lần lưu DiningSession mới, 1 lần lưu SessionParticipant (HOST)
+        _uowMock.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Exactly(2));
         _sessionRepoMock.Verify(r => r.AddAsync(It.IsAny<DiningSession>()), Times.Once);
+        _participantRepoMock.Verify(r => r.AddAsync(It.Is<SessionParticipant>(p => p.Role == ParticipantRole.HOST)), Times.Once);
     }
 
     // ===== EXISTING SESSION - Khách thứ 2 quét QR cùng bàn =====
@@ -153,7 +160,7 @@ public class GuestLoginTests
 
         _tableRepoMock.Setup(r => r.GetByIdAsync(5)).ReturnsAsync(table);
         _sessionRepoMock.Setup(r => r.GetActiveByTableIdAsync(5)).ReturnsAsync(existingSession);
-        _jwtMock.Setup(j => j.GenerateAccessToken(99, "", "Khách mới", "GUEST"))
+        _jwtMock.Setup(j => j.GenerateGuestToken(It.IsAny<string>(), 99, "Khách mới"))
             .Returns(("guest_token_2", "jti_2"));
 
         var result = await _authService.LoginGuestAsync(new GuestLoginRequest
@@ -169,19 +176,28 @@ public class GuestLoginTests
     }
 
     [Fact]
-    public async Task LoginGuest_ExistingActiveSession_DoesNotCallSaveChanges()
+    public async Task LoginGuest_ExistingActiveSession_StillCallsSaveChangesForParticipant()
     {
         var table = new Table { Id = 5, TableNumber = 12, Status = TableStatus.OCCUPIED };
         var existingSession = new DiningSession { Id = 99, TableId = 5, Status = DiningSessionStatus.ACTIVE };
+        // Khách đầu tiên (HOST) đã có mặt từ trước trong session
+        existingSession.Participants.Add(new SessionParticipant
+        {
+            SessionId = 99, GuestSessionId = "first-guest-uuid", Role = ParticipantRole.HOST
+        });
 
         _tableRepoMock.Setup(r => r.GetByIdAsync(5)).ReturnsAsync(table);
         _sessionRepoMock.Setup(r => r.GetActiveByTableIdAsync(5)).ReturnsAsync(existingSession);
-        _jwtMock.Setup(j => j.GenerateAccessToken(It.IsAny<int>(), "", It.IsAny<string>(), "GUEST"))
+        _jwtMock.Setup(j => j.GenerateGuestToken(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<string>()))
             .Returns(("token", "jti"));
 
         await _authService.LoginGuestAsync(new GuestLoginRequest { TableId = 5, GuestName = "Test" });
 
-        _uowMock.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
+        // Không tạo DiningSession mới, nhưng VẪN gọi SaveChanges 1 lần để lưu SessionParticipant.
+        _sessionRepoMock.Verify(r => r.AddAsync(It.IsAny<DiningSession>()), Times.Never);
+        _uowMock.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
+        // Đã có HOST -> khách thứ 2 vào cùng bàn phải là MEMBER, không phải HOST.
+        _participantRepoMock.Verify(r => r.AddAsync(It.Is<SessionParticipant>(p => p.Role == ParticipantRole.MEMBER)), Times.Once);
     }
 
     // ===== ERROR CASES =====
@@ -221,7 +237,7 @@ public class GuestLoginTests
         _sessionRepoMock.Setup(r => r.AddAsync(It.IsAny<DiningSession>()))
             .ReturnsAsync((DiningSession s) => s);
 
-        _jwtMock.Setup(j => j.GenerateAccessToken(It.IsAny<int>(), "", "Guest", "GUEST"))
+        _jwtMock.Setup(j => j.GenerateGuestToken(It.IsAny<string>(), It.IsAny<int>(), "Guest"))
             .Returns(("anonymous_token", "jti"));
 
         var result = await _authService.LoginGuestAsync(new GuestLoginRequest
@@ -232,11 +248,11 @@ public class GuestLoginTests
         });
 
         Assert.Equal("anonymous_token", result.Token);
-        _jwtMock.Verify(j => j.GenerateAccessToken(It.IsAny<int>(), "", "Guest", "GUEST"), Times.Once);
+        _jwtMock.Verify(j => j.GenerateGuestToken(It.IsAny<string>(), It.IsAny<int>(), "Guest"), Times.Once);
     }
 
     [Fact]
-    public async Task LoginGuest_NullGuestName_StoresNullInSession()
+    public async Task LoginGuest_NullGuestName_StoresDefaultGuestNameInSession()
     {
         var table = new Table { Id = 1, TableNumber = 1, Status = TableStatus.AVAILABLE };
         _tableRepoMock.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(table);
@@ -246,12 +262,13 @@ public class GuestLoginTests
         _sessionRepoMock.Setup(r => r.AddAsync(It.IsAny<DiningSession>()))
             .Callback<DiningSession>(s => captured = s)
             .ReturnsAsync((DiningSession s) => s);
-        _jwtMock.Setup(j => j.GenerateAccessToken(It.IsAny<int>(), "", "Guest", "GUEST"))
+        _jwtMock.Setup(j => j.GenerateGuestToken(It.IsAny<string>(), It.IsAny<int>(), "Guest"))
             .Returns(("token", "jti"));
 
         await _authService.LoginGuestAsync(new GuestLoginRequest { TableId = 1 });
 
-        Assert.Null(captured!.GuestName);
+        // GuestName mặc định là "Guest" (không còn null) sau khi sửa LoginGuestAsync; GuestPhone vẫn null vì không truyền.
+        Assert.Equal("Guest", captured!.GuestName);
         Assert.Null(captured.GuestPhone);
     }
 
@@ -265,8 +282,8 @@ public class GuestLoginTests
             .ReturnsAsync((DiningSession s) => s);
 
         // BUG DETECTION: empty string "" is not null, so ?? won't trigger.
-        // Token gets generated with "" as name instead of "Guest".
-        _jwtMock.Setup(j => j.GenerateAccessToken(It.IsAny<int>(), "", "", "GUEST"))
+        // Token vẫn được tạo với guestName = "" thay vì "Guest".
+        _jwtMock.Setup(j => j.GenerateGuestToken(It.IsAny<string>(), It.IsAny<int>(), ""))
             .Returns(("empty_name_token", "jti"));
 
         var result = await _authService.LoginGuestAsync(new GuestLoginRequest
@@ -276,8 +293,8 @@ public class GuestLoginTests
             GuestPhone = ""
         });
 
-        // Verifies that empty string passes through — potential issue for JWT claim readability
-        _jwtMock.Verify(j => j.GenerateAccessToken(It.IsAny<int>(), "", "", "GUEST"), Times.Once);
+        // Xác nhận chuỗi rỗng đi xuyên qua không đổi thành "Guest" — tên hiển thị rỗng cho nhân viên/khác.
+        _jwtMock.Verify(j => j.GenerateGuestToken(It.IsAny<string>(), It.IsAny<int>(), ""), Times.Once);
     }
 
     // ===== CONCURRENT SCENARIO - Nhiều khách quét cùng lúc =====
@@ -298,7 +315,7 @@ public class GuestLoginTests
         _sessionRepoMock.Setup(r => r.AddAsync(It.IsAny<DiningSession>()))
             .ReturnsAsync((DiningSession s) => { s.Id = 200; return s; });
 
-        _jwtMock.Setup(j => j.GenerateAccessToken(200, "", It.IsAny<string>(), "GUEST"))
+        _jwtMock.Setup(j => j.GenerateGuestToken(It.IsAny<string>(), 200, "Khách 1"))
             .Returns(("token_1", "jti_1"));
 
         var result1 = await _authService.LoginGuestAsync(new GuestLoginRequest
@@ -306,7 +323,7 @@ public class GuestLoginTests
             TableId = 5, GuestName = "Khách 1"
         });
 
-        _jwtMock.Setup(j => j.GenerateAccessToken(200, "", "Khách 2", "GUEST"))
+        _jwtMock.Setup(j => j.GenerateGuestToken(It.IsAny<string>(), 200, "Khách 2"))
             .Returns(("token_2", "jti_2"));
 
         var result2 = await _authService.LoginGuestAsync(new GuestLoginRequest
@@ -317,6 +334,11 @@ public class GuestLoginTests
         Assert.Equal(200, result1.SessionId);
         Assert.Equal(200, result2.SessionId);
         Assert.NotEqual(result1.Token, result2.Token);
+
+        // BUG FIX VERIFIED: trước đây cả 2 khách dùng chung sub=sessionId nên không phân biệt được.
+        // Giờ mỗi lần gọi GenerateGuestToken nhận 1 guestUniqueId (UUID) khác nhau làm sub.
+        _jwtMock.Verify(j => j.GenerateGuestToken(It.IsAny<string>(), 200, "Khách 1"), Times.Once);
+        _jwtMock.Verify(j => j.GenerateGuestToken(It.IsAny<string>(), 200, "Khách 2"), Times.Once);
     }
 
     // ===== RESPONSE FORMAT VALIDATION =====
@@ -329,7 +351,7 @@ public class GuestLoginTests
         _sessionRepoMock.Setup(r => r.GetActiveByTableIdAsync(3)).ReturnsAsync((DiningSession?)null);
         _sessionRepoMock.Setup(r => r.AddAsync(It.IsAny<DiningSession>()))
             .ReturnsAsync((DiningSession s) => s);
-        _jwtMock.Setup(j => j.GenerateAccessToken(It.IsAny<int>(), "", It.IsAny<string>(), "GUEST"))
+        _jwtMock.Setup(j => j.GenerateGuestToken(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<string>()))
             .Returns(("token", "jti"));
 
         var result = await _authService.LoginGuestAsync(new GuestLoginRequest
@@ -349,7 +371,7 @@ public class GuestLoginTests
         _sessionRepoMock.Setup(r => r.GetActiveByTableIdAsync(1)).ReturnsAsync((DiningSession?)null);
         _sessionRepoMock.Setup(r => r.AddAsync(It.IsAny<DiningSession>()))
             .ReturnsAsync((DiningSession s) => s);
-        _jwtMock.Setup(j => j.GenerateAccessToken(It.IsAny<int>(), "", It.IsAny<string>(), "GUEST"))
+        _jwtMock.Setup(j => j.GenerateGuestToken(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<string>()))
             .Returns(("token", "jti"));
 
         var result = await _authService.LoginGuestAsync(new GuestLoginRequest
@@ -370,7 +392,7 @@ public class GuestLoginTests
         _sessionRepoMock.Setup(r => r.GetActiveByTableIdAsync(1)).ReturnsAsync((DiningSession?)null);
         _sessionRepoMock.Setup(r => r.AddAsync(It.IsAny<DiningSession>()))
             .ReturnsAsync((DiningSession s) => s);
-        _jwtMock.Setup(j => j.GenerateAccessToken(It.IsAny<int>(), "", It.IsAny<string>(), "GUEST"))
+        _jwtMock.Setup(j => j.GenerateGuestToken(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<string>()))
             .Returns(("token", "jti"));
 
         await _authService.LoginGuestAsync(new GuestLoginRequest
@@ -386,17 +408,19 @@ public class GuestLoginTests
         _jwtMock.Verify(j => j.GenerateRefreshToken(), Times.Never);
     }
 
-    // ===== BUG DETECTION: Email rỗng trong JWT claim =====
+    // ===== BUG FIX VERIFIED: GenerateGuestToken không còn nhận tham số email =====
+    // Trước đây GenerateAccessToken(sessionId, "", name, "GUEST") luôn nhúng email rỗng vào JWT claim.
+    // Thiết kế mới (GenerateGuestToken) bỏ hẳn khái niệm email cho GUEST — không còn claim email rỗng.
 
     [Fact]
-    public async Task LoginGuest_GeneratesTokenWithEmptyEmail()
+    public async Task LoginGuest_TokenGenerationNoLongerTakesEmailParameter()
     {
         var table = new Table { Id = 1, TableNumber = 1, Status = TableStatus.AVAILABLE };
         _tableRepoMock.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(table);
         _sessionRepoMock.Setup(r => r.GetActiveByTableIdAsync(1)).ReturnsAsync((DiningSession?)null);
         _sessionRepoMock.Setup(r => r.AddAsync(It.IsAny<DiningSession>()))
             .ReturnsAsync((DiningSession s) => s);
-        _jwtMock.Setup(j => j.GenerateAccessToken(It.IsAny<int>(), "", It.IsAny<string>(), "GUEST"))
+        _jwtMock.Setup(j => j.GenerateGuestToken(It.IsAny<string>(), It.IsAny<int>(), "Khách"))
             .Returns(("token", "jti"));
 
         await _authService.LoginGuestAsync(new GuestLoginRequest
@@ -404,18 +428,14 @@ public class GuestLoginTests
             TableId = 1, GuestName = "Khách"
         });
 
-        // BUG: Token is generated with empty string email ("").
-        // The /api/v1/auth/me endpoint tries to look up user by role,
-        // but GUEST role is not handled in GetCurrentUserAsync — it falls
-        // into the else branch (User lookup) and will throw EntityNotFoundException
-        // because session.Id is used as userId, which doesn't exist in the Users table.
-        _jwtMock.Verify(j => j.GenerateAccessToken(It.IsAny<int>(), "", It.IsAny<string>(), "GUEST"), Times.Once);
+        _jwtMock.Verify(j => j.GenerateGuestToken(It.IsAny<string>(), It.IsAny<int>(), "Khách"), Times.Once);
+        _jwtMock.Verify(j => j.GenerateAccessToken(It.IsAny<int>(), It.IsAny<string>(), It.IsAny<string>(), "GUEST"), Times.Never);
     }
 
-    // ===== BUG DETECTION: SessionId trong token = session ID, không phải user ID =====
+    // ===== BUG FIX VERIFIED + BUG MỚI PHÁT SINH: sub giờ là UUID, không phải sessionId =====
 
     [Fact]
-    public async Task LoginGuest_UsesSessionIdAsIdentifier_NotUserId()
+    public async Task LoginGuest_UsesUuidAsIdentifier_NotSessionId()
     {
         var table = new Table { Id = 5, TableNumber = 12, Status = TableStatus.AVAILABLE };
         _tableRepoMock.Setup(r => r.GetByIdAsync(5)).ReturnsAsync(table);
@@ -423,7 +443,9 @@ public class GuestLoginTests
         _sessionRepoMock.Setup(r => r.AddAsync(It.IsAny<DiningSession>()))
             .ReturnsAsync((DiningSession s) => { s.Id = 77; return s; });
 
-        _jwtMock.Setup(j => j.GenerateAccessToken(77, "", "Khách", "GUEST"))
+        string? capturedUuid = null;
+        _jwtMock.Setup(j => j.GenerateGuestToken(It.IsAny<string>(), 77, "Khách"))
+            .Callback<string, int, string>((uuid, _, _) => capturedUuid = uuid)
             .Returns(("token", "jti"));
 
         await _authService.LoginGuestAsync(new GuestLoginRequest
@@ -431,11 +453,16 @@ public class GuestLoginTests
             TableId = 5, GuestName = "Khách"
         });
 
-        // The token's NameIdentifier claim = session.Id (77), not a user/customer ID.
-        // This means Logout endpoint will call RevokeAllByUserAsync(77, "GUEST")
-        // which won't find any refresh tokens (since none were created).
-        // Also, GetCurrentUserAsync(77, "GUEST") will fail because GUEST role
-        // is not handled — it falls into the User lookup path.
-        _jwtMock.Verify(j => j.GenerateAccessToken(77, "", "Khách", "GUEST"), Times.Once);
+        // FIXED: sub (capturedUuid) không còn trùng với sessionId (77) — mỗi GUEST có 1 UUID riêng.
+        Assert.NotNull(capturedUuid);
+        Assert.NotEqual("77", capturedUuid);
+        Assert.True(Guid.TryParse(capturedUuid, out _), "guestUniqueId phải là 1 GUID hợp lệ");
+
+        // sub (capturedUuid) không phải số nguyên — đây là thiết kế có chủ đích. AuthController
+        // (cả SmartDine.API và SmartDine.Identity.API) đã được sửa để không còn int.Parse(sub) vô
+        // điều kiện: với GUEST, controller đọc id thực tế từ custom claim "session_id" thay vì sub.
+        // Xem JwtTokenServiceTests.GenerateGuestToken_SubClaim_IsNotParsableAsInt_ControllersMustUseSessionIdClaimInstead.
+        Assert.False(int.TryParse(capturedUuid, out _),
+            "sub là UUID, không phải sessionId — AuthController phải lấy id từ claim \"session_id\" khi role=GUEST");
     }
 }

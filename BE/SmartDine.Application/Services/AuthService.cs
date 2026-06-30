@@ -340,10 +340,13 @@ public class AuthService
     /// Lấy thông tin user hiện tại từ JWT claims (userId + role).
     ///
     /// Luồng:
-    ///   1. Controller parse JWT → lấy userId (claim NameIdentifier) + role.
+    ///   1. Controller parse JWT → lấy id + role. Với CUSTOMER/STAFF/CHEF/MANAGER, id lấy từ
+    ///      claim NameIdentifier (sub). Với GUEST, sub là UUID định danh phiên đăng nhập nên
+    ///      Controller phải lấy id từ claim "session_id" thay vì sub.
     ///   2. Nếu role = CUSTOMER → tìm trong bảng Customers.
-    ///   3. Ngược lại (STAFF/CHEF/MANAGER) → tìm trong bảng Users.
-    ///   4. Trả về UserInfoResponse (id, fullName, email, role, avatarUrl).
+    ///   3. Nếu role = GUEST → không có DB, trả thẳng id (sessionId) + tên mặc định "Guest".
+    ///   4. Ngược lại (STAFF/CHEF/MANAGER) → tìm trong bảng Users.
+    ///   5. Trả về UserInfoResponse (id, fullName, email, role, avatarUrl).
     ///
     /// Error cases:
     ///   - User/Customer bị xóa hoặc không tồn tại → EntityNotFoundException (404).
@@ -366,7 +369,8 @@ public class AuthService
         }
         else if (role == UserRole.GUEST.ToString())
         {
-            // GUEST token dùng sessionId làm NameIdentifier → trả info tối thiểu
+            // GUEST không có row trong DB — id truyền vào đây là sessionId (lấy từ claim
+            // "session_id" ở Controller, không phải sub/NameIdentifier vốn là UUID) → trả info tối thiểu
             return new UserInfoResponse
             {
                 Id = id,
@@ -418,6 +422,8 @@ public class AuthService
         var existingSession = await _uow.DiningSessions.GetActiveByTableIdAsync(request.TableId);
         DiningSession session;
 
+        var guestName = request.GuestName ?? "Guest";
+
         if (existingSession != null)
         {
             // Bàn đã có khách → join session hiện tại
@@ -431,7 +437,7 @@ public class AuthService
             session = new DiningSession
             {
                 TableId = table.Id,
-                GuestName = request.GuestName,
+                GuestName = guestName,
                 GuestPhone = request.GuestPhone,
                 Status = DiningSessionStatus.ACTIVE,
                 StartedAt = DateTime.UtcNow
@@ -441,9 +447,20 @@ public class AuthService
             await _uow.SaveChangesAsync();
         }
 
-        // JWT cho guest: userId = sessionId, role = GUEST
-        var guestName = request.GuestName ?? "Guest";
-        var (accessToken, _) = _jwtService.GenerateAccessToken(session.Id, "", guestName, UserRole.GUEST.ToString());
+        // Mỗi GUEST nhận một UUID riêng làm identity — tránh nhầm lẫn khi nhiều khách cùng bàn
+        var guestUniqueId = Guid.NewGuid().ToString("N");
+        var (accessToken, _) = _jwtService.GenerateGuestToken(guestUniqueId, session.Id, guestName);
+
+        // Tạo participant cho GUEST này (UUID là key để phân biệt)
+        var isFirstParticipant = !session.Participants.Any(p => p.LeftAt == null);
+        await _uow.SessionParticipants.AddAsync(new SessionParticipant
+        {
+            SessionId = session.Id,
+            GuestSessionId = guestUniqueId,
+            Role = isFirstParticipant ? ParticipantRole.HOST : ParticipantRole.MEMBER,
+            JoinedAt = DateTime.UtcNow
+        });
+        await _uow.SaveChangesAsync();
 
         return new GuestLoginResponse
         {

@@ -328,6 +328,15 @@ public class IntegrationTests : IClassFixture<CustomWebApplicationFactory<Progra
             db.DiningSessions.Add(session);
             db.SaveChanges();
 
+            db.SessionParticipants.Add(new SessionParticipant
+            {
+                SessionId = session.Id,
+                CustomerId = customer.Id,
+                Role = ParticipantRole.HOST,
+                JoinedAt = DateTime.UtcNow
+            });
+            db.SaveChanges();
+
             placeOrderRequest.DiningSessionId = session.Id;
         }
 

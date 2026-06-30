@@ -138,7 +138,9 @@ public class GuestLoginRequest
 
 /// <summary>
 /// Response sau guest login.
-/// Token là JWT với role=GUEST, claim userId = sessionId (không phải customer ID).
+/// Token là JWT với role=GUEST.
+///   sub = UUID duy nhất cho lần đăng nhập này (phân biệt nhiều GUEST cùng bàn).
+///   claim "session_id" = sessionId thực tế.
 /// Client dùng token này để gọi món tại bàn (quyền hạn giới hạn hơn CUSTOMER).
 /// </summary>
 public class GuestLoginResponse

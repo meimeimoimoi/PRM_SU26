@@ -211,6 +211,24 @@ public class DiningSessionRepository : GenericRepository<DiningSession>, IDining
     public async Task<DiningSession?> GetActiveByTableIdAsync(int tableId) =>
         await _dbSet.Include(d => d.Orders)
                     .FirstOrDefaultAsync(d => d.TableId == tableId && d.Status == DiningSessionStatus.ACTIVE);
+
+    public async Task<DiningSession?> GetByIdWithParticipantsAsync(int id) =>
+        await _dbSet.Include(d => d.Table)
+                    .Include(d => d.Customer)
+                    .Include(d => d.Participants)
+                    .FirstOrDefaultAsync(d => d.Id == id);
+}
+
+public class CouponRepository : GenericRepository<CustomerCoupon>, ICouponRepository
+{
+    public CouponRepository(SmartDineDbContext context) : base(context) { }
+
+    public async Task<Promotion?> GetActivePromotionByCodeAsync(string code) =>
+        await _context.Set<Promotion>()
+                      .FirstOrDefaultAsync(p => p.Code == code && p.IsActive);
+
+    public async Task<CustomerCoupon?> GetByCustomerAndPromotionAsync(int customerId, int promotionId) =>
+        await _dbSet.FirstOrDefaultAsync(c => c.CustomerId == customerId && c.PromotionId == promotionId);
 }
 
 public class PaymentRepository : GenericRepository<Payment>, IPaymentRepository

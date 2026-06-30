@@ -128,6 +128,8 @@ public class PromotionConfiguration : IEntityTypeConfiguration<Promotion>
     {
         builder.ToTable("promotions");
         builder.HasKey(p => p.Id);
+        builder.Property(p => p.Code).HasMaxLength(50).IsRequired();
+        builder.HasIndex(p => p.Code).IsUnique();
         builder.Property(p => p.Name).HasMaxLength(100);
         builder.Property(p => p.Description).HasColumnType("text");
         builder.Property(p => p.DiscountType).HasConversion<string>().HasMaxLength(20).IsRequired();
@@ -512,16 +514,22 @@ public class SessionParticipantConfiguration : IEntityTypeConfiguration<SessionP
     {
         builder.ToTable("session_participants");
         builder.HasKey(sp => sp.Id);
+        builder.Property(sp => sp.GuestSessionId).HasMaxLength(100);
+        builder.Property(sp => sp.Role)
+               .HasConversion<string>()
+               .HasMaxLength(20);
 
         builder.HasOne(sp => sp.Session)
                .WithMany(s => s.Participants)
                .HasForeignKey(sp => sp.SessionId)
                .OnDelete(DeleteBehavior.Cascade);
 
+        // Nullable: GUEST participants không có CustomerId
         builder.HasOne(sp => sp.Customer)
                .WithMany(c => c.SessionParticipants)
                .HasForeignKey(sp => sp.CustomerId)
-               .OnDelete(DeleteBehavior.Cascade);
+               .IsRequired(false)
+               .OnDelete(DeleteBehavior.Restrict);
     }
 }
 

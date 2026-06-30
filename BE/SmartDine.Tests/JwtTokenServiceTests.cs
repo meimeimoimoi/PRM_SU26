@@ -145,4 +145,72 @@ public class JwtTokenServiceTests
 
         Assert.NotEqual(jwtId1, jwtId2);
     }
+
+    // ═══════════════════════════════════════════════════════════════
+    // GenerateGuestToken — JWT cho GUEST (sub = UUID, claim "session_id" riêng)
+    // ═══════════════════════════════════════════════════════════════
+
+    [Fact]
+    public void GenerateGuestToken_ReturnsValidRs256Jwt()
+    {
+        var guestUuid = Guid.NewGuid().ToString("N");
+        var (token, jwtId) = _jwtService.GenerateGuestToken(guestUuid, 50, "Khách A");
+
+        Assert.NotEmpty(token);
+        Assert.NotEmpty(jwtId);
+
+        var jwtToken = new JwtSecurityTokenHandler().ReadJwtToken(token);
+        Assert.Equal("RS256", jwtToken.Header.Alg);
+        Assert.Equal(jwtId, jwtToken.Id);
+    }
+
+    [Fact]
+    public void GenerateGuestToken_SubClaimIsGuestUniqueId_NotSessionId()
+    {
+        var guestUuid = Guid.NewGuid().ToString("N");
+        var (token, _) = _jwtService.GenerateGuestToken(guestUuid, 50, "Khách A");
+
+        var jwtToken = new JwtSecurityTokenHandler().ReadJwtToken(token);
+
+        Assert.Equal(guestUuid, jwtToken.Claims.First(c => c.Type == ClaimTypes.NameIdentifier).Value);
+        Assert.Equal("50", jwtToken.Claims.First(c => c.Type == "session_id").Value);
+        Assert.Equal("GUEST", jwtToken.Claims.First(c => c.Type == ClaimTypes.Role).Value);
+    }
+
+    [Fact]
+    public void GenerateGuestToken_TwoGuestsSameSession_HaveDifferentSubClaims()
+    {
+        var (token1, _) = _jwtService.GenerateGuestToken(Guid.NewGuid().ToString("N"), 50, "Khách A");
+        var (token2, _) = _jwtService.GenerateGuestToken(Guid.NewGuid().ToString("N"), 50, "Khách B");
+
+        var handler = new JwtSecurityTokenHandler();
+        var sub1 = handler.ReadJwtToken(token1).Claims.First(c => c.Type == ClaimTypes.NameIdentifier).Value;
+        var sub2 = handler.ReadJwtToken(token2).Claims.First(c => c.Type == ClaimTypes.NameIdentifier).Value;
+        var sessionId1 = handler.ReadJwtToken(token1).Claims.First(c => c.Type == "session_id").Value;
+        var sessionId2 = handler.ReadJwtToken(token2).Claims.First(c => c.Type == "session_id").Value;
+
+        // FIXED: 2 GUEST cùng bàn (cùng session_id) nhưng có sub khác nhau -> phân biệt được danh tính.
+        Assert.NotEqual(sub1, sub2);
+        Assert.Equal(sessionId1, sessionId2);
+    }
+
+    // BUG FIX VERIFIED (regression phát sinh từ việc đổi sub sang UUID, nay đã vá):
+    // sub (NameIdentifier) của GUEST là UUID dạng "N", KHÔNG parse được sang int — đây là thiết kế
+    // có chủ đích để phân biệt nhiều GUEST cùng bàn. Trước đây AuthController.GetCurrentUser() và
+    // Logout() (cả SmartDine.API và SmartDine.Identity.API) đều int.Parse(sub) vô điều kiện nên
+    // throw FormatException cho mọi GUEST. Đã fix: cả 2 controller giờ kiểm tra role == "GUEST"
+    // trước, và lấy id thực tế từ custom claim "session_id" (JwtClaimTypes.SessionId) thay vì sub —
+    // giống cách DiningSessionsController.ExtractIdentity() vốn đã làm đúng từ đầu.
+    [Fact]
+    public void GenerateGuestToken_SubClaim_IsNotParsableAsInt_ControllersMustUseSessionIdClaimInstead()
+    {
+        var guestUuid = Guid.NewGuid().ToString("N");
+        var (token, _) = _jwtService.GenerateGuestToken(guestUuid, 50, "Khách A");
+
+        var jwtToken = new JwtSecurityTokenHandler().ReadJwtToken(token);
+        var sub = jwtToken.Claims.First(c => c.Type == ClaimTypes.NameIdentifier).Value;
+
+        Assert.False(int.TryParse(sub, out _),
+            "sub là UUID, không phải số — AuthController.GetCurrentUser()/Logout() phải đọc claim \"session_id\" cho GUEST thay vì int.Parse(sub)");
+    }
 }

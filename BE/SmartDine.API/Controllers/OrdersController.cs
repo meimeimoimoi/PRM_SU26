@@ -27,7 +27,7 @@ public class OrdersController : ControllerBase
     {
         // Lấy customerId từ JWT claims (được map vào NameIdentifier khi login/register)
         var customerId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
-        var result = await _orderService.PlaceOrderAsync(customerId, request);
+        var result = await _orderService.PlaceOrderAsync(customerId, null, false, request);
         return Created("", ApiResponse<OrderResponse>.Ok(result, "Đặt món thành công"));
     }
 

@@ -21,13 +21,13 @@ public class OrdersController : ControllerBase
         _orderService = orderService;
     }
 
-    /// <summary>POST /api/v1/orders — Đặt món mới</summary>
+    /// <summary>POST /api/v1/orders — Đặt món mới (DINER/GUEST/STAFF)</summary>
     [HttpPost]
+    [Authorize(Roles = "CUSTOMER,GUEST,STAFF")]
     public async Task<IActionResult> PlaceOrder([FromBody] PlaceOrderRequest request)
     {
-        // Lấy customerId từ JWT claims (được map vào NameIdentifier khi login/register)
-        var customerId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
-        var result = await _orderService.PlaceOrderAsync(customerId, request);
+        var (customerId, guestSessionId) = ExtractIdentity();
+        var result = await _orderService.PlaceOrderAsync(customerId, guestSessionId, IsStaff(), request);
         return Created("", ApiResponse<OrderResponse>.Ok(result, "Đặt món thành công"));
     }
 
@@ -39,6 +39,15 @@ public class OrdersController : ControllerBase
         if (result == null)
             return NotFound(ApiResponse<object>.Fail("Không tìm thấy đơn hàng"));
         return Ok(ApiResponse<OrderResponse>.Ok(result));
+    }
+
+    /// <summary>GET /api/v1/orders/{id}/status — Theo dõi tiến độ món ăn realtime</summary>
+    [HttpGet("{id:int}/status")]
+    public async Task<IActionResult> GetStatus(int id)
+    {
+        var (customerId, guestSessionId) = ExtractIdentity();
+        var result = await _orderService.GetStatusAsync(id, customerId, guestSessionId, IsStaff());
+        return Ok(ApiResponse<OrderStatusResponse>.Ok(result));
     }
 
     /// <summary>GET /api/v1/orders/active — Đơn hàng đang hoạt động (cho kitchen/staff)</summary>
@@ -76,4 +85,29 @@ public class OrdersController : ControllerBase
         var result = await _orderService.GetByCustomerIdAsync(customerId, page, pageSize);
         return Ok(ApiResponse<List<OrderResponse>>.Ok(result));
     }
+
+    // ═══════════════════════════════════════════════════════════════
+    // Helper
+    // ═══════════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// Trích xuất định danh người dùng từ JWT.
+    /// CUSTOMER → customerId (int). GUEST → guestSessionId (string sub claim).
+    /// </summary>
+    private (int? customerId, string? guestSessionId) ExtractIdentity()
+    {
+        var role = User.FindFirst(ClaimTypes.Role)?.Value;
+        var sub = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+        if (role == "CUSTOMER" && int.TryParse(sub, out var cid))
+            return (cid, null);
+
+        if (role == "GUEST")
+            return (null, sub);
+
+        return (null, null);
+    }
+
+    /// <summary>STAFF được đặt/xem mọi session, không bị giới hạn theo participant.</summary>
+    private bool IsStaff() => User.IsInRole("STAFF") || User.IsInRole("CHEF") || User.IsInRole("MANAGER");
 }
