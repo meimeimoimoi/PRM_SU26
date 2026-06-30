@@ -45,10 +45,12 @@ public class UpdateTableStatusRequest
 /// <summary>
 /// Request body cho API POST /api/v1/tables/{id}/scan.
 /// CustomerId nullable: nếu null → khách vãng lai (guest), nếu có → khách thành viên.
+/// GuestSessionId: set bởi controller từ JWT sub claim khi role=GUEST.
 /// </summary>
 public class ScanTableRequest
 {
     public int? CustomerId { get; set; }
+    public string? GuestSessionId { get; set; }
 }
 
 /// <summary>

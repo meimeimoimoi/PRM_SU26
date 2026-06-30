@@ -22,6 +22,8 @@ public class UnitOfWork : IUnitOfWork
     public IRepository<MenuItemStatistics> MenuItemStatisticsRepo { get; }
     public IRepository<BusinessContextLog> BusinessContextLogs { get; }
     public IRepository<RecommendationLog> RecommendationLogs { get; }
+    public IRepository<SessionParticipant> SessionParticipants { get; }
+
 
     public UnitOfWork(SmartDineDbContext context)
     {
@@ -41,6 +43,7 @@ public class UnitOfWork : IUnitOfWork
         MenuItemStatisticsRepo = new GenericRepository<MenuItemStatistics>(context);
         BusinessContextLogs = new GenericRepository<BusinessContextLog>(context);
         RecommendationLogs = new GenericRepository<RecommendationLog>(context);
+        SessionParticipants = new GenericRepository<SessionParticipant>(context);
     }
 
     public async Task<int> SaveChangesAsync(CancellationToken ct = default) =>

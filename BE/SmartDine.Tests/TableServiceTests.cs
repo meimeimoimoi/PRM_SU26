@@ -15,6 +15,7 @@ public class TableServiceTests
     private readonly Mock<IDiningSessionRepository> _sessionRepoMock;
     private readonly Mock<ICustomerRepository> _customerRepoMock;
     private readonly Mock<ITableReservationRepository> _reservationRepoMock;
+    private readonly Mock<IRepository<SessionParticipant>> _participantRepoMock;
     private readonly TableService _tableService;
 
     public TableServiceTests()
@@ -24,11 +25,15 @@ public class TableServiceTests
         _sessionRepoMock = new Mock<IDiningSessionRepository>();
         _customerRepoMock = new Mock<ICustomerRepository>();
         _reservationRepoMock = new Mock<ITableReservationRepository>();
+        _participantRepoMock = new Mock<IRepository<SessionParticipant>>();
 
         _uowMock.Setup(u => u.Tables).Returns(_tableRepoMock.Object);
         _uowMock.Setup(u => u.DiningSessions).Returns(_sessionRepoMock.Object);
         _uowMock.Setup(u => u.Customers).Returns(_customerRepoMock.Object);
         _uowMock.Setup(u => u.TableReservations).Returns(_reservationRepoMock.Object);
+        _uowMock.Setup(u => u.SessionParticipants).Returns(_participantRepoMock.Object);
+        _participantRepoMock.Setup(r => r.AddAsync(It.IsAny<SessionParticipant>()))
+            .ReturnsAsync((SessionParticipant p) => p);
         _uowMock.Setup(u => u.SaveChangesAsync(It.IsAny<CancellationToken>())).ReturnsAsync(1);
 
         _tableService = new TableService(_uowMock.Object);
@@ -149,7 +154,8 @@ public class TableServiceTests
         Assert.True(result.IsNewSession);
         Assert.Equal(50, result.SessionId);
         Assert.Equal(TableStatus.OCCUPIED, table.Status);
-        _uowMock.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
+        // SaveChanges được gọi 2 lần: 1 lần cho session+table, 1 lần cho participant (HOST)
+        _uowMock.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Exactly(2));
     }
 
     [Fact]
@@ -165,7 +171,40 @@ public class TableServiceTests
         Assert.False(result.IsNewSession);
         Assert.Equal(99, result.SessionId);
         _sessionRepoMock.Verify(r => r.AddAsync(It.IsAny<DiningSession>()), Times.Never);
-        _uowMock.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
+        // SaveChanges được gọi 1 lần vì khách mới (chưa có CustomerId/GuestSessionId trùng) được thêm làm participant
+        _uowMock.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
+        _participantRepoMock.Verify(r => r.AddAsync(It.IsAny<SessionParticipant>()), Times.Once);
+    }
+
+    // BUG DETECTION: "alreadyIn" check so sánh p.GuestSessionId == request.GuestSessionId bằng
+    // in-memory LINQ (List<T>.Any), nên khi CẢ HAI đều null, C# coi null == null là true.
+    // Hệ quả: 2 khách ẩn danh KHÁC NHAU (không CustomerId, không GuestSessionId — vd CUSTOMER
+    // quét bàn nhưng client không gửi CustomerId trong body) cùng bàn sẽ bị nhận diện là MỘT người,
+    // người thứ 2 không được thêm participant mới -> GetParticipantsAsync sẽ thiếu người này.
+    [Fact]
+    public async Task Scan_ExistingSession_TwoAnonymousScans_SecondPersonMergedWithFirst_PotentialBug()
+    {
+        var table = new Table { Id = 1, TableNumber = 10, Status = TableStatus.OCCUPIED };
+        var existingSession = new DiningSession { Id = 99, TableId = 1, Status = DiningSessionStatus.ACTIVE };
+        _tableRepoMock.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(table);
+        _sessionRepoMock.Setup(r => r.GetActiveByTableIdAsync(1)).ReturnsAsync(existingSession);
+
+        // Khách ẩn danh #1 quét bàn -> được thêm làm participant (CustomerId=null, GuestSessionId=null)
+        await _tableService.ScanTableAsync(1, new ScanTableRequest());
+
+        // Mô phỏng việc participant vừa tạo được persist + load lại từ DB (như trong production thực tế,
+        // GetActiveByTableIdAsync sẽ Include participant này ở lần gọi kế tiếp)
+        existingSession.Participants.Add(new SessionParticipant
+        {
+            SessionId = 99, CustomerId = null, GuestSessionId = null, Role = ParticipantRole.MEMBER
+        });
+
+        // Khách ẩn danh #2 (một người hoàn toàn khác) quét cùng bàn
+        await _tableService.ScanTableAsync(1, new ScanTableRequest());
+
+        // BUG: lẽ ra phải có 2 participant record (2 người khác nhau), nhưng vì null == null
+        // nên khách #2 bị coi là "đã có mặt" -> AddAsync chỉ được gọi 1 lần duy nhất.
+        _participantRepoMock.Verify(r => r.AddAsync(It.IsAny<SessionParticipant>()), Times.Once);
     }
 
     [Fact]
