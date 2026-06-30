@@ -65,6 +65,14 @@ public static class ValidationMessages
     public const string MENU_ITEM_NOT_FOUND = "MENU_ITEM_NOT_FOUND";
     public const string NO_MENU_ITEMS = "NO_MENU_ITEMS";
 
+    // ===== DiningSession =====
+    public const string DINING_SESSION_NOT_FOUND = "DINING_SESSION_NOT_FOUND";
+    public const string DINING_SESSION_NOT_ACTIVE = "Phiên ăn này đã kết thúc, không thể thực hiện thao tác.";
+    public const string DINING_SESSION_PARTICIPANT_NOT_FOUND = "Bạn không thuộc phiên ăn này.";
+    public const string DINING_SESSION_ALREADY_LEFT = "Bạn đã rời khỏi phiên ăn này trước đó.";
+    public const string DINING_SESSION_LEAVE_SUCCESS = "Đã rời khỏi nhóm gọi món tại bàn số {0} thành công.";
+    public const string DINING_SESSION_ACCESS_DENIED = "Bạn không có quyền xem thông tin của phiên ăn này.";
+
     // ===== Order =====
     public const string ORDER_NOT_FOUND = "ORDER_NOT_FOUND";
     public const string ORDER_ITEM_NOT_FOUND = "ORDER_ITEM_NOT_FOUND";

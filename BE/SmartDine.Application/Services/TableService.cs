@@ -4,6 +4,7 @@ using SmartDine.Domain.Entities;
 using SmartDine.Domain.Enums;
 using SmartDine.Domain.Exceptions;
 using SmartDine.Domain.Interfaces;
+using System;
 
 namespace SmartDine.Application.Services;
 
@@ -100,7 +101,26 @@ public class TableService
 
         if (existingSession != null)
         {
-            // Bàn đã có khách → tham gia nhóm gọi món hiện tại
+            // Bàn đã có khách → tham gia nhóm gọi món nếu chưa có mặt
+            var alreadyIn = existingSession.Participants.Any(p =>
+                p.LeftAt == null &&
+                (request.CustomerId.HasValue
+                    ? p.CustomerId == request.CustomerId
+                    : p.GuestSessionId == request.GuestSessionId));
+
+            if (!alreadyIn)
+            {
+                await _uow.SessionParticipants.AddAsync(new SessionParticipant
+                {
+                    SessionId = existingSession.Id,
+                    CustomerId = request.CustomerId,
+                    GuestSessionId = request.GuestSessionId,
+                    Role = ParticipantRole.MEMBER,
+                    JoinedAt = DateTime.UtcNow
+                });
+                await _uow.SaveChangesAsync();
+            }
+
             return new ScanTableResponse
             {
                 SessionId = existingSession.Id,
@@ -122,6 +142,17 @@ public class TableService
 
         await _uow.DiningSessions.AddAsync(newSession);
         table.Status = TableStatus.OCCUPIED;
+        await _uow.SaveChangesAsync();
+
+        // Người quét đầu tiên là HOST
+        await _uow.SessionParticipants.AddAsync(new SessionParticipant
+        {
+            SessionId = newSession.Id,
+            CustomerId = request.CustomerId,
+            GuestSessionId = request.GuestSessionId,
+            Role = ParticipantRole.HOST,
+            JoinedAt = DateTime.UtcNow
+        });
         await _uow.SaveChangesAsync();
 
         return new ScanTableResponse
