@@ -11,7 +11,7 @@ import MenuManagementPage from '@/pages/dashboard/MenuManagementPage';
 import StaffManagementPage from '@/pages/dashboard/StaffManagementPage';
 import SettingsPage from '@/pages/dashboard/SettingsPage';
 import TransactionsPage from '@/pages/dashboard/TransactionsPage';
-
+import RestaurantDrawPage from '@/pages/draw_map/RestaurantDrawPage';
 // Protected Route Guard
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const isAuthenticated = useSelector(selectIsAuthenticated);
@@ -32,7 +32,7 @@ const App: React.FC = () => {
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
-          
+
           {/* Nested Dashboard Routes inside DashboardLayout layout */}
           <Route
             path="/*"
@@ -49,6 +49,7 @@ const App: React.FC = () => {
             <Route path="staff" element={<StaffManagementPage />} />
             <Route path="transactions" element={<TransactionsPage />} />
             <Route path="settings" element={<SettingsPage />} />
+            <Route path="draw-map" element={<RestaurantDrawPage />} />
             {/* Fallback route within dashboard layout */}
             <Route path="*" element={<Navigate to="/dashboard" replace />} />
           </Route>
