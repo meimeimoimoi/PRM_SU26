@@ -1,0 +1,2 @@
+RobotStart_robotStart-1782781296436: 0.00 0.00
+Table_101_Delivery: -0.45 7.85

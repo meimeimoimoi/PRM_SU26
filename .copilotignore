@@ -1,0 +1,42 @@
+# --- THƯ VIỆN & CẤU TRÚC PHỤ THUỘC ---
+
+**/dist/
+**/common/
+**/feedback/
+**/layouts/
+**/auth/
+**/dashboard/
+**/services/
+
+# --- DỰ ÁN CỤ THỂ ---
+
+**/BE/
+**/customer-mobile/
+**/Robot/libraries/
+**/Robot/plugins/
+**/Robot/protos/
+**/Robot/worlds/
+
+# --- CẤU HÌNH & TỆP PHỤ PRM_SU26 ---
+
+PRM_SU26/FE/web-dashboard/src/styles/
+PRM_SU26/FE/web-dashboard/node_modules/
+PRM_SU26/FE/web-dashboard/dist/
+
+PRM_SU26/FE/web-dashboard/src/types/auth.ts
+PRM_SU26/FE/web-dashboard/src/vite-env.d.ts
+PRM_SU26/FE/web-dashboard/index.html
+PRM_SU26/FE/web-dashboard/package-lock.json
+PRM_SU26/FE/web-dashboard/package.json
+PRM_SU26/FE/web-dashboard/tsconfig.json
+PRM_SU26/FE/web-dashboard/tsconfig.node.json
+PRM_SU26/FE/web-dashboard/vite.config.ts
+PRM_SU26/.gitignore
+PRM_SU26/docker-compose.yml
+PRM_SU26/README.md
+
+# --- DỮ LIỆU & LOG ---
+
+data/
+*.log
+*.tmp
