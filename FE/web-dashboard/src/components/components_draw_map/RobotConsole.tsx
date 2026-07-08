@@ -21,8 +21,9 @@ interface Telemetry {
 }
 
 export const RobotConsole: React.FC = () => {
-  const objects = useMapStore((state) => state.objects);
-  const tables = objects.filter((obj) => obj.type === 'table');
+  const graphNodes = useMapStore((state) => state.graphNodes);
+  // Lấy delivery nodes từ graph thay vì objects — để target gửi cho robot khớp với graph.json
+  const deliveryNodes = graphNodes.filter((node) => node.type === 'delivery');
 
   const [selectedTable, setSelectedTable] = useState<string | undefined>(undefined);
   const [telemetry, setTelemetry] = useState<Telemetry>({
@@ -149,9 +150,9 @@ export const RobotConsole: React.FC = () => {
             style={{ width: '100%' }}
             value={selectedTable}
             onChange={setSelectedTable}
-            options={tables.map((t) => ({
-              value: (t.name || `Table_${t.id}`).replace(/\s+/g, '_'),
-              label: t.name || `Table ${t.id}`,
+            options={deliveryNodes.map((node) => ({
+              value: node.id,   // ID graph node — robot dùng để lookup trong graph.json
+              label: node.name, // Hiển thị tên thân thiện, vd "Table 101_Delivery"
             }))}
           />
           <Row gutter={8}>

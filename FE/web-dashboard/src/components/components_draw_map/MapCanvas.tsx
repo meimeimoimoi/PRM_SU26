@@ -571,6 +571,26 @@ export function MapCanvas() {
   const panStart = useRef({ x: 0, y: 0, panX: 0, panY: 0 });
   const spaceHeld = useRef(false);
 
+  // Căn giữa map khi load
+  useEffect(() => {
+    const centerMap = () => {
+      if (!containerRef.current) return;
+      const rect = containerRef.current.getBoundingClientRect();
+      if (rect.width === 0 || rect.height === 0) {
+        // Layout chưa sẵn sàng, thử lại sau 50ms
+        setTimeout(centerMap, 50);
+        return;
+      }
+      const mapSize = getMapPixels(floorSize, resolution);
+      setPan({
+        x: (rect.width - mapSize * zoom) / 2,
+        y: (rect.height - mapSize * zoom) / 2,
+      });
+    };
+    centerMap();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [floorSize, resolution]); // Chỉ chạy khi map size thay đổi hoặc mount lần đầu
+
   const [dragState, setDragState] = useState<{
     id: string | null;
     offsetX: number;
@@ -1518,15 +1538,11 @@ export function MapCanvas() {
               <div
                 style={{
                   position: 'absolute',
-                  width: '28px',
-                  height: '28px',
-                  background: robotColor,
-                  border: '3px solid white',
-                  borderRadius: '50%',
-                  left: pos.x - 14,
-                  top: pos.y - 14,
+                  width: '32px',
+                  height: '32px',
+                  left: pos.x - 16,
+                  top: pos.y - 16,
                   zIndex: 100,
-                  boxShadow: `0 0 14px ${glowColor}`,
                   transform: `rotate(${((robotState.theta || 0) * 180) / Math.PI}deg)`,
                   transformOrigin: 'center center',
                   display: 'flex',
@@ -1534,6 +1550,7 @@ export function MapCanvas() {
                   justifyContent: 'center',
                   transition: 'left 0.15s linear, top 0.15s linear, transform 0.15s linear',
                   animation: isCalibrating ? 'robotPulse 1s ease-in-out infinite' : undefined,
+                  filter: `drop-shadow(0 0 6px ${glowColor})`,
                 }}
                 title={
                   isCalibrating
@@ -1541,16 +1558,15 @@ export function MapCanvas() {
                     : `🤖 Robot: (${robotState.x.toFixed(2)}, ${robotState.y.toFixed(2)})`
                 }
               >
-                <div
-                  style={{
-                    width: '0',
-                    height: '0',
-                    borderLeft: '5px solid transparent',
-                    borderRight: '5px solid transparent',
-                    borderBottom: '10px solid #ffffff',
-                    transform: 'translateY(-2px)',
-                  }}
-                />
+                <svg width="32" height="32" viewBox="0 0 32 32">
+                  <path
+                    d="M 32 16 L 0 27.2 L 9.6 16 L 0 4.8 Z"
+                    fill={robotColor}
+                    stroke="#ffffff"
+                    strokeWidth="2"
+                    strokeLinejoin="round"
+                  />
+                </svg>
               </div>
             );
           })()}
