@@ -40,9 +40,10 @@ public static class DependencyInjection
         services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
         services.AddScoped<IPasswordResetTokenRepository, PasswordResetTokenRepository>();
 
-        // Security — RSA key service (singleton vì RSA key không đổi trong runtime)
-        services.AddSingleton<RsaKeyService>();
-        services.AddScoped<IJwtTokenService, JwtTokenService>();
+
+        // Security
+        services.AddSingleton<IRsaKeyProvider, RsaKeyProvider>();
+        services.AddSingleton<IJwtTokenService, JwtTokenService>();
         services.AddScoped<IPasswordHasher, BCryptPasswordHasher>();
 
         // Fallback services

@@ -18,28 +18,35 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddInfrastructureServices(builder.Configuration);
 builder.Services.AddApplicationServices();
 
-// ===== Authentication & Authorization (RSA256) =====
+// ===== Authentication & Authorization =====
+var publicPem = File.ReadAllText(builder.Configuration["Jwt:PublicKeyPath"]!);
+using var rsaForValidation = RSA.Create();
+rsaForValidation.ImportFromPem(publicPem);
+var publicKeyParams = rsaForValidation.ExportParameters(false);
+
 builder.Services.AddAuthentication(options =>
 {
     options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
     options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
 })
-.AddJwtBearer();
 
-builder.Services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme)
-    .Configure<RsaKeyService, IConfiguration>((options, rsaKeyService, configuration) =>
+
+.AddJwtBearer(options =>
+{
+    var rsa = RSA.Create();
+    rsa.ImportParameters(publicKeyParams);
+
+    options.TokenValidationParameters = new TokenValidationParameters
     {
-        options.TokenValidationParameters = new TokenValidationParameters
-        {
-            ValidateIssuer = true,
-            ValidateAudience = true,
-            ValidateLifetime = true,
-            ValidateIssuerSigningKey = true,
-            ValidIssuer = configuration["Jwt:Issuer"],
-            ValidAudience = configuration["Jwt:Audience"],
-            IssuerSigningKey = new RsaSecurityKey(rsaKeyService.GetRsaKey())
-        };
-    });
+        ValidateIssuer = true,
+        ValidateAudience = true,
+        ValidateLifetime = true,
+        ValidateIssuerSigningKey = true,
+        ValidIssuer = builder.Configuration["Jwt:Issuer"],
+        ValidAudience = builder.Configuration["Jwt:Audience"],
+        IssuerSigningKey = new RsaSecurityKey(rsa)
+    };
+});
 
 builder.Services.AddAuthorization();
 
