@@ -8,11 +8,6 @@ using SmartDine.Application.Services;
 
 namespace SmartDine.API.Controllers;
 
-/// <summary>
-/// Controller xác thực (Monolith API version).
-/// Chức năng tương tự Identity.API nhưng không có login-guest và logout
-/// (các endpoint đó chỉ có trong Identity microservice).
-/// </summary>
 [ApiController]
 [Route("api/v1/auth")]
 public class AuthController : ControllerBase
@@ -24,47 +19,23 @@ public class AuthController : ControllerBase
         _authService = authService;
     }
 
-    /// <summary>POST /api/v1/auth/login — Đăng nhập (User hoặc Customer).</summary>
+    /// <summary>POST /api/v1/auth/login — User or customer login</summary>
     [HttpPost("login")]
     public async Task<IActionResult> Login([FromBody] LoginRequest request)
     {
         var result = await _authService.LoginAsync(request);
-        return Ok(ApiResponse<TokenResponse>.Ok(result, ValidationMessages.LOGIN_SUCCESS));
+        return Ok(ApiResponse<TokenResponse>.Ok(result, ValidationMessages.AUTH_LOGIN_SUCCESS));
     }
 
-    /// <summary>POST /api/v1/auth/register — Đăng ký Customer mới.</summary>
+    /// <summary>POST /api/v1/auth/register — Register a new customer account</summary>
     [HttpPost("register")]
     public async Task<IActionResult> Register([FromBody] RegisterRequest request)
     {
         var result = await _authService.RegisterAsync(request);
-        return Created("", ApiResponse<TokenResponse>.Ok(result, ValidationMessages.REGISTER_SUCCESS));
+        return Created("", ApiResponse<TokenResponse>.Ok(result, ValidationMessages.AUTH_REGISTER_SUCCESS));
     }
 
-    /// <summary>POST /api/v1/auth/refresh-token — Làm mới cặp token.</summary>
-    [HttpPost("refresh-token")]
-    public async Task<IActionResult> RefreshToken([FromBody] RefreshTokenRequest request)
-    {
-        var result = await _authService.RefreshTokenAsync(request);
-        return Ok(ApiResponse<TokenResponse>.Ok(result, ValidationMessages.REFRESH_TOKEN_SUCCESS));
-    }
-
-    /// <summary>POST /api/v1/auth/forgot-password — Khởi tạo reset password flow.</summary>
-    [HttpPost("forgot-password")]
-    public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordRequest request)
-    {
-        var result = await _authService.ForgotPasswordAsync(request);
-        return Ok(ApiResponse<ForgotPasswordResponse>.Ok(result));
-    }
-
-    /// <summary>POST /api/v1/auth/reset-password — Đặt lại mật khẩu bằng reset token.</summary>
-    [HttpPost("reset-password")]
-    public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordRequest request)
-    {
-        await _authService.ResetPasswordAsync(request);
-        return Ok(ApiResponse<object>.Ok(null!, ValidationMessages.RESET_PASSWORD_SUCCESS));
-    }
-
-    /// <summary>GET /api/v1/auth/me — Thông tin user hiện tại.</summary>
+    /// <summary>GET /api/v1/auth/me — Get current authenticated user info</summary>
     [HttpGet("me")]
     [Authorize]
     public async Task<IActionResult> GetCurrentUser()
@@ -73,5 +44,32 @@ public class AuthController : ControllerBase
         var role = User.FindFirstValue(ClaimTypes.Role)!;
         var result = await _authService.GetCurrentUserAsync(userId, role);
         return Ok(ApiResponse<UserInfoResponse>.Ok(result));
+    }
+
+    /// <summary>POST /api/v1/auth/change-password — Change password for authenticated user</summary>
+    [HttpPost("change-password")]
+    [Authorize]
+    public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequest request)
+    {
+        var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        var role   = User.FindFirstValue(ClaimTypes.Role)!;
+        await _authService.ChangePasswordAsync(userId, role, request);
+        return Ok(ApiResponse<object>.Ok(null, ValidationMessages.AUTH_CHANGE_PASSWORD_SUCCESS));
+    }
+
+    /// <summary>POST /api/v1/auth/forgot-password — Request a password reset token</summary>
+    [HttpPost("forgot-password")]
+    public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordRequest request)
+    {
+        var result = await _authService.ForgotPasswordAsync(request);
+        return Ok(ApiResponse<ForgotPasswordResponse>.Ok(result));
+    }
+
+    /// <summary>POST /api/v1/auth/reset-password — Reset password using a valid reset token</summary>
+    [HttpPost("reset-password")]
+    public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordRequest request)
+    {
+        await _authService.ResetPasswordAsync(request);
+        return Ok(ApiResponse<object>.Ok(null, ValidationMessages.AUTH_RESET_PASSWORD_SUCCESS));
     }
 }

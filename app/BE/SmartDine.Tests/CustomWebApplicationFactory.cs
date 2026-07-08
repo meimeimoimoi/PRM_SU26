@@ -1,40 +1,32 @@
 using System.Security.Cryptography;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.Extensions.Configuration;
 
 namespace SmartDine.Tests;
 
 public class CustomWebApplicationFactory<TProgram> : WebApplicationFactory<TProgram> where TProgram : class
 {
-    public static readonly RSA RsaKey;
-    public static readonly string RsaPrivateKeyBase64;
-    public static readonly string RsaPublicKeyBase64;
+    private static readonly string PrivateKeyPath;
+    private static readonly string PublicKeyPath;
 
     static CustomWebApplicationFactory()
     {
-        RsaKey = RSA.Create(2048);
-        RsaPrivateKeyBase64 = Convert.ToBase64String(RsaKey.ExportRSAPrivateKey());
-        RsaPublicKeyBase64 = Convert.ToBase64String(RsaKey.ExportRSAPublicKey());
+        // Generate temp RSA key pair used for all integration tests
+        var tempDir = Path.GetTempPath();
+        PrivateKeyPath = Path.Combine(tempDir, "smartdine_test_private.pem");
+        PublicKeyPath  = Path.Combine(tempDir, "smartdine_test_public.pem");
+
+        using var rsa = RSA.Create(2048);
+        File.WriteAllText(PrivateKeyPath, rsa.ExportPkcs8PrivateKeyPem());
+        File.WriteAllText(PublicKeyPath,  rsa.ExportSubjectPublicKeyInfoPem());
 
         Environment.SetEnvironmentVariable("UseInMemoryDatabase", "true");
+        Environment.SetEnvironmentVariable("Jwt__PrivateKeyPath", PrivateKeyPath);
+        Environment.SetEnvironmentVariable("Jwt__PublicKeyPath",  PublicKeyPath);
+        Environment.SetEnvironmentVariable("Jwt__Issuer",   "SmartDineTest");
+        Environment.SetEnvironmentVariable("Jwt__Audience", "SmartDineTest");
+        Environment.SetEnvironmentVariable("Jwt__AccessTokenExpiryMinutes", "60");
     }
 
-    protected override void ConfigureWebHost(IWebHostBuilder builder)
-    {
-        // InMemory config added LAST → overrides appsettings.*.json
-        builder.ConfigureAppConfiguration((context, config) =>
-        {
-            config.AddInMemoryCollection(new Dictionary<string, string?>
-            {
-                { "UseInMemoryDatabase", "true" },
-                { "Jwt:RsaPrivateKey", RsaPrivateKeyBase64 },
-                { "Jwt:RsaPublicKey", RsaPublicKeyBase64 },
-                { "Jwt:Issuer", "SmartDineAPI" },
-                { "Jwt:Audience", "SmartDineApp" },
-                { "Jwt:AccessTokenExpiryMinutes", "60" },
-                { "Jwt:RefreshTokenExpiryDays", "7" }
-            });
-        });
-    }
+    protected override void ConfigureWebHost(IWebHostBuilder builder) { }
 }
