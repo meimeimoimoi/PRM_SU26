@@ -76,11 +76,4 @@ public class OrdersController : ControllerBase
         var result = await _orderService.GetByCustomerIdAsync(customerId, page, pageSize);
         return Ok(ApiResponse<List<OrderResponse>>.Ok(result));
     }
-
-    [HttpGet("health")]
-    [AllowAnonymous]
-    public IActionResult HealthCheck()
-    {
-        return Ok(new { status = "Healthy" });
-    }
 }

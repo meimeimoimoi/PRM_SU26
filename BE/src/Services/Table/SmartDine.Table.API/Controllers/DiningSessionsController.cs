@@ -119,11 +119,4 @@ public class DiningSessionsController : ControllerBase
 
     /// <summary>STAFF/MANAGER được xem mọi session, không bị giới hạn theo participant.</summary>
     private bool IsStaff() => User.IsInRole("STAFF") || User.IsInRole("MANAGER");
-
-    [HttpGet("health")]
-    [AllowAnonymous]
-    public IActionResult HealthCheck()
-    {
-        return Ok(new { status = "Healthy" });
-    }
 }

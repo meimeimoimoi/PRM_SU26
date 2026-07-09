@@ -234,11 +234,4 @@ Chỉ trả về chuỗi JSON đại diện cho hành động, tuyệt đối kh
         var content = messageElement.GetProperty("content").GetString();
         return content ?? string.Empty;
     }
-
-    [HttpGet("health")]
-    [AllowAnonymous]
-    public IActionResult HealthCheck()
-    {
-        return Ok(new { status = "Healthy" });
-    }
 }

@@ -1,13 +1,21 @@
 <Solution>
-  <Project Path="SmartDine.Gateway/SmartDine.Gateway.csproj" />
-  <Project Path="SmartDine.Identity.API/SmartDine.Identity.API.csproj" />
-  <Project Path="SmartDine.Menu.API/SmartDine.Menu.API.csproj" />
-  <Project Path="SmartDine.Order.API/SmartDine.Order.API.csproj" />
-  <Project Path="SmartDine.Table.API/SmartDine.Table.API.csproj" />
-  <Project Path="SmartDine.AI.API/SmartDine.AI.API.csproj" />
-  <Project Path="SmartDine.API/SmartDine.API.csproj" />
-  <Project Path="SmartDine.Application/SmartDine.Application.csproj" />
-  <Project Path="SmartDine.Domain/SmartDine.Domain.csproj" />
-  <Project Path="SmartDine.Infrastructure/SmartDine.Infrastructure.csproj" />
-  <Project Path="SmartDine.Tests/SmartDine.Tests.csproj" />
+  
+  <Project Path="src/Services/Gateway/SmartDine.Gateway/SmartDine.Gateway.csproj" />
+  <Project Path="src/Services/Identity/SmartDine.Identity.API/SmartDine.Identity.API.csproj" />
+  <Project Path="src/Services/Menu/SmartDine.Menu.API/SmartDine.Menu.API.csproj" />
+  <Project Path="src/Services/Order/SmartDine.Order.API/SmartDine.Order.API.csproj" />
+  <Project Path="src/Services/Table/SmartDine.Table.API/SmartDine.Table.API.csproj" />
+  <Project Path="src/Services/AI/SmartDine.AI.API/SmartDine.AI.API.csproj" />
+  <Project Path="src/SmartDine.API/SmartDine.API.csproj" />
+  <Project Path="src/SmartDine.Application/SmartDine.Application.csproj" />
+  <Project Path="src/SmartDine.Domain/SmartDine.Domain.csproj" />
+  <Project Path="src/SmartDine.Infrastructure/SmartDine.Infrastructure.csproj" />
+  <Project Path="src/SmartDine.Tests/SmartDine.Tests.csproj" />
+
+  <!-- Tests -->
+  <Project Path="src/Services/Identity/SmartDine.Identity.Tests/SmartDine.Identity.Tests.csproj" />
+  <Project Path="src/Services/Menu/SmartDine.Menu.Tests/SmartDine.Menu.Tests.csproj" />
+  <Project Path="src/Services/Order/SmartDine.Order.Tests/SmartDine.Order.Tests.csproj" />
+  <Project Path="src/Services/Table/SmartDine.Table.Tests/SmartDine.Table.Tests.csproj" />
+  <Project Path="src/Services/AI/SmartDine.AI.Tests/SmartDine.AI.Tests.csproj" />
 </Solution>

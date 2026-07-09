@@ -116,11 +116,4 @@ public class TablesController : ControllerBase
         var result = await _tableService.UpdateReservationStatusAsync(id, request.Status);
         return Ok(ApiResponse<UpdateReservationStatusResponse>.Ok(result, "Cập nhật trạng thái đặt bàn thành công"));
     }
-
-    [HttpGet("health")]
-    [AllowAnonymous]
-    public IActionResult HealthCheck()
-    {
-        return Ok(new { status = "Healthy" });
-    }
 }

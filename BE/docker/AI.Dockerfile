@@ -4,10 +4,11 @@ EXPOSE 8080
 
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
-COPY ["SmartDine.AI.API/SmartDine.AI.API.csproj", "SmartDine.AI.API/"]
-RUN dotnet restore "SmartDine.AI.API/SmartDine.AI.API.csproj"
-COPY . .
-WORKDIR "/src/SmartDine.AI.API"
+
+COPY ["src/Services/AI/SmartDine.AI.API/SmartDine.AI.API.csproj", "Services/AI/SmartDine.AI.API/"]
+RUN dotnet restore "Services/AI/SmartDine.AI.API/SmartDine.AI.API.csproj"
+COPY src/ .
+WORKDIR "/src/Services/AI/SmartDine.AI.API"
 RUN dotnet build "SmartDine.AI.API.csproj" -c Release -o /app/build
 
 FROM build AS publish

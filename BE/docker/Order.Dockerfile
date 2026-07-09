@@ -4,13 +4,18 @@ EXPOSE 8080
 
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
-COPY ["SmartDine.Order.API/SmartDine.Order.API.csproj", "SmartDine.Order.API/"]
-COPY ["SmartDine.Application/SmartDine.Application.csproj", "SmartDine.Application/"]
-COPY ["SmartDine.Domain/SmartDine.Domain.csproj", "SmartDine.Domain/"]
-COPY ["SmartDine.Infrastructure/SmartDine.Infrastructure.csproj", "SmartDine.Infrastructure/"]
+
+#Copy shared layers
+COPY ["src/Shared/SmartDine.Domain/SmartDine.Domain.csproj", "Shared/SmartDine.Domain/"]
+COPY ["src/Shared/SmartDine.Application/SmartDine.Application.csproj", "Shared/SmartDine.Application/"]
+COPY ["src/Shared/SmartDine.Infrastructure/SmartDine.Infrastructure.csproj", "Shared/SmartDine.Infrastructure/"]
+# Copy service
+COPY ["src/Services/Order/SmartDine.Order.API/SmartDine.Order.API.csproj", "Services/Order/SmartDine.Order.API/"]
 RUN dotnet restore "SmartDine.Order.API/SmartDine.Order.API.csproj"
-COPY . .
-WORKDIR "/src/SmartDine.Order.API"
+
+#Copyy all source
+COPY src/ .
+WORKDIR "/src/Services/Order/SmartDine.Order.API"
 RUN dotnet build "SmartDine.Order.API.csproj" -c Release -o /app/build
 
 FROM build AS publish

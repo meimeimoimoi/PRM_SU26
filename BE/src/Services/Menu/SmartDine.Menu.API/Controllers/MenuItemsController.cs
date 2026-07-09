@@ -209,11 +209,4 @@ public class MenuItemsController : ControllerBase
         var idClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
         return int.TryParse(idClaim, out var id) ? id : null;
     }
-
-    [HttpGet("health")]
-    [AllowAnonymous]
-    public IActionResult HealthCheck()
-    {
-        return Ok(new { status = "Healthy" });
-    }
 }

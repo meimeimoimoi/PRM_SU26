@@ -126,11 +126,4 @@ public class AuthController : ControllerBase
         var result = await _authService.GetCurrentUserAsync(userId, role);
         return Ok(ApiResponse<UserInfoResponse>.Ok(result));
     }
-
-    [HttpGet("health")]
-    [AllowAnonymous]
-    public IActionResult HealthCheck()
-    {
-        return Ok(new { status = "Healthy" });
-    }
 }
