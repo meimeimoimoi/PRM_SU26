@@ -22,7 +22,7 @@ app.use(express.json({ limit: '10mb' }));
 // Configuration – controller directory where the robot reads map files
 // ---------------------------------------------------------------------------
 const WEBOTS_CONTROLLER_DIR = process.env.WEBOTS_CONTROLLER_DIR ||
-  'D:/User/refactor/Robot/controllers/robot_controller';
+  'D:/User/refactor/PRM_SU26/Robot/controllers/robot_controller';
 
 
 

@@ -25,7 +25,7 @@ const toolLabels: Record<MapTool, string> = {
   select: 'Select',
   pan: 'Pan',
   table: 'Table',
-    wall: 'Wall',
+  wall: 'Wall',
   robotStart: 'Start Position',
   waypoint: 'Waypoint',
   edge: 'Connect Edge',
@@ -742,44 +742,44 @@ export function MapCanvas() {
         if (!obj && !node) return;
 
         if (dragState.kind === 'node' && node) {
-              const pointerWorld = pixelToWorld(canvasX, canvasY, floorSize, resolution);
-              const nextX = pointerWorld.x - dragState.offsetX;
-              const nextY = pointerWorld.y - dragState.offsetY;
-              const anchorX = dragState.nodeStartX ?? node.x;
-              const anchorY = dragState.nodeStartY ?? node.y;
-              const deltaX = nextX - anchorX;
-              const deltaY = nextY - anchorY;
-              if (Math.hypot(deltaX, deltaY) < 0.02) return;
+          const pointerWorld = pixelToWorld(canvasX, canvasY, floorSize, resolution);
+          const nextX = pointerWorld.x - dragState.offsetX;
+          const nextY = pointerWorld.y - dragState.offsetY;
+          const anchorX = dragState.nodeStartX ?? node.x;
+          const anchorY = dragState.nodeStartY ?? node.y;
+          const deltaX = nextX - anchorX;
+          const deltaY = nextY - anchorY;
+          if (Math.hypot(deltaX, deltaY) < 0.02) return;
 
-              // Update graph node position
-              updateGraphNode(dragState.id!, { x: nextX, y: nextY });
+          // Update graph node position
+          updateGraphNode(dragState.id!, { x: nextX, y: nextY });
 
-              // Sync delivery offset back to the parent table object (if this is a delivery node)
-              if (node.type === 'delivery') {
-                const objectId = node.id.replace('delivery-', '');
-                const parentObj = objects.find((o) => o.id === objectId);
-                if (parentObj) {
-                  // Table centre in world coordinates
-                  const tableCenterWorld = pixelToWorld(
-                    parentObj.x + parentObj.width / 2,
-                    parentObj.y + parentObj.height / 2,
-                    floorSize,
-                    resolution,
-                  );
-                  // Convert world delta to pixel offset used by the object
-                  // Adjust offset: X direction is fine, Y direction needs sign inversion because world Y increases upwards.
-                  const offsetWorldX = nextX - tableCenterWorld.x;
-                  const offsetWorldY = tableCenterWorld.y - nextY; // invert Y sign
-                  const offsetPxX = offsetWorldX / resolution;
-                  const offsetPxY = offsetWorldY / resolution;
-                  updateObject(parentObj.id, {
-                    deliveryOffsetX: offsetPxX,
-                    deliveryOffsetY: offsetPxY,
-                  });
-                }
-              }
+          // Sync delivery offset back to the parent table object (if this is a delivery node)
+          if (node.type === 'delivery') {
+            const objectId = node.id.replace('delivery-', '');
+            const parentObj = objects.find((o) => o.id === objectId);
+            if (parentObj) {
+              // Table centre in world coordinates
+              const tableCenterWorld = pixelToWorld(
+                parentObj.x + parentObj.width / 2,
+                parentObj.y + parentObj.height / 2,
+                floorSize,
+                resolution,
+              );
+              // Convert world delta to pixel offset used by the object
+              // Adjust offset: X direction is fine, Y direction needs sign inversion because world Y increases upwards.
+              const offsetWorldX = nextX - tableCenterWorld.x;
+              const offsetWorldY = tableCenterWorld.y - nextY; // invert Y sign
+              const offsetPxX = offsetWorldX / resolution;
+              const offsetPxY = offsetWorldY / resolution;
+              updateObject(parentObj.id, {
+                deliveryOffsetX: offsetPxX,
+                deliveryOffsetY: offsetPxY,
+              });
+            }
+          }
 
-              return;
+          return;
         }
 
         if (!obj) return;
@@ -788,7 +788,7 @@ export function MapCanvas() {
         if (dragState.handle === 'delivery') {
           const dx = canvasX - dragState.startX;
           const dy = canvasY - dragState.startY;
-          
+
           // Chuyển đổi dx, dy theo góc xoay của bàn (để chuột kéo hướng nào, điểm đi hướng đó)
           const angleRad = -((obj.rotation || 0) * Math.PI) / 180;
           const localDx = dx * Math.cos(angleRad) - dy * Math.sin(angleRad);
@@ -1187,7 +1187,7 @@ export function MapCanvas() {
         <Typography.Text strong>Canvas</Typography.Text>
         <Tag color="blue">{toolLabels[selectedTool]}</Tag>
         <Tag>{Math.round(zoom * 100)}%</Tag>
-            <Tag>{navPhase}</Tag>
+        <Tag>{navPhase}</Tag>
         {selectedTool === 'edge' && edgeDraftFromNodeId && <Tag color="orange">Edge from {edgeDraftFromNodeId}</Tag>}
         {dragState.id && <Tag color="green">Dragging</Tag>}
       </div>
@@ -1311,11 +1311,11 @@ export function MapCanvas() {
                       : node.type === 'charging'
                         ? '#00cec9'
                         : '#1890ff';
-                    // Highlight waypoint during Phase2 navigation
-                    let displayColor = nodeColor;
-                    if (navPhase === 'Phase2' && node.type === 'waypoint') {
-                      displayColor = '#f1c40f'; // bright yellow
-                    }
+            // Highlight waypoint during Phase2 navigation
+            let displayColor = nodeColor;
+            if (navPhase === 'Phase2' && node.type === 'waypoint') {
+              displayColor = '#f1c40f'; // bright yellow
+            }
 
             const nodeIcon =
               node.type === 'robotStart'
@@ -1543,7 +1543,7 @@ export function MapCanvas() {
                   left: pos.x - 16,
                   top: pos.y - 16,
                   zIndex: 100,
-                  transform: `rotate(${((robotState.theta || 0) * 180) / Math.PI}deg)`,
+                  transform: `rotate(${-((robotState.theta || 0) * 180) / Math.PI}deg)`,
                   transformOrigin: 'center center',
                   display: 'flex',
                   alignItems: 'center',
