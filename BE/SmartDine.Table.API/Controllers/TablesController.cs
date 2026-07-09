@@ -2,8 +2,11 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using SmartDine.Application.DTOs.Common;
+using SmartDine.Application.Constants;
 using SmartDine.Application.DTOs.Tables;
 using SmartDine.Application.Services;
+using SmartDine.Domain.Constants;
+using SmartDine.Domain.Enums;
 
 namespace SmartDine.Table.API.Controllers;
 
@@ -36,7 +39,7 @@ public class TablesController : ControllerBase
     /// Nếu không truyền filter → trả tất cả bàn.
     /// </summary>
     [HttpGet]
-    [Authorize(Roles = "STAFF,MANAGER")]
+    [Authorize(Roles = Roles.StaffAndManager)]
     public async Task<IActionResult> GetAll([FromQuery] string? status, [FromQuery] int? capacity)
     {
         var result = await _tableService.GetAllAsync(status, capacity);
@@ -54,12 +57,12 @@ public class TablesController : ControllerBase
     ///   - Bàn đã có khách → trả session hiện tại (tham gia nhóm gọi món).
     /// </summary>
     [HttpPost("{id:int}/scan")]
-    [Authorize(Roles = "CUSTOMER,GUEST")]
+    [Authorize(Roles = Roles.AllDiners)]
     public async Task<IActionResult> ScanTable(int id, [FromBody] ScanTableRequest request)
     {
         // GUEST: guestSessionId = JWT sub claim (không phải customerId)
         var role = User.FindFirst(ClaimTypes.Role)?.Value;
-        if (role == "GUEST")
+        if (role == nameof(UserRole.GUEST))
             request.GuestSessionId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
 
         var result = await _tableService.ScanTableAsync(id, request);
@@ -76,11 +79,11 @@ public class TablesController : ControllerBase
     /// Hoặc chuyển bàn sang MAINTENANCE khi cần sửa chữa.
     /// </summary>
     [HttpPatch("{id:int}/status")]
-    [Authorize(Roles = "STAFF,MANAGER")]
+    [Authorize(Roles = Roles.StaffAndManager)]
     public async Task<IActionResult> UpdateStatus(int id, [FromBody] UpdateTableStatusRequest request)
     {
         var result = await _tableService.UpdateStatusAsync(id, request.Status);
-        return Ok(ApiResponse<UpdateTableStatusResponse>.Ok(result, "Cập nhật trạng thái bàn thành công"));
+        return Ok(ApiResponse<UpdateTableStatusResponse>.Ok(result, ValidationMessages.TABLE_STATUS_UPDATED_SUCCESS));
     }
 
     /// <summary>
@@ -93,11 +96,11 @@ public class TablesController : ControllerBase
     ///        → tạo reservation PENDING → trả về thông tin đặt bàn.
     /// </summary>
     [HttpPost("reservations")]
-    [Authorize(Roles = "CUSTOMER,STAFF,MANAGER")]
+    [Authorize(Roles = Roles.CustomerAndManagement)]
     public async Task<IActionResult> CreateReservation([FromBody] CreateReservationRequest request)
     {
         var result = await _tableService.CreateReservationAsync(request);
-        return Created("", ApiResponse<ReservationResponse>.Ok(result, "Đặt bàn thành công"));
+        return Created("", ApiResponse<ReservationResponse>.Ok(result, ValidationMessages.RESERVATION_CREATED_SUCCESS));
     }
 
     /// <summary>
@@ -110,10 +113,10 @@ public class TablesController : ControllerBase
     ///        Hoặc CANCELLED (hủy), NO_SHOW (khách không đến).
     /// </summary>
     [HttpPatch("reservations/{id:int}/status")]
-    [Authorize(Roles = "STAFF,MANAGER")]
+    [Authorize(Roles = Roles.StaffAndManager)]
     public async Task<IActionResult> UpdateReservationStatus(int id, [FromBody] UpdateReservationStatusRequest request)
     {
         var result = await _tableService.UpdateReservationStatusAsync(id, request.Status);
-        return Ok(ApiResponse<UpdateReservationStatusResponse>.Ok(result, "Cập nhật trạng thái đặt bàn thành công"));
+        return Ok(ApiResponse<UpdateReservationStatusResponse>.Ok(result, ValidationMessages.RESERVATION_STATUS_UPDATED_SUCCESS));
     }
 }

@@ -5,5 +5,7 @@ public enum PaymentMethod
     CASH,
     CREDIT_CARD,
     E_WALLET,
-    QR
+    QR,
+    VNPAY,
+    MOMO
 }

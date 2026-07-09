@@ -4,6 +4,8 @@ using Microsoft.AspNetCore.Mvc;
 using SmartDine.Application.DTOs.Common;
 using SmartDine.Application.DTOs.DiningSessions;
 using SmartDine.Application.Services;
+using SmartDine.Domain.Constants;
+using SmartDine.Domain.Enums;
 
 namespace SmartDine.Table.API.Controllers;
 
@@ -36,7 +38,7 @@ public class DiningSessionsController : ControllerBase
     /// Dùng để hiển thị giao diện nhóm gọi món (ai là HOST, ai là MEMBER).
     /// </summary>
     [HttpGet("{id:int}/participants")]
-    [Authorize(Roles = "CUSTOMER,GUEST,STAFF,MANAGER")]
+    [Authorize(Roles = Roles.AllExceptChef)]
     public async Task<IActionResult> GetParticipants(int id)
     {
         var (customerId, guestSessionId) = ExtractIdentity();
@@ -53,7 +55,7 @@ public class DiningSessionsController : ControllerBase
     /// Nếu là HOST → chuyển quyền cho MEMBER tiếp theo.
     /// </summary>
     [HttpPost("{id:int}/leave")]
-    [Authorize(Roles = "CUSTOMER,GUEST")]
+    [Authorize(Roles = Roles.AllDiners)]
     public async Task<IActionResult> Leave(int id)
     {
         var (customerId, guestSessionId) = ExtractIdentity();
@@ -70,7 +72,7 @@ public class DiningSessionsController : ControllerBase
     /// tax = sub_total * 10% (VAT).
     /// </summary>
     [HttpGet("{id:int}/bill-summary")]
-    [Authorize(Roles = "CUSTOMER,GUEST,STAFF,MANAGER")]
+    [Authorize(Roles = Roles.AllExceptChef)]
     public async Task<IActionResult> GetBillSummary(int id)
     {
         var (customerId, guestSessionId) = ExtractIdentity();
@@ -86,7 +88,7 @@ public class DiningSessionsController : ControllerBase
     /// Dùng để khách theo dõi tiến độ hoặc nhân viên kiểm tra.
     /// </summary>
     [HttpGet("{id:int}/orders")]
-    [Authorize(Roles = "CUSTOMER,GUEST,STAFF,MANAGER")]
+    [Authorize(Roles = Roles.AllExceptChef)]
     public async Task<IActionResult> GetOrders(int id)
     {
         var (customerId, guestSessionId) = ExtractIdentity();
@@ -108,15 +110,17 @@ public class DiningSessionsController : ControllerBase
         var role = User.FindFirst(ClaimTypes.Role)?.Value;
         var sub = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
 
-        if (role == "CUSTOMER" && int.TryParse(sub, out var cid))
+        if (role == nameof(UserRole.CUSTOMER) && int.TryParse(sub, out var cid))
             return (cid, null);
 
-        if (role == "GUEST")
+        if (role == nameof(UserRole.GUEST))
             return (null, sub);
 
         return (null, null);
     }
 
     /// <summary>STAFF/MANAGER được xem mọi session, không bị giới hạn theo participant.</summary>
-    private bool IsStaff() => User.IsInRole("STAFF") || User.IsInRole("MANAGER");
+    private bool IsStaff() =>
+        User.IsInRole(nameof(UserRole.STAFF)) ||
+        User.IsInRole(nameof(UserRole.MANAGER));
 }

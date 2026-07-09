@@ -39,4 +39,15 @@ public class OrderNotificationService : IOrderNotificationService
             Timestamp = DateTime.UtcNow
         });
     }
+
+    public async Task NotifyPaymentSuccessAsync(int tableId, string invoiceId, decimal amount)
+    {
+        await _hubContext.Clients.Group($"table_{tableId}").SendAsync("ReceivePaymentSuccess", new
+        {
+            TableId = tableId,
+            InvoiceId = invoiceId,
+            Amount = amount,
+            Timestamp = DateTime.UtcNow
+        });
+    }
 }

@@ -2,8 +2,10 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using SmartDine.Application.DTOs.Common;
+using SmartDine.Application.Constants;
 using SmartDine.Application.DTOs.Orders;
 using SmartDine.Application.Services;
+using SmartDine.Domain.Constants;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
@@ -28,7 +30,7 @@ public class OrdersController : ControllerBase
         // Lấy customerId từ JWT claims (được map vào NameIdentifier khi login/register)
         var customerId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
         var result = await _orderService.PlaceOrderAsync(customerId, null, false, request);
-        return Created("", ApiResponse<OrderResponse>.Ok(result, "Đặt món thành công"));
+        return Created("", ApiResponse<OrderResponse>.Ok(result, ValidationMessages.ORDER_PLACED_SUCCESS));
     }
 
     /// <summary>GET /api/v1/orders/{id} — Lấy chi tiết đơn hàng</summary>
@@ -36,14 +38,12 @@ public class OrdersController : ControllerBase
     public async Task<IActionResult> GetById(int id)
     {
         var result = await _orderService.GetByIdAsync(id);
-        if (result == null)
-            return NotFound(ApiResponse<object>.Fail("Không tìm thấy đơn hàng"));
         return Ok(ApiResponse<OrderResponse>.Ok(result));
     }
 
     /// <summary>GET /api/v1/orders/active — Đơn hàng đang hoạt động (cho kitchen/staff)</summary>
     [HttpGet("active")]
-    [Authorize(Roles = "STAFF,CHEF,MANAGER")]
+    [Authorize(Roles = Roles.KitchenStaff)]
     public async Task<IActionResult> GetActiveOrders()
     {
         var result = await _orderService.GetActiveOrdersAsync();
@@ -52,7 +52,7 @@ public class OrdersController : ControllerBase
 
     /// <summary>GET /api/v1/orders/today — Tất cả đơn hôm nay (cho manager)</summary>
     [HttpGet("today")]
-    [Authorize(Roles = "MANAGER")]
+    [Authorize(Roles = Roles.Manager)]
     public async Task<IActionResult> GetTodayOrders()
     {
         var result = await _orderService.GetTodayOrdersAsync();
@@ -61,11 +61,11 @@ public class OrdersController : ControllerBase
 
     /// <summary>PATCH /api/v1/orders/{id}/status — Cập nhật trạng thái đơn hàng</summary>
     [HttpPatch("{id:int}/status")]
-    [Authorize(Roles = "STAFF,CHEF,MANAGER")]
+    [Authorize(Roles = Roles.KitchenStaff)]
     public async Task<IActionResult> UpdateStatus(int id, [FromBody] UpdateOrderStatusRequest request)
     {
         var result = await _orderService.UpdateStatusAsync(id, request.Status);
-        return Ok(ApiResponse<OrderResponse>.Ok(result, "Cập nhật trạng thái thành công"));
+        return Ok(ApiResponse<OrderResponse>.Ok(result, ValidationMessages.ORDER_STATUS_UPDATED_SUCCESS));
     }
 
     /// <summary>GET /api/v1/orders/my — Lịch sử đơn hàng của customer</summary>

@@ -87,14 +87,31 @@ public class PaymentConfiguration : IEntityTypeConfiguration<Payment>
     {
         builder.ToTable("payments");
         builder.HasKey(p => p.Id);
+        builder.Property(p => p.InvoiceId).HasMaxLength(50).IsRequired();
         builder.Property(p => p.Amount).HasPrecision(12, 2).IsRequired();
         builder.Property(p => p.PaymentMethod).HasConversion<string>().HasMaxLength(50).IsRequired();
-        builder.Property(p => p.PaymentStatus).HasConversion<string>().HasMaxLength(20).HasDefaultValue(PaymentStatus.SUCCESS);
+        builder.Property(p => p.PaymentStatus).HasConversion<string>().HasMaxLength(20).HasDefaultValue(PaymentStatus.PENDING);
+        builder.Property(p => p.QrUrl).HasColumnType("text");
+        builder.Property(p => p.Deeplink).HasColumnType("text");
+        builder.Property(p => p.ExternalRef).HasMaxLength(100);
+        builder.Property(p => p.SplitCount).HasDefaultValue(1);
 
+        // Liên kết theo phiên ăn (chính) — nullable FK vì data cũ có thể không có SessionId
+        builder.HasOne(p => p.Session)
+               .WithMany(s => s.Payments)
+               .HasForeignKey(p => p.SessionId)
+               .IsRequired(false)
+               .OnDelete(DeleteBehavior.Restrict);
+
+        // Backward-compat: payment gắn với 1 order cụ thể (optional)
         builder.HasOne(p => p.Order)
                .WithMany(o => o.Payments)
                .HasForeignKey(p => p.OrderId)
-               .OnDelete(DeleteBehavior.Cascade);
+               .IsRequired(false)
+               .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasIndex(p => p.ExternalRef).IsUnique().HasFilter("external_ref IS NOT NULL");
+        builder.HasIndex(p => p.InvoiceId).IsUnique();
     }
 }
 
@@ -180,7 +197,8 @@ public class LoyaltyTransactionConfiguration : IEntityTypeConfiguration<LoyaltyT
         builder.ToTable("loyalty_transactions");
         builder.HasKey(lt => lt.Id);
         builder.Property(lt => lt.Points).IsRequired();
-        builder.Property(lt => lt.TransactionType).HasMaxLength(20).IsRequired();
+        // Lưu enum dạng string ("EARN"/"REDEEM") — HasConversion giữ cho DB column là varchar(20)
+        builder.Property(lt => lt.TransactionType).HasConversion<string>().HasMaxLength(20).IsRequired();
 
         builder.HasOne(lt => lt.Customer)
                .WithMany(c => c.LoyaltyTransactions)

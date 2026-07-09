@@ -99,4 +99,44 @@ public static class ValidationMessages
     public const string COUPON_NOT_OWNED = "Bạn không sở hữu mã giảm giá này.";
     public const string COUPON_ALREADY_USED = "Mã giảm giá này đã được sử dụng.";
     public const string COUPON_NOT_SUPPORTED_TYPE = "Loại khuyến mãi này hiện chưa được hỗ trợ áp dụng tự động.";
+
+    // ===== Payment =====
+    public const string PAYMENT_SESSION_NOT_FOUND = "PAYMENT_SESSION_NOT_FOUND";
+    public const string PAYMENT_SESSION_CLOSED = "Phiên ăn này đã kết thúc, không thể tạo hóa đơn.";
+    public const string PAYMENT_SESSION_CHECKOUT_IN_PROGRESS = "Phiên ăn đang trong quá trình thanh toán, vui lòng hoàn tất giao dịch hiện tại.";
+    public const string PAYMENT_NO_ORDERS = "Phiên ăn chưa có đơn hàng nào để thanh toán.";
+    public const string PAYMENT_ALREADY_PENDING = "Đang có giao dịch đang xử lý cho phiên ăn này. Vui lòng hoàn tất hoặc chờ hết hạn trước khi thử lại.";
+    public const string PAYMENT_ALREADY_COMPLETED = "Phiên ăn này đã được thanh toán thành công.";
+    public const string PAYMENT_METHOD_INVALID = "Phương thức thanh toán không hợp lệ. Hỗ trợ: VNPAY, MOMO, QR, CASH.";
+    public const string PAYMENT_GATEWAY_ERROR = "Không thể kết nối cổng thanh toán. Vui lòng thử lại sau.";
+    public const string PAYMENT_WEBHOOK_INVALID_SIGNATURE = "PAYMENT_WEBHOOK_INVALID_SIGNATURE";
+    public const string PAYMENT_NOT_FOUND = "PAYMENT_NOT_FOUND";
+    public const string PAYMENT_ACCESS_DENIED = "Bạn không có quyền thực hiện thanh toán cho phiên ăn này.";
+
+    // ===== Order — block khi CHECKOUT =====
+    public const string ORDER_BLOCKED_CHECKOUT = "Phiên ăn đang trong quá trình thanh toán, không thể đặt thêm món.";
+
+    // ===== Order — item validation =====
+    public const string ORDER_ITEM_NOT_IN_MENU = "Một hoặc nhiều món không tồn tại trong menu.";
+    public const string ORDER_ITEM_UNAVAILABLE = "Các món sau đang hết: {0}";
+
+    // ===== PayOS config =====
+    public const string PAYOS_CONFIG_CLIENTID_MISSING = "PayOS:ClientId chưa được cấu hình.";
+    public const string PAYOS_CONFIG_APIKEY_MISSING = "PayOS:ApiKey chưa được cấu hình.";
+    public const string PAYOS_CONFIG_CHECKSUMKEY_MISSING = "PayOS:ChecksumKey chưa được cấu hình.";
+
+    // ===== Order — success responses =====
+    public const string ORDER_PLACED_SUCCESS = "Đặt món thành công";
+    public const string ORDER_STATUS_UPDATED_SUCCESS = "Cập nhật trạng thái thành công";
+
+    // ===== Table — success responses =====
+    public const string TABLE_STATUS_UPDATED_SUCCESS = "Cập nhật trạng thái bàn thành công";
+    public const string RESERVATION_CREATED_SUCCESS = "Đặt bàn thành công";
+    public const string RESERVATION_STATUS_UPDATED_SUCCESS = "Cập nhật trạng thái đặt bàn thành công";
+
+    // ===== Payment — success responses =====
+    public const string PAYMENT_INTENT_CREATED = "Hóa đơn đã được tạo. Vui lòng quét mã QR để thanh toán.";
+
+    // ===== AI =====
+    public const string AI_PROMPT_EMPTY = "Nội dung câu hỏi không được để trống.";
 }

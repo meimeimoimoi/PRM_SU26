@@ -41,8 +41,10 @@ public class OrderService
         var session = await _uow.DiningSessions.GetByIdWithParticipantsAsync(request.DiningSessionId)
             ?? throw new EntityNotFoundException("Dining Session", request.DiningSessionId);
 
+        if (session.Status == DiningSessionStatus.CHECKOUT)
+            throw new BusinessRuleViolationException(ValidationMessages.ORDER_BLOCKED_CHECKOUT);
         if (session.Status != DiningSessionStatus.ACTIVE)
-            throw new BusinessRuleViolationException("Dining Session này đã đóng.");
+            throw new BusinessRuleViolationException(ValidationMessages.DINING_SESSION_NOT_ACTIVE);
 
         EnsureCallerIsParticipant(session.Participants, callerCustomerId, callerGuestSessionId, isStaff);
 
@@ -51,11 +53,12 @@ public class OrderService
         var menuItems = await _uow.MenuItems.GetByIdsAsync(menuItemIds);
 
         if (menuItems.Count != menuItemIds.Count)
-            throw new BusinessRuleViolationException("Một hoặc nhiều món không tồn tại trong menu.");
+            throw new BusinessRuleViolationException(ValidationMessages.ORDER_ITEM_NOT_IN_MENU);
 
         var unavailable = menuItems.Where(m => !m.IsAvailable).Select(m => m.Name).ToList();
         if (unavailable.Any())
-            throw new BusinessRuleViolationException($"Các món sau đang hết: {string.Join(", ", unavailable)}");
+            throw new BusinessRuleViolationException(
+                string.Format(ValidationMessages.ORDER_ITEM_UNAVAILABLE, string.Join(", ", unavailable)));
 
         // Create order
         var order = new Order
@@ -130,7 +133,7 @@ public class OrderService
             ?? throw new EntityNotFoundException("Order", orderId);
 
         if (!Enum.TryParse<OrderStatus>(newStatus, true, out var parsedStatus))
-            throw new BusinessRuleViolationException($"Invalid order status: {newStatus}");
+            throw new BusinessRuleViolationException(ValidationMessages.ORDER_STATUS_INVALID);
 
         order.UpdateStatus(parsedStatus);
         await _uow.SaveChangesAsync();
@@ -143,10 +146,10 @@ public class OrderService
         return MapToResponse(order, menuItems);
     }
 
-    public async Task<OrderResponse?> GetByIdAsync(int orderId)
+    public async Task<OrderResponse> GetByIdAsync(int orderId)
     {
-        var order = await _uow.Orders.GetByIdAsync(orderId);
-        if (order == null) return null;
+        var order = await _uow.Orders.GetByIdAsync(orderId)
+            ?? throw new EntityNotFoundException("Order", orderId);
 
         var menuItems = await _uow.MenuItems.GetByIdsAsync(
             order.OrderDetails.Select(i => i.MenuItemId).ToList());

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using SmartDine.Domain.Enums;
 
 namespace SmartDine.Application.DTOs.Orders;
 
@@ -21,7 +22,7 @@ public class OrderDetailRequest
 
 public class UpdateOrderStatusRequest
 {
-    public string Status { get; set; } = "PENDING";
+    public string Status { get; set; } = nameof(OrderStatus.PENDING);
 }
 
 public class OrderResponse
@@ -34,7 +35,7 @@ public class OrderResponse
     public decimal TotalAmount { get; set; }
     public decimal DiscountAmount { get; set; }
     public decimal FinalAmount { get; set; }
-    public string Status { get; set; } = "PENDING";
+    public string Status { get; set; } = nameof(OrderStatus.PENDING);
     public string? SpecialInstructions { get; set; }
     public DateTime CreatedAt { get; set; }
 }
@@ -48,13 +49,13 @@ public class OrderDetailResponse
     public int Quantity { get; set; }
     public decimal Total => UnitPrice * Quantity;
     public string? Notes { get; set; }
-    public string Status { get; set; } = "WAITING";
+    public string Status { get; set; } = nameof(OrderDetailStatus.WAITING);
 }
 
 public class OrderStatusResponse
 {
     public int OrderId { get; set; }
-    public string Status { get; set; } = "PENDING";
+    public string Status { get; set; } = nameof(OrderStatus.PENDING);
     public List<OrderItemStatusResponse> Items { get; set; } = new();
 }
 
@@ -62,5 +63,5 @@ public class OrderItemStatusResponse
 {
     public string Name { get; set; } = string.Empty;
     public int Quantity { get; set; }
-    public string Status { get; set; } = "WAITING";
+    public string Status { get; set; } = nameof(OrderDetailStatus.WAITING);
 }

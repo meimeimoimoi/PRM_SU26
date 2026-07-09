@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using SmartDine.Domain.Constants;
 using SmartDine.Domain.Enums;
 using SmartDine.Domain.Exceptions;
 
@@ -56,7 +57,7 @@ public class Order : BaseEntity
         else
         {
             throw new BusinessRuleViolationException(
-                $"Cannot transition order from {Status} to {newStatus}");
+                string.Format(DomainMessages.ORDER_STATUS_TRANSITION_INVALID, Status, newStatus));
         }
     }
 }

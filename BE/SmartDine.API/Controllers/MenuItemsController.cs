@@ -1,8 +1,10 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using SmartDine.Application.Constants;
 using SmartDine.Application.DTOs.Common;
 using SmartDine.Application.DTOs.Menu;
 using SmartDine.Application.Services;
+using SmartDine.Domain.Constants;
 
 namespace SmartDine.API.Controllers;
 
@@ -32,8 +34,6 @@ public class MenuItemsController : ControllerBase
     public async Task<IActionResult> GetById(int id)
     {
         var result = await _menuService.GetByIdAsync(id);
-        if (result == null)
-            return NotFound(ApiResponse<object>.Fail("Không tìm thấy món ăn"));
         return Ok(ApiResponse<MenuItemResponse>.Ok(result));
     }
 
@@ -47,25 +47,25 @@ public class MenuItemsController : ControllerBase
 
     /// <summary>POST /api/v1/menu-items — Tạo món mới (Manager only)</summary>
     [HttpPost]
-    [Authorize(Roles = "MANAGER")]
+    [Authorize(Roles = Roles.Manager)]
     public async Task<IActionResult> Create([FromBody] CreateMenuItemRequest request)
     {
         var result = await _menuService.CreateAsync(request);
-        return Created("", ApiResponse<MenuItemCreatedResponse>.Ok(result, "Tạo món thành công"));
+        return Created("", ApiResponse<MenuItemCreatedResponse>.Ok(result, ValidationMessages.MENU_ITEM_CREATED_SUCCESS));
     }
 
     /// <summary>PUT /api/v1/menu-items/{id} — Cập nhật món (Manager only)</summary>
     [HttpPut("{id:int}")]
-    [Authorize(Roles = "MANAGER")]
+    [Authorize(Roles = Roles.Manager)]
     public async Task<IActionResult> Update(int id, [FromBody] UpdateMenuItemRequest request)
     {
         var result = await _menuService.UpdateAsync(id, request);
-        return Ok(ApiResponse<MenuItemResponse>.Ok(result, "Cập nhật thành công"));
+        return Ok(ApiResponse<MenuItemResponse>.Ok(result, ValidationMessages.MENU_ITEM_UPDATED_SUCCESS));
     }
 
     /// <summary>DELETE /api/v1/menu-items/{id} — Xóa món (Manager only)</summary>
     [HttpDelete("{id:int}")]
-    [Authorize(Roles = "MANAGER")]
+    [Authorize(Roles = Roles.Manager)]
     public async Task<IActionResult> Delete(int id)
     {
         await _menuService.DeleteAsync(id);
@@ -74,7 +74,7 @@ public class MenuItemsController : ControllerBase
 
     /// <summary>PATCH /api/v1/menu-items/{id}/availability — Toggle trạng thái</summary>
     [HttpPatch("{id:int}/availability")]
-    [Authorize(Roles = "MANAGER,CHEF")]
+    [Authorize(Roles = Roles.ManagerAndChef)]
     public async Task<IActionResult> ToggleAvailability(int id)
     {
         var result = await _menuService.ToggleAvailabilityAsync(id);

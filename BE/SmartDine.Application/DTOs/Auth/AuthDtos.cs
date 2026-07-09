@@ -1,3 +1,5 @@
+using SmartDine.Domain.Enums;
+
 namespace SmartDine.Application.DTOs.Auth;
 
 // ─────────────────────────────────────────────────────────────
@@ -149,7 +151,7 @@ public class GuestLoginResponse
     public int SessionId { get; set; }
     public int TableId { get; set; }
     public int TableNumber { get; set; }
-    public string Role { get; set; } = "GUEST";
+    public string Role { get; set; } = nameof(UserRole.GUEST);
 }
 
 // ─────────────────────────────────────────────────────────────

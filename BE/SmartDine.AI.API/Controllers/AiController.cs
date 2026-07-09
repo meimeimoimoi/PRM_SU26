@@ -3,6 +3,9 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using SmartDine.Application.Constants;
+using SmartDine.Application.DTOs.Common;
+using SmartDine.Domain.Enums;
 
 namespace SmartDine.AI.API.Controllers;
 
@@ -23,7 +26,7 @@ public class IntentResult
     public string Action { get; set; } = "general_chat";
 }
 
-public class ApiResponseWrapper<T>
+public class ServiceResponseWrapper<T>
 {
     [JsonPropertyName("success")]
     public bool Success { get; set; }
@@ -88,61 +91,50 @@ public class AiController : ControllerBase
     public async Task<IActionResult> Query([FromBody] QueryRequest request)
     {
         if (string.IsNullOrWhiteSpace(request.Prompt))
+            return BadRequest(ApiResponse<object>.Fail(ValidationMessages.AI_PROMPT_EMPTY));
+
+        // 1. Phân loại ý định của người dùng bằng Ollama
+        var intent = await ClassifyIntentAsync(request.Prompt);
+        _logger.LogInformation("Recognized intent action: {Action}", intent.Action);
+
+        string systemPrompt = "Bạn là trợ lý AI thông minh cho nhà hàng SmartDine. Hãy trả lời câu hỏi của khách hàng bằng tiếng Việt một cách tự nhiên và lịch sự.";
+        string contextData = "";
+
+        // 2. Lấy dữ liệu động dựa trên ý định
+        var authHeader = Request.Headers.Authorization.ToString();
+
+        if (intent.Action == "get_occupied_tables" || intent.Action == "get_available_tables")
         {
-            return BadRequest(new { success = false, message = "Prompt cannot be empty" });
+            var tables = await FetchDataAsync<List<TableDto>>($"{_tableApiUrl}/api/v1/tables", authHeader);
+            if (tables != null)
+            {
+                int total = tables.Count;
+                int occupied = tables.Count(t => t.Status.Equals(nameof(TableStatus.OCCUPIED), StringComparison.OrdinalIgnoreCase));
+                int available = tables.Count(t => t.Status.Equals(nameof(TableStatus.AVAILABLE), StringComparison.OrdinalIgnoreCase));
+                var occupiedList = string.Join(", ", tables.Where(t => t.Status.Equals(nameof(TableStatus.OCCUPIED), StringComparison.OrdinalIgnoreCase)).Select(t => $"Bàn {t.Number}"));
+                var availableList = string.Join(", ", tables.Where(t => t.Status.Equals(nameof(TableStatus.AVAILABLE), StringComparison.OrdinalIgnoreCase)).Select(t => $"Bàn {t.Number}"));
+
+                contextData = $"[Dữ liệu bàn ăn hiện tại từ hệ thống: Tổng số bàn={total}, Số bàn trống={available} (gồm: {availableList}), Số bàn có khách={occupied} (gồm: {occupiedList})]";
+            }
+        }
+        else if (intent.Action == "get_popular_items")
+        {
+            var popularItems = await FetchDataAsync<List<MenuItemDto>>($"{_menuApiUrl}/api/v1/menu-items/popular?count=5", authHeader);
+            if (popularItems != null)
+            {
+                var itemsText = string.Join("\n", popularItems.Select(i => $"- {i.Name} ({i.Category}): {i.Price:N0} VNĐ - {i.Description}"));
+                contextData = $"[Danh sách các món ăn phổ biến/bán chạy nhất hiện tại:\n{itemsText}]";
+            }
         }
 
-        try
+        // 3. Xây dựng prompt sinh câu trả lời cuối cùng
+        if (!string.IsNullOrEmpty(contextData))
         {
-            // 1. Phân loại ý định của người dùng bằng Ollama
-            var intent = await ClassifyIntentAsync(request.Prompt);
-            _logger.LogInformation("Recognized intent action: {Action}", intent.Action);
-
-            string systemPrompt = "Bạn là trợ lý AI thông minh cho nhà hàng SmartDine. Hãy trả lời câu hỏi của khách hàng bằng tiếng Việt một cách tự nhiên và lịch sự.";
-            string contextData = "";
-
-            // 2. Lấy dữ liệu động dựa trên ý định
-            var authHeader = Request.Headers.Authorization.ToString();
-            
-            if (intent.Action == "get_occupied_tables" || intent.Action == "get_available_tables")
-            {
-                var tables = await FetchDataAsync<List<TableDto>>($"{_tableApiUrl}/api/v1/tables", authHeader);
-                if (tables != null)
-                {
-                    int total = tables.Count;
-                    int occupied = tables.Count(t => t.Status.Equals("OCCUPIED", StringComparison.OrdinalIgnoreCase));
-                    int available = tables.Count(t => t.Status.Equals("AVAILABLE", StringComparison.OrdinalIgnoreCase));
-                    var occupiedList = string.Join(", ", tables.Where(t => t.Status.Equals("OCCUPIED", StringComparison.OrdinalIgnoreCase)).Select(t => $"Bàn {t.Number}"));
-                    var availableList = string.Join(", ", tables.Where(t => t.Status.Equals("AVAILABLE", StringComparison.OrdinalIgnoreCase)).Select(t => $"Bàn {t.Number}"));
-
-                    contextData = $"[Dữ liệu bàn ăn hiện tại từ hệ thống: Tổng số bàn={total}, Số bàn trống={available} (gồm: {availableList}), Số bàn có khách={occupied} (gồm: {occupiedList})]";
-                }
-            }
-            else if (intent.Action == "get_popular_items")
-            {
-                var popularItems = await FetchDataAsync<List<MenuItemDto>>($"{_menuApiUrl}/api/v1/menu-items/popular?count=5", authHeader);
-                if (popularItems != null)
-                {
-                    var itemsText = string.Join("\n", popularItems.Select(i => $"- {i.Name} ({i.Category}): {i.Price:N0} VNĐ - {i.Description}"));
-                    contextData = $"[Danh sách các món ăn phổ biến/bán chạy nhất hiện tại:\n{itemsText}]";
-                }
-            }
-
-            // 3. Xây dựng prompt sinh câu trả lời cuối cùng
-            var responsePrompt = request.Prompt;
-            if (!string.IsNullOrEmpty(contextData))
-            {
-                systemPrompt = "Bạn là trợ lý AI thông minh cho nhà hàng SmartDine. Dưới đây là dữ liệu thực tế từ hệ thống: " + contextData + ". Hãy trả lời câu hỏi của người dùng dựa trên thông tin thực tế này. Trả lời bằng tiếng Việt ngắn gọn, thân thiện.";
-            }
-
-            var answer = await CallOllamaChatAsync(systemPrompt, responsePrompt);
-            return Ok(new QueryResponse { Success = true, Answer = answer });
+            systemPrompt = "Bạn là trợ lý AI thông minh cho nhà hàng SmartDine. Dưới đây là dữ liệu thực tế từ hệ thống: " + contextData + ". Hãy trả lời câu hỏi của người dùng dựa trên thông tin thực tế này. Trả lời bằng tiếng Việt ngắn gọn, thân thiện.";
         }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error processing AI query");
-            return StatusCode(500, new QueryResponse { Success = false, Answer = "Xin lỗi, đã có lỗi xảy ra khi xử lý yêu cầu của bạn qua AI." });
-        }
+
+        var answer = await CallOllamaChatAsync(systemPrompt, request.Prompt);
+        return Ok(ApiResponse<QueryResponse>.Ok(new QueryResponse { Success = true, Answer = answer }));
     }
 
     private async Task<IntentResult> ClassifyIntentAsync(string userPrompt)
@@ -160,7 +152,7 @@ Chỉ trả về chuỗi JSON đại diện cho hành động, tuyệt đối kh
         try
         {
             var jsonResponse = await CallOllamaChatAsync(systemInstruction, userPrompt);
-            
+
             // Extract JSON from potential markdown blocks if LLM returns it wrapped in ```json
             var cleanJson = jsonResponse.Trim();
             if (cleanJson.StartsWith("```"))
@@ -194,7 +186,7 @@ Chỉ trả về chuỗi JSON đại diện cho hành động, tuyệt đối kh
             if (response.IsSuccessStatusCode)
             {
                 var content = await response.Content.ReadAsStringAsync();
-                var result = JsonSerializer.Deserialize<ApiResponseWrapper<T>>(content, new JsonSerializerOptions
+                var result = JsonSerializer.Deserialize<ServiceResponseWrapper<T>>(content, new JsonSerializerOptions
                 {
                     PropertyNameCaseInsensitive = true
                 });

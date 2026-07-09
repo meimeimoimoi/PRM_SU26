@@ -759,13 +759,11 @@ public class MenuServiceTests
     }
 
     [Fact]
-    public async Task GetById_NotFound_ReturnsNull()
+    public async Task GetById_NotFound_ThrowsEntityNotFoundException()
     {
         _menuRepoMock.Setup(r => r.GetByIdAsync(999)).ReturnsAsync((MenuItem?)null);
 
-        var result = await _menuService.GetByIdAsync(999);
-
-        Assert.Null(result);
+        await Assert.ThrowsAsync<EntityNotFoundException>(() => _menuService.GetByIdAsync(999));
     }
 
     [Fact]
@@ -831,7 +829,7 @@ public class MenuServiceTests
     // ═══════════════════════════════════════════════════════════════
 
     [Fact]
-    public async Task Delete_ThenGetById_ReturnsNull()
+    public async Task Delete_ThenGetById_ThrowsEntityNotFoundException()
     {
         var item = new MenuItem { Id = 1, Name = "Test" };
         _menuRepoMock.SetupSequence(r => r.GetByIdAsync(1))
@@ -839,9 +837,7 @@ public class MenuServiceTests
             .ReturnsAsync((MenuItem?)null); // After soft delete, global filter excludes it
 
         await _menuService.DeleteAsync(1);
-        var result = await _menuService.GetByIdAsync(1);
-
-        Assert.Null(result);
+        await Assert.ThrowsAsync<EntityNotFoundException>(() => _menuService.GetByIdAsync(1));
     }
 
     [Fact]

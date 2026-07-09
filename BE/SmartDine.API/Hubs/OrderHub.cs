@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
+using SmartDine.Domain.Constants;
 
 namespace SmartDine.API.Hubs;
 
@@ -28,7 +29,7 @@ public class OrderHub : Hub
     /// <summary>
     /// Tham gia nhóm nhà bếp (dành cho bếp và nhân viên).
     /// </summary>
-    [Authorize(Roles = "STAFF,CHEF,MANAGER")]
+    [Authorize(Roles = Roles.KitchenStaff)]
     public async Task JoinKitchenGroup()
     {
         await Groups.AddToGroupAsync(Context.ConnectionId, "KitchenGroup");
@@ -37,7 +38,7 @@ public class OrderHub : Hub
     /// <summary>
     /// Rời khỏi nhóm nhà bếp.
     /// </summary>
-    [Authorize(Roles = "STAFF,CHEF,MANAGER")]
+    [Authorize(Roles = Roles.KitchenStaff)]
     public async Task LeaveKitchenGroup()
     {
         await Groups.RemoveFromGroupAsync(Context.ConnectionId, "KitchenGroup");

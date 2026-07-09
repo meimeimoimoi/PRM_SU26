@@ -4,6 +4,7 @@ using System.Security.Cryptography;
 using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
 using SmartDine.Domain.Constants;
+using SmartDine.Domain.Enums;
 using SmartDine.Domain.Interfaces;
 
 namespace SmartDine.Infrastructure.Security;
@@ -88,7 +89,7 @@ public class JwtTokenService : IJwtTokenService
             new Claim(ClaimTypes.NameIdentifier, guestUniqueId),
             new Claim(JwtClaimTypes.SessionId, sessionId.ToString()),
             new Claim(ClaimTypes.Name, guestName),
-            new Claim(ClaimTypes.Role, "GUEST"),
+            new Claim(ClaimTypes.Role, nameof(UserRole.GUEST)),
         };
 
         var rsaKey = _rsaKeyService.GetRsaKey();

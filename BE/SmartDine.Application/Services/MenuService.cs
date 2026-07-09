@@ -329,10 +329,11 @@ public class MenuService
         return items.Select(MapToResponse).ToList();
     }
 
-    public async Task<MenuItemResponse?> GetByIdAsync(int id)
+    public async Task<MenuItemResponse> GetByIdAsync(int id)
     {
-        var item = await _uow.MenuItems.GetByIdAsync(id);
-        return item == null ? null : MapToResponse(item);
+        var item = await _uow.MenuItems.GetByIdAsync(id)
+            ?? throw new EntityNotFoundException("MenuItem", id);
+        return MapToResponse(item);
     }
 
     public async Task<MenuItemResponse> UpdateAsync(int id, UpdateMenuItemRequest request)

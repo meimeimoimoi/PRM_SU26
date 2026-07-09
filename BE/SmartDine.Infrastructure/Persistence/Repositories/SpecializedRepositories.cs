@@ -217,6 +217,17 @@ public class DiningSessionRepository : GenericRepository<DiningSession>, IDining
                     .Include(d => d.Customer)
                     .Include(d => d.Participants)
                     .FirstOrDefaultAsync(d => d.Id == id);
+
+    /// <summary>
+    /// Load đầy đủ session: Table + Customer + Participants + Orders.
+    /// Dùng trong create-intent: Participants → IDOR check; Orders → tính tổng hóa đơn.
+    /// </summary>
+    public async Task<DiningSession?> GetByIdWithParticipantsAndOrdersAsync(int id) =>
+        await _dbSet.Include(d => d.Table)
+                    .Include(d => d.Customer)
+                    .Include(d => d.Participants)
+                    .Include(d => d.Orders)
+                    .FirstOrDefaultAsync(d => d.Id == id);
 }
 
 public class CouponRepository : GenericRepository<CustomerCoupon>, ICouponRepository
@@ -235,8 +246,55 @@ public class PaymentRepository : GenericRepository<Payment>, IPaymentRepository
 {
     public PaymentRepository(SmartDineDbContext context) : base(context) { }
 
+    /// <summary>Backward-compat — lấy payment gắn với 1 Order cụ thể.</summary>
     public async Task<Payment?> GetByOrderIdAsync(int orderId) =>
         await _dbSet.FirstOrDefaultAsync(p => p.OrderId == orderId);
+
+    /// <summary>
+    /// Lấy orderCode duy nhất từ PostgreSQL sequence.
+    /// Sequence đảm bảo không bao giờ trùng dù nhiều request tạo payment cùng lúc.
+    /// Fallback về timestamp-based khi chạy InMemory (test): không cần sequence thật.
+    /// </summary>
+    public async Task<long> GetNextOrderCodeAsync()
+    {
+        if (_context.Database.IsInMemory())
+            return DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() % 9_999_999_999L;
+
+        var conn = _context.Database.GetDbConnection();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT nextval('payment_order_code_seq')";
+        if (conn.State != System.Data.ConnectionState.Open)
+            await conn.OpenAsync();
+        var result = await cmd.ExecuteScalarAsync();
+        return Convert.ToInt64(result);
+    }
+
+    /// <summary>
+    /// Trả về payments PENDING tạo trước thời điểm cutoff.
+    /// Background job dùng để detect payment hết hạn (PayOS link tồn tại 30 phút).
+    /// Include Session để job có thể revert trạng thái về ACTIVE ngay trong cùng loop.
+    /// </summary>
+    public async Task<IReadOnlyList<Payment>> GetPendingOlderThanAsync(DateTime cutoff) =>
+        await _dbSet.Include(p => p.Session)
+                    .Where(p => p.PaymentStatus == PaymentStatus.PENDING && p.CreatedAt < cutoff)
+                    .ToListAsync();
+
+    /// <summary>
+    /// Lấy payment mới nhất của 1 DiningSession.
+    /// Dùng khi create-intent: kiểm tra PENDING/SUCCESS trước khi tạo mới.
+    /// Sắp xếp DESC theo CreatedAt → lấy record mới nhất (có thể có nhiều FAILED).
+    /// </summary>
+    public async Task<Payment?> GetBySessionIdAsync(int sessionId) =>
+        await _dbSet.Where(p => p.SessionId == sessionId)
+                    .OrderByDescending(p => p.CreatedAt)
+                    .FirstOrDefaultAsync();
+
+    /// <summary>
+    /// Tìm payment bằng ExternalRef (PayOS orderCode dạng string).
+    /// Key dùng để match webhook gọi về với Payment record đã tạo.
+    /// </summary>
+    public async Task<Payment?> GetByExternalRefAsync(string externalRef) =>
+        await _dbSet.FirstOrDefaultAsync(p => p.ExternalRef == externalRef);
 
     public async Task<IReadOnlyList<Payment>> GetByDateRangeAsync(DateTime start, DateTime end) =>
         await _dbSet.Where(p => p.PaidAt >= start && p.PaidAt <= end)

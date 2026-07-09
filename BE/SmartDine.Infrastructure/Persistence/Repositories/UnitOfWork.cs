@@ -24,6 +24,7 @@ public class UnitOfWork : IUnitOfWork
     public IRepository<RecommendationLog> RecommendationLogs { get; }
     public IRepository<SessionParticipant> SessionParticipants { get; }
     public ICouponRepository Coupons { get; }
+    public IRepository<LoyaltyTransaction> LoyaltyTransactions { get; }
 
     public UnitOfWork(SmartDineDbContext context)
     {
@@ -45,6 +46,7 @@ public class UnitOfWork : IUnitOfWork
         RecommendationLogs = new GenericRepository<RecommendationLog>(context);
         SessionParticipants = new GenericRepository<SessionParticipant>(context);
         Coupons = new CouponRepository(context);
+        LoyaltyTransactions = new GenericRepository<LoyaltyTransaction>(context);
     }
 
     public async Task<int> SaveChangesAsync(CancellationToken ct = default) =>
