@@ -136,6 +136,22 @@ public class OrderService
             throw new BusinessRuleViolationException(ValidationMessages.ORDER_STATUS_INVALID);
 
         order.UpdateStatus(parsedStatus);
+
+        var detailStatus = parsedStatus switch
+        {
+            OrderStatus.COOKING   => OrderDetailStatus.DOING,
+            OrderStatus.READY     => OrderDetailStatus.DONE,
+            OrderStatus.COMPLETED => OrderDetailStatus.SERVED,
+            OrderStatus.CANCELLED => OrderDetailStatus.CANCELLED,
+            _                     => (OrderDetailStatus?)null
+        };
+
+        if (detailStatus.HasValue)
+        {
+            foreach (var detail in order.OrderDetails.Where(d => d.Status != OrderDetailStatus.CANCELLED))
+                detail.Status = detailStatus.Value;
+        }
+
         await _uow.SaveChangesAsync();
 
         // Gửi thông báo thời gian thực đến khách hàng tại bàn ăn

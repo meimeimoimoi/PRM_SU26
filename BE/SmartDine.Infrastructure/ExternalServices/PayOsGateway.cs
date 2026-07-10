@@ -53,6 +53,10 @@ public class PayOsGateway : IPaymentGateway
     public async Task<GatewayCreatePaymentResult> CreatePaymentLinkAsync(
         long orderCode, int amount, string description, string returnUrl, string cancelUrl)
     {
+        // PayOS yêu cầu signature = HMAC-SHA256 của các field chính, sắp xếp theo alphabet
+        var dataToSign = $"amount={amount}&cancelUrl={cancelUrl}&description={description}&orderCode={orderCode}&returnUrl={returnUrl}";
+        var signature = ComputeHmacSha256(dataToSign, _checksumKey);
+
         var body = new
         {
             orderCode,
@@ -60,6 +64,7 @@ public class PayOsGateway : IPaymentGateway
             description,
             cancelUrl,
             returnUrl,
+            signature,
             items = new[]
             {
                 new { name = "Hóa đơn", quantity = 1, price = amount }

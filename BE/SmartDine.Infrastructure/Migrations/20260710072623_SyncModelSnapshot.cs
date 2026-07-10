@@ -80,7 +80,7 @@ namespace SmartDine.Infrastructure.Migrations
                 table: "payments",
                 column: "ExternalRef",
                 unique: true,
-                filter: "external_ref IS NOT NULL");
+                filter: "\"ExternalRef\" IS NOT NULL");
 
             migrationBuilder.CreateIndex(
                 name: "IX_payments_InvoiceId",
