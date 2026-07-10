@@ -26,7 +26,7 @@ static bool resolve_graph_target(const char *target, double *x, double *y, enum 
 #define TIME_STEP 64
 
 // Robot parameters
-#define MAX_SPEED 5.5
+#define MAX_SPEED 10.5
 #define MAX_ACCEL 0.5
 #define MAX_OMEGA 2.0
 #define MAX_OMEGA_ACCEL 1.0
@@ -1157,13 +1157,8 @@ double evaluate_trajectory(double v, double omega, double robot_x, double robot_
     double heading_cost = heading_err / M_PI;
     double vel_cost = 1.0 - (v / MAX_SPEED);
 
-    // Soft clearance cost — steep penalty below OBSTACLE_MARGIN, normal above
-    double clearance_cost;
-    if (clearance < OBSTACLE_MARGIN) {
-        clearance_cost = 1.0 + 2.0 * (1.0 - clearance / OBSTACLE_MARGIN);
-    } else {
-        clearance_cost = 1.0 - (clearance / LIDAR_MAX_RANGE);
-    }
+    // Smooth clearance cost — no hard threshold, continuous gradient
+    double clearance_cost = 1.0 / (1.0 + 3.0 * clearance / OBSTACLE_MARGIN);
 
     double end_dist = hypot(goal_x - x, goal_y - y);
     double dist_cost = end_dist / 3.0;
@@ -1191,13 +1186,13 @@ double evaluate_trajectory(double v, double omega, double robot_x, double robot_
         w_smooth = 0.10;
     }
 
-    // When heading is well-aligned and far from goal, favor forward progress
-    if (!near_table && heading_err < 0.35 && dist_to_final_goal > 3.0) {
-        w_clearance = 0.10;
-        w_dist = 0.40;
+    // When heading is roughly aligned and far from goal, favor forward progress
+    if (!near_table && heading_err < 0.50 && dist_to_final_goal > 2.0) {
         w_heading = 0.15;
-        w_vel = 0.25;
-        w_smooth = 0.10;
+        w_clearance = 0.05;
+        w_vel = 0.20;
+        w_dist = 0.60;
+        w_smooth = 0.05;
     }
 
     return w_heading * heading_cost + w_clearance * clearance_cost
@@ -1287,6 +1282,11 @@ void dwa_control(double robot_x, double robot_y, double robot_theta,
     // If the chosen action is almost pure rotation, do not force forward motion.
     if (fabs(best_v) < 0.03) {
         best_v = 0.0;
+    }
+
+    // Forward-creep override: if stalled while roughly facing goal, nudge forward
+    if (best_v < 0.01 && fabs(h_err) < 1.0) {
+        best_v = 0.06;
     }
 
     // Post-filter: clamp omega change to OMEGA_SMOOTH_MAX per step
