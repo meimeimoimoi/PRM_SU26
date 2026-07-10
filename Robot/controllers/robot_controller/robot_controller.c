@@ -1158,7 +1158,7 @@ double evaluate_trajectory(double v, double omega, double robot_x, double robot_
     // Soft clearance cost — steep penalty below OBSTACLE_MARGIN, normal above
     double clearance_cost;
     if (clearance < OBSTACLE_MARGIN) {
-        clearance_cost = 1.0 + 3.0 * (1.0 - clearance / OBSTACLE_MARGIN);
+        clearance_cost = 1.0 + 2.0 * (1.0 - clearance / OBSTACLE_MARGIN);
     } else {
         clearance_cost = 1.0 - (clearance / LIDAR_MAX_RANGE);
     }
@@ -1189,6 +1189,12 @@ double evaluate_trajectory(double v, double omega, double robot_x, double robot_
         w_smooth = 0.10;
     }
 
+    // When heading is well-aligned and far from goal, favor forward progress
+    if (!near_table && heading_err < 0.26 && dist_to_final_goal > 3.0) {
+        w_clearance = 0.15;
+        w_dist = 0.35;
+    }
+
     return w_heading * heading_cost + w_clearance * clearance_cost
          + w_vel * vel_cost + w_dist * dist_cost + w_smooth * smooth_cost;
 }
@@ -1198,7 +1204,7 @@ void dwa_control(double robot_x, double robot_y, double robot_theta,
                  double *out_v, double *out_omega,
                  double dist_to_final_goal, bool near_table) {
     double min_v = fmax(0.0, current_v - MAX_ACCEL * TIME_STEP / 1000.0);
-    double max_v = fmin(MAX_SPEED, current_v + MAX_ACCEL * TIME_STEP / 1000.0);
+    double max_v = fmin(MAX_SPEED, current_v + MAX_ACCEL * PREDICT_TIME);
 
     double dx = goal_x - robot_x;
     double dy = goal_y - robot_y;
@@ -1217,7 +1223,7 @@ void dwa_control(double robot_x, double robot_y, double robot_theta,
     }
 
     double min_omega = fmax(-MAX_OMEGA, current_omega - MAX_OMEGA_ACCEL * TIME_STEP / 1000.0);
-    double max_omega = fmin(MAX_OMEGA, current_omega + MAX_OMEGA_ACCEL * TIME_STEP / 1000.0);
+    double max_omega = fmin(MAX_OMEGA, current_omega + MAX_OMEGA_ACCEL * PREDICT_TIME);
 
     double best_cost = INFINITY;
     double best_v = 0.0, best_omega = 0.0;
@@ -1287,12 +1293,16 @@ void dwa_control(double robot_x, double robot_y, double robot_theta,
     if ((dwa_debug_tick++ % 10) == 0) {
         int gmx, gmy;
         world_to_map(goal_x, goal_y, &gmx, &gmy);
-        printf("DWA debug: robot=(%.2f,%.2f,th=%.2f) goal=(%.2f,%.2f) map_goal=(%d,%d) v_range=[%.2f,%.2f] w_range=[%.2f,%.2f] valid=%d blocked=%d best=(%.2f,%.2f) cost=%.3f dist=%.3f near_table=%d\n",
+        int cmx, cmy;
+        world_to_map(robot_x, robot_y, &cmx, &cmy);
+        double clearance_robot = dist_to_obstacle[cmy][cmx] * MAP_RESOLUTION;
+        printf("DWA debug: robot=(%.2f,%.2f,th=%.2f) goal=(%.2f,%.2f) map_goal=(%d,%d) v_range=[%.2f,%.2f] w_range=[%.2f,%.2f] valid=%d blocked=%d best=(%.2f,%.2f) cost=%.3f dist=%.3f h_err=%.1f clear=%.2f near_table=%d\n",
                robot_x, robot_y, robot_theta,
                goal_x, goal_y, gmx, gmy,
                min_v, max_v, min_omega, max_omega,
                valid_samples, collision_samples,
                best_v, best_omega, best_cost, dist_to_final_goal,
+               h_err * 180.0 / M_PI, clearance_robot,
                near_table ? 1 : 0);
     }
 
@@ -1522,6 +1532,13 @@ int main(int argc, char **argv) {
             // Keep encoder history updated so fallback works if needed
             last_left = wb_position_sensor_get_value(left_enc);
             last_right = wb_position_sensor_get_value(right_enc);
+        }
+
+        // Log state transitions
+        static enum RobotState prev_state = STATE_IDLE;
+        if (robot_state != prev_state) {
+            printf("STATE: %s -> %s\n", get_state_string(prev_state), get_state_string(robot_state));
+            prev_state = robot_state;
         }
 
         // 1. Đọc lệnh từ UI gửi qua command.txt
@@ -1826,10 +1843,24 @@ int main(int argc, char **argv) {
 
         static int pc = 0;
         if (pc++ % 15 == 0) {
-            printf("Pos: (%.2f,%.2f) th=%.2f v=%.2f w=%.2f goal=(%.2f,%.2f) final_d=%.3f %s\n",
-                   robot_x, robot_y, robot_theta, current_v, current_omega,
+            double dx_g = local_goal_x - robot_x;
+            double dy_g = local_goal_y - robot_y;
+            double h_err_pos = atan2(dy_g, dx_g) - robot_theta;
+            while (h_err_pos > M_PI) h_err_pos -= 2 * M_PI;
+            while (h_err_pos < -M_PI) h_err_pos += 2 * M_PI;
+            char wp_info[48] = "";
+            if (has_path && path_idx < path_len && path_is_graph) {
+                int nidx = global_path[path_idx].x;
+                if (nidx >= 0 && nidx < num_graph_nodes) {
+                    double d_wp = hypot(graph_nodes[nidx].x - robot_x, graph_nodes[nidx].y - robot_y);
+                    snprintf(wp_info, sizeof(wp_info), " wp=%d/%d d_wp=%.2f", path_idx, path_len - 1, d_wp);
+                }
+            }
+            printf("Pos: (%.2f,%.2f) th=%.2f v=%.2f w=%.2f vl=%.2f vr=%.2f goal=(%.2f,%.2f) final_d=%.3f h_err=%.1f%s%s\n",
+                   robot_x, robot_y, robot_theta, current_v, current_omega, vl, vr,
                    local_goal_x, local_goal_y, dist_to_final,
-                   near_table ? "[TABLE]" : "");
+                   h_err_pos * 180.0 / M_PI, wp_info,
+                   near_table ? " [TABLE]" : "");
         }
     }
     wb_robot_cleanup();

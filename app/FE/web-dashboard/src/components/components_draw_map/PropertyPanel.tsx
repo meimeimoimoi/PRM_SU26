@@ -1,6 +1,8 @@
+import { useCallback, useEffect, useState } from 'react';
 import { Button, Card, Empty, Form, Input, InputNumber, Select, Tabs, Typography } from 'antd';
 import type { TabsProps } from 'antd';
-import { Trash2 } from 'lucide-react';
+import { Trash2, RotateCw } from 'lucide-react';
+import type { GraphNode } from '@/types/graph';
 import type { MapObject, MapObjectType } from '@/types/map';
 import { useMapStore } from '@/store/mapStore';
 import { RobotConsole } from './RobotConsole';
@@ -80,19 +82,81 @@ function InspectorForm({ selectedObject, onUpdate, onDelete }: InspectorFormProp
   );
 }
 
+function StartNodeInspector({ node }: { node: GraphNode }) {
+  const updateGraphNode = useMapStore((s) => s.updateGraphNode);
+  const removeGraphNode = useMapStore((s) => s.removeGraphNode);
+  const [thetaDeg, setThetaDeg] = useState(((node.theta ?? 0) * 180) / Math.PI);
+
+  useEffect(() => {
+    setThetaDeg(((node.theta ?? 0) * 180) / Math.PI);
+  }, [node.theta, node.id]);
+
+  const commitTheta = useCallback(
+    (deg: number | null) => {
+      if (deg === null) return;
+      const clamped = ((deg % 360) + 360) % 360;
+      setThetaDeg(clamped);
+      updateGraphNode(node.id, { theta: (clamped * Math.PI) / 180 });
+    },
+    [node.id, updateGraphNode],
+  );
+
+  return (
+    <Card title="Start Position" className="panel-card" extra={
+      <Button danger size="small" icon={<Trash2 size={14} />} onClick={() => removeGraphNode(node.id)}>Delete</Button>
+    }>
+      <Form layout="vertical">
+        <div className="property-grid">
+          <Form.Item label="X (m)" style={{ marginBottom: 8 }}>
+            <InputNumber className="full-width-control" value={node.x} step={0.1} disabled />
+          </Form.Item>
+          <Form.Item label="Y (m)" style={{ marginBottom: 8 }}>
+            <InputNumber className="full-width-control" value={node.y} step={0.1} disabled />
+          </Form.Item>
+        </div>
+        <Form.Item label="Heading θ (degrees)" style={{ marginBottom: 4 }}>
+          <InputNumber
+            className="full-width-control"
+            value={thetaDeg}
+            min={0}
+            max={360}
+            step={1}
+            formatter={(val) => val !== undefined ? `${Number(val).toFixed(1)}°` : ''}
+            parser={(val) => parseFloat(val?.replace('°', '') || '0')}
+            addonAfter={<RotateCw size={14} />}
+            onChange={commitTheta}
+            onStep={(_val, info) => {
+              if (info.type === 'up') commitTheta(((thetaDeg + 1) % 360 + 360) % 360);
+              if (info.type === 'down') commitTheta(((thetaDeg - 1) % 360 + 360) % 360);
+            }}
+          />
+        </Form.Item>
+        <Typography.Text type="secondary" style={{ fontSize: 11 }}>
+          0° = East, 90° = North, {thetaDeg.toFixed(1)}° currently
+        </Typography.Text>
+      </Form>
+    </Card>
+  );
+}
+
 export function PropertyPanel() {
   const objects = useMapStore((s) => s.objects);
   const selectedObjectId = useMapStore((s) => s.selectedObjectId);
   const updateObject = useMapStore((s) => s.updateObject);
   const removeObject = useMapStore((s) => s.removeObject);
   const setSelectedObject = useMapStore((s) => s.setSelectedObject);
+  const graphNodes = useMapStore((s) => s.graphNodes);
+  const selectedGraphNodeId = useMapStore((s) => s.selectedGraphNodeId);
   const selectedObject = objects.find((o) => o.id === selectedObjectId);
+  const selectedGraphNode = graphNodes.find((n) => n.id === selectedGraphNodeId);
 
   const tabItems: TabsProps['items'] = [
     {
       key: 'inspector',
       label: 'Inspector',
-      children: <InspectorForm selectedObject={selectedObject} onUpdate={updateObject} onDelete={removeObject} />,
+      children: selectedGraphNode?.type === 'robotStart'
+        ? <StartNodeInspector node={selectedGraphNode} />
+        : <InspectorForm selectedObject={selectedObject} onUpdate={updateObject} onDelete={removeObject} />,
     },
     {
       key: 'console',

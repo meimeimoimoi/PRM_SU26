@@ -1,1 +1,1 @@
-NAV_TO_TABLE delivery-table-103 NONE
+NONE NONE NONE

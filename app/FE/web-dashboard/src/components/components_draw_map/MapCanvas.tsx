@@ -606,7 +606,8 @@ export function MapCanvas() {
     startDeliveryOffsetY?: number;
     nodeStartX?: number;
     nodeStartY?: number;
-    kind: 'object' | 'node' | null;
+    nodeStartTheta?: number;
+    kind: 'object' | 'node' | 'theta' | null;
   }>({
     id: null,
     offsetX: 0,
@@ -622,6 +623,7 @@ export function MapCanvas() {
     startDeliveryOffsetY: 0,
     nodeStartX: 0,
     nodeStartY: 0,
+    nodeStartTheta: 0,
     kind: null,
   });
 
@@ -782,6 +784,22 @@ export function MapCanvas() {
           return;
         }
 
+        if (dragState.kind === 'theta') {
+          const thetaNode = graphNodes.find(n => n.id === dragState.id);
+          if (!thetaNode) return;
+          const px = worldToPixel(thetaNode.x, thetaNode.y, floorSize, resolution);
+          const dx = canvasX - px.x;
+          const dy = canvasY - px.y;
+          let theta = -Math.atan2(dy, dx);
+          theta = ((theta % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+          if (e.shiftKey) {
+            const step = Math.PI / 12;
+            theta = Math.round(theta / step) * step;
+          }
+          updateGraphNode(dragState.id, { theta });
+          return;
+        }
+
         if (!obj) return;
 
         // Xử lý điểm giao hàng
@@ -917,6 +935,7 @@ export function MapCanvas() {
       startDeliveryOffsetY: 0,
       nodeStartX: 0,
       nodeStartY: 0,
+      nodeStartTheta: 0,
       kind: null,
     });
   }, []);
@@ -1330,6 +1349,209 @@ export function MapCanvas() {
                         ? <BatteryCharging size={12} color="white" />
                         : <Route size={12} color="white" />;
 
+            if (node.type === 'robotStart') {
+              const thetaRad = node.theta ?? 0;
+              const thetaDeg = -(thetaRad * 180) / Math.PI;
+              const headingRad = -thetaRad;
+              const rayLen = 50;
+              const rayEndX = pos.x + rayLen * Math.cos(headingRad);
+              const rayEndY = pos.y + rayLen * Math.sin(headingRad);
+              const ringR = 24;
+              const hdlAngle = headingRad;
+              const hdlX = pos.x + ringR * Math.cos(hdlAngle);
+              const hdlY = pos.y + ringR * Math.sin(hdlAngle);
+              return (
+                <React.Fragment key={node.id}>
+                  {/* Projection ray */}
+                  {(isSelected || hoveredNodeId === node.id) && (
+                    <svg
+                      style={{
+                        position: 'absolute', left: 0, top: 0,
+                        width: '100%', height: '100%',
+                        pointerEvents: 'none', zIndex: 80,
+                        overflow: 'visible',
+                      }}
+                    >
+                      <line
+                        x1={pos.x} y1={pos.y}
+                        x2={rayEndX} y2={rayEndY}
+                        stroke="#52c41a" strokeWidth={2}
+                        strokeDasharray="5 4" opacity={0.5}
+                        strokeLinecap="round"
+                      />
+                      <circle cx={rayEndX} cy={rayEndY} r={3} fill="#52c41a" opacity={0.35} />
+                    </svg>
+                  )}
+                  {/* Rotation ring */}
+                  {isSelected && (
+                    <div
+                      style={{
+                        position: 'absolute',
+                        left: pos.x - ringR,
+                        top: pos.y - ringR,
+                        width: ringR * 2,
+                        height: ringR * 2,
+                        borderRadius: '50%',
+                        border: '2px dashed #52c41a66',
+                        pointerEvents: 'none',
+                        zIndex: 88,
+                      }}
+                    />
+                  )}
+                  {/* Rotation handle */}
+                  {isSelected && (
+                    <div
+                      onPointerDown={(ev) => {
+                        if (ev.button !== 0) return;
+                        ev.stopPropagation();
+                        ev.preventDefault();
+                        setDragState({
+                          id: node.id,
+                          offsetX: 0, offsetY: 0,
+                          startX: 0, startY: 0,
+                          startWidth: 0, startHeight: 0,
+                          handle: null,
+                          initialRotation: 0, startAngle: 0,
+                          startDeliveryOffsetX: 0, startDeliveryOffsetY: 0,
+                          nodeStartX: 0, nodeStartY: 0,
+                          nodeStartTheta: thetaRad,
+                          kind: 'theta',
+                        });
+                        (ev.currentTarget as HTMLElement).setPointerCapture(ev.pointerId);
+                      }}
+                      style={{
+                        position: 'absolute',
+                        left: hdlX - 7,
+                        top: hdlY - 7,
+                        width: 14,
+                        height: 14,
+                        borderRadius: '50%',
+                        background: '#52c41a',
+                        border: '2.5px solid white',
+                        cursor: 'grab',
+                        zIndex: 95,
+                        boxShadow: '0 2px 6px rgba(0,0,0,0.3)',
+                        transition: 'transform 0.12s ease',
+                      }}
+                      title="Drag to rotate start heading"
+                    />
+                  )}
+                  {/* Robot icon */}
+                  <div
+                    onMouseEnter={() => setHoveredNodeId(node.id)}
+                    onMouseLeave={() => setHoveredNodeId(null)}
+                    onClick={(ev) => {
+                      ev.stopPropagation();
+                      if (selectedTool === 'edge') {
+                        if (!edgeDraftFromNodeId) {
+                          setEdgeDraftFromNodeId(node.id);
+                          setSelectedGraphNode(node.id);
+                        } else if (edgeDraftFromNodeId !== node.id) {
+                          graphEdgeCounter++;
+                          const from = graphNodes.find((n) => n.id === edgeDraftFromNodeId);
+                          const weight = from ? Math.hypot(node.x - from.x, node.y - from.y) : 1;
+                          addGraphEdge({
+                            id: `edge-${graphEdgeCounter}`,
+                            from: edgeDraftFromNodeId,
+                            to: node.id,
+                            bidirectional: true,
+                            weight,
+                          });
+                          setEdgeDraftFromNodeId(null);
+                        } else {
+                          setEdgeDraftFromNodeId(null);
+                        }
+                        return;
+                      }
+                      setSelectedGraphNode(node.id);
+                      setSelectedObject(null);
+                    }}
+                    onPointerDown={(ev) => {
+                      if (ev.button !== 0) return;
+                      if (selectedTool === 'edge') return;
+                      ev.stopPropagation();
+                      const rect = containerRef.current?.getBoundingClientRect();
+                      if (!rect) return;
+                      const canvasX = (ev.clientX - rect.left - pan.x) / zoom;
+                      const canvasY = (ev.clientY - rect.top - pan.y) / zoom;
+                      const pointerWorld = pixelToWorld(canvasX, canvasY, floorSize, resolution);
+                      setDragState({
+                        id: node.id,
+                        offsetX: pointerWorld.x - node.x,
+                        offsetY: pointerWorld.y - node.y,
+                        startX: canvasX,
+                        startY: canvasY,
+                        startWidth: 0,
+                        startHeight: 0,
+                        handle: null,
+                        initialRotation: 0,
+                        startAngle: 0,
+                        startDeliveryOffsetX: 0,
+                        startDeliveryOffsetY: 0,
+                        nodeStartX: node.x,
+                        nodeStartY: node.y,
+                        kind: 'node',
+                      });
+                      setSelectedGraphNode(node.id);
+                      setSelectedObject(null);
+                      (ev.currentTarget as HTMLElement).setPointerCapture(ev.pointerId);
+                    }}
+                    onContextMenu={(ev) => {
+                      ev.preventDefault();
+                      ev.stopPropagation();
+                      removeGraphNode(node.id);
+                    }}
+                    style={{
+                      position: 'absolute',
+                      left: pos.x - 18,
+                      top: pos.y - 18,
+                      width: 36,
+                      height: 36,
+                      zIndex: 90,
+                      transform: `rotate(${thetaDeg}deg)`,
+                      transformOrigin: 'center center',
+                      cursor: 'pointer',
+                      filter: isSelected
+                        ? 'drop-shadow(0 0 5px #52c41a88)'
+                        : hoveredNodeId === node.id
+                          ? 'drop-shadow(0 0 3px #52c41a55)'
+                          : undefined,
+                      transition: 'filter 0.15s ease-out',
+                    }}
+                    title={`Start (θ=${(thetaRad * 180 / Math.PI).toFixed(1)}°)`}
+                  >
+                    <svg width="36" height="36" viewBox="0 0 36 36">
+                      <circle cx="18" cy="18" r="18" fill="#52c41a" />
+                      <path
+                        d="M 26 18 L 10 26 L 14 18 L 10 10 Z"
+                        fill="white" opacity="0.9"
+                      />
+                    </svg>
+                  </div>
+                  {/* Label */}
+                  <span
+                    style={{
+                      position: 'absolute',
+                      top: pos.y + 20,
+                      left: pos.x,
+                      transform: 'translateX(-50%)',
+                      fontSize: '10px',
+                      fontWeight: 700,
+                      color: '#1f1f1f',
+                      whiteSpace: 'nowrap',
+                      background: 'rgba(255,255,255,0.9)',
+                      padding: '0 4px',
+                      borderRadius: '4px',
+                      pointerEvents: 'none',
+                      zIndex: 90,
+                    }}
+                  >
+                    Start
+                  </span>
+                </React.Fragment>
+              );
+            }
+
             return (
               <div
                 key={node.id}
@@ -1354,7 +1576,6 @@ export function MapCanvas() {
                       });
                       setEdgeDraftFromNodeId(null);
                     } else {
-                      // Click lại chính node đang chọn → huỷ draft
                       setEdgeDraftFromNodeId(null);
                     }
                     return;
@@ -1364,7 +1585,6 @@ export function MapCanvas() {
                 }}
                 onPointerDown={(ev) => {
                   if (ev.button !== 0) return;
-                  // Khi đang ở chế độ edge, không bắt drag – để onClick xử lý kết nối
                   if (selectedTool === 'edge') return;
                   ev.stopPropagation();
                   const rect = containerRef.current?.getBoundingClientRect();
@@ -1439,17 +1659,15 @@ export function MapCanvas() {
                     pointerEvents: 'none',
                   }}
                 >
-                  {node.type === 'robotStart'
-                    ? 'Start'
-                    : node.type === 'table'
-                      ? node.name
-                      : node.type === 'delivery'
-                        ? 'Delivery'
-                        : node.type === 'kitchen'
-                          ? 'Kitchen'
-                          : node.type === 'charging'
-                            ? 'Charging'
-                            : 'Waypoint'}
+                  {node.type === 'table'
+                    ? node.name
+                    : node.type === 'delivery'
+                      ? 'Delivery'
+                      : node.type === 'kitchen'
+                        ? 'Kitchen'
+                        : node.type === 'charging'
+                          ? 'Charging'
+                          : 'Waypoint'}
                 </span>
               </div>
             );
