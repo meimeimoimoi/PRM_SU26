@@ -258,6 +258,20 @@ app.post('/api/maps', (req, res) => {
     console.log(`  [OBJ] ${o.type} canvas=(${Math.round(o.x)},${Math.round(o.y)}) size=${Math.round(o.width)}x${Math.round(o.height)}px world=(${wx},${wy}) ${overlap ? '⚠️ ĐÈ LÊN ROBOT START!' : 'ok'}`);
   });
 
+  // === UI draw map summary ===
+  const typeCounts = {};
+  objects.forEach(o => { typeCounts[o.type] = (typeCounts[o.type] || 0) + 1; });
+  console.log(`  [DRAW] Object counts: ${Object.entries(typeCounts).map(([t, c]) => `${t}=${c}`).join(', ')}`);
+  objects.forEach((o, i) => {
+    const centerX = o.x + o.width / 2;
+    const centerY = o.y + o.height / 2;
+    const wx = ((centerX - mapCx) * resolution).toFixed(2);
+    const wy = ((mapCx - centerY) * resolution).toFixed(2);
+    const rot = o.rotation ? ` rot=${o.rotation}°` : '';
+    console.log(`  [DRAW] [${i}] ${o.type} canvas=(${Math.round(o.x)},${Math.round(o.y)}) size=${Math.round(o.width)}x${Math.round(o.height)}${rot} world=(${wx},${wy})`);
+  });
+  console.log(`  [DRAW] Map canvas: ${mapPx}x${mapPx}px, resolution=${resolution}m/px, floor=${floorSize}m`);
+
 
   if (process.env.DEBUG_FULL_PAYLOAD === 'true') {
     const logDir = path.join(__dirname, 'logs');

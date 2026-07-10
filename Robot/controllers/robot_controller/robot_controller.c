@@ -1125,24 +1125,26 @@ double evaluate_trajectory(double v, double omega, double robot_x, double robot_
     if (collision) return 1e6;
 
     // Clearance via distance transform — single lookup per sample point
-    double clearance = LIDAR_MAX_RANGE;
+    double clearance_min = LIDAR_MAX_RANGE;
+    double clearance_sum = 0.0;
     int steps_c = (int)(PREDICT_TIME / DT);
     double cx_c = robot_x, cy_c = robot_y, th_c = robot_theta;
     for (int sc = 0; sc <= steps_c; sc++) {
         int mx, my;
         world_to_map(cx_c, cy_c, &mx, &my);
         double d = dist_to_obstacle[my][mx] * MAP_RESOLUTION;
-        if (d < clearance) clearance = d;
+        if (d < clearance_min) clearance_min = d;
+        clearance_sum += d;
         th_c += omega * DT;
         cx_c += v * cos(th_c) * DT;
         cy_c += v * sin(th_c) * DT;
     }
+    double clearance = clearance_sum / (steps_c + 1);
 
-    // Hard reject only at actual collision distance (3cm)
-    // For near-table, allow even closer approach
+    // Hard reject only when min clearance below collision distance (3cm)
     double hard_min = 0.03;
     if (near_table && dist_to_final_goal < 0.5) hard_min = 0.01;
-    if (clearance < hard_min && fabs(v) > 0.01) return 1e6;
+    if (clearance_min < hard_min && fabs(v) > 0.01) return 1e6;
 
     // Goal heading cost
     double dx_goal = goal_x - x;
@@ -1190,9 +1192,12 @@ double evaluate_trajectory(double v, double omega, double robot_x, double robot_
     }
 
     // When heading is well-aligned and far from goal, favor forward progress
-    if (!near_table && heading_err < 0.26 && dist_to_final_goal > 3.0) {
-        w_clearance = 0.15;
-        w_dist = 0.35;
+    if (!near_table && heading_err < 0.35 && dist_to_final_goal > 3.0) {
+        w_clearance = 0.10;
+        w_dist = 0.40;
+        w_heading = 0.15;
+        w_vel = 0.25;
+        w_smooth = 0.10;
     }
 
     return w_heading * heading_cost + w_clearance * clearance_cost
