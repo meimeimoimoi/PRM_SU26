@@ -86,6 +86,27 @@ public class UserRepository : GenericRepository<User>, IUserRepository
 
     public async Task<bool> ExistsAsync(string email) =>
         await _dbSet.AnyAsync(u => u.Email == email);
+
+    public async Task<(IReadOnlyList<User> Items, int TotalCount)> GetPagedFilteredAsync(
+        string? role, bool? isActive, int page, int pageSize)
+    {
+        var query = _dbSet.AsQueryable();
+
+        if (!string.IsNullOrEmpty(role) && Enum.TryParse<UserRole>(role, true, out var parsedRole))
+            query = query.Where(u => u.Role == parsedRole);
+
+        if (isActive.HasValue)
+            query = query.Where(u => u.IsActive == isActive.Value);
+
+        var totalCount = await query.CountAsync();
+
+        var items = await query.OrderBy(u => u.FullName)
+                               .Skip((page - 1) * pageSize)
+                               .Take(pageSize)
+                               .ToListAsync();
+
+        return (items, totalCount);
+    }
 }
 
 public class CustomerRepository : GenericRepository<Customer>, ICustomerRepository
@@ -297,6 +318,35 @@ public class PaymentRepository : GenericRepository<Payment>, IPaymentRepository
         await _dbSet.Where(p => p.PaidAt >= start && p.PaidAt <= end)
                     .OrderByDescending(p => p.PaidAt)
                     .ToListAsync();
+
+    public async Task<(IReadOnlyList<Payment> Items, int TotalCount)> GetPagedFilteredAsync(
+        DateTime? fromDate, DateTime? toDate, string? status, string? paymentMethod, int page, int pageSize)
+    {
+        var query = _dbSet.Include(p => p.Session).ThenInclude(s => s.Table)
+                          .Include(p => p.Session).ThenInclude(s => s.Customer)
+                          .AsQueryable();
+
+        if (fromDate.HasValue)
+            query = query.Where(p => p.CreatedAt >= fromDate.Value);
+
+        if (toDate.HasValue)
+            query = query.Where(p => p.CreatedAt <= toDate.Value);
+
+        if (!string.IsNullOrEmpty(status) && Enum.TryParse<PaymentStatus>(status, true, out var parsedStatus))
+            query = query.Where(p => p.PaymentStatus == parsedStatus);
+
+        if (!string.IsNullOrEmpty(paymentMethod) && Enum.TryParse<PaymentMethod>(paymentMethod, true, out var parsedMethod))
+            query = query.Where(p => p.PaymentMethod == parsedMethod);
+
+        var totalCount = await query.CountAsync();
+
+        var items = await query.OrderByDescending(p => p.CreatedAt)
+                               .Skip((page - 1) * pageSize)
+                               .Take(pageSize)
+                               .ToListAsync();
+
+        return (items, totalCount);
+    }
 }
 
 public class ReviewRepository : GenericRepository<Review>, IReviewRepository
@@ -318,5 +368,33 @@ public class ReviewRepository : GenericRepository<Review>, IReviewRepository
     {
         var reviews = await _dbSet.Where(r => r.MenuItemId == menuItemId).ToListAsync();
         return reviews.Count == 0 ? 0 : reviews.Average(r => r.Rating);
+    }
+}
+
+/// <summary>
+/// Repository cấu hình nhà hàng — luôn thao tác trên bản ghi có Id nhỏ nhất (singleton row).
+/// Tự động tạo bản ghi mặc định nếu bảng rỗng.
+/// </summary>
+public class SettingsRepository : GenericRepository<RestaurantSettings>, ISettingsRepository
+{
+    public SettingsRepository(SmartDineDbContext context) : base(context) { }
+
+    public async Task<RestaurantSettings> GetSingletonAsync()
+    {
+        var settings = await _dbSet.OrderBy(s => s.Id).FirstOrDefaultAsync();
+        if (settings == null)
+        {
+            settings = new RestaurantSettings
+            {
+                RestaurantName = "SmartDine Restaurant",
+                OpeningTime = new TimeSpan(8, 0, 0),
+                ClosingTime = new TimeSpan(22, 0, 0),
+                TaxRate = 8.00m,
+                ServiceChargeRate = 5.00m
+            };
+            await _dbSet.AddAsync(settings);
+            await _context.SaveChangesAsync();
+        }
+        return settings;
     }
 }

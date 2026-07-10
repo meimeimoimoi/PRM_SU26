@@ -39,6 +39,9 @@ public static class ValidationMessages
     public const string TABLE_MAINTENANCE_CANNOT_OCCUPIED = "Bàn số {0} đang bảo trì, không thể chuyển sang OCCUPIED.";
     public const string TABLE_OCCUPIED_CANNOT_CHECKIN = "Bàn số {0} đang có khách, không thể check-in.";
     public const string TABLE_MAINTENANCE_CANNOT_CHECKIN = "Bàn số {0} đang bảo trì, không thể check-in.";
+    public const string TABLE_CAPACITY_INVALID = "Sức chứa bàn phải lớn hơn 0.";
+    public const string TABLE_NUMBER_ALREADY_EXISTS = "Số bàn {0} đã tồn tại trong hệ thống.";
+    public const string TABLE_CANNOT_DELETE_OCCUPIED = "Bàn số {0} đang có khách, không thể xóa.";
 
     // ===== Reservation =====
     public const string RESERVATION_NOT_FOUND = "RESERVATION_NOT_FOUND";
@@ -133,6 +136,36 @@ public static class ValidationMessages
     public const string TABLE_STATUS_UPDATED_SUCCESS = "Cập nhật trạng thái bàn thành công";
     public const string RESERVATION_CREATED_SUCCESS = "Đặt bàn thành công";
     public const string RESERVATION_STATUS_UPDATED_SUCCESS = "Cập nhật trạng thái đặt bàn thành công";
+    public const string TABLE_CREATED_SUCCESS = "Tạo bàn mới thành công";
+    public const string TABLE_DELETED_SUCCESS = "Xóa bàn thành công";
+
+    // ===== Staff =====
+    public const string STAFF_NOT_FOUND = "STAFF_NOT_FOUND";
+    public const string STAFF_ROLE_INVALID = "Vai trò không hợp lệ. Chỉ chấp nhận: STAFF, CHEF, MANAGER.";
+    public const string STAFF_PASSWORD_TOO_SHORT = "Mật khẩu phải có ít nhất 6 ký tự.";
+    public const string STAFF_FULLNAME_REQUIRED = "Họ tên không được để trống.";
+    public const string STAFF_CANNOT_DEACTIVATE_SELF = "Không thể tự vô hiệu hóa tài khoản của chính mình.";
+    public const string STAFF_CREATED_SUCCESS = "Tạo tài khoản nhân viên thành công";
+    public const string STAFF_UPDATED_SUCCESS = "Cập nhật thông tin nhân viên thành công";
+    public const string STAFF_DEACTIVATED_SUCCESS = "Vô hiệu hóa tài khoản nhân viên thành công";
+
+    // ===== Menu Category =====
+    public const string CATEGORY_NOT_FOUND = "CATEGORY_NOT_FOUND";
+    public const string CATEGORY_NAME_REQUIRED = "Tên danh mục không được để trống.";
+    public const string CATEGORY_NAME_ALREADY_EXISTS = "Tên danh mục '{0}' đã tồn tại.";
+    public const string CATEGORY_HAS_MENU_ITEMS = "Danh mục này vẫn còn món ăn, không thể xóa.";
+    public const string CATEGORY_CREATED_SUCCESS = "Tạo danh mục thành công";
+    public const string CATEGORY_UPDATED_SUCCESS = "Cập nhật danh mục thành công";
+    public const string CATEGORY_DELETED_SUCCESS = "Xóa danh mục thành công";
+
+    // ===== Payment history =====
+    public const string PAYMENT_STATUS_INVALID = "Trạng thái thanh toán không hợp lệ.";
+
+    // ===== Settings =====
+    public const string SETTINGS_NAME_REQUIRED = "Tên nhà hàng không được để trống.";
+    public const string SETTINGS_TIME_INVALID = "Giờ mở/đóng cửa không hợp lệ. Định dạng: HH:mm.";
+    public const string SETTINGS_RATE_INVALID = "Tỷ lệ phải nằm trong khoảng 0 đến 100.";
+    public const string SETTINGS_UPDATED_SUCCESS = "Cập nhật cấu hình nhà hàng thành công";
 
     // ===== Payment — success responses =====
     public const string PAYMENT_INTENT_CREATED = "Hóa đơn đã được tạo. Vui lòng quét mã QR để thanh toán.";

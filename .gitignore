@@ -3,7 +3,6 @@
 # ==========================================
 [Bb]in/
 [Oo]bj/
-[Mm]igrations/
 *.user
 *.userosscache
 *.sln.docstates

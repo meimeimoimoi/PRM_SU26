@@ -158,5 +158,21 @@ public class DbSeeder
             await _context.DiningSessions.AddAsync(session);
             await _context.SaveChangesAsync();
         }
+
+        // 5. Seed Restaurant Settings (singleton row)
+        if (!_context.RestaurantSettings.Any())
+        {
+            await _context.RestaurantSettings.AddAsync(new RestaurantSettings
+            {
+                RestaurantName = "SmartDine Restaurant",
+                Address = "123 Nguyễn Huệ, Quận 1, TP.HCM",
+                Phone = "1900 1234",
+                OpeningTime = new TimeSpan(8, 0, 0),
+                ClosingTime = new TimeSpan(22, 0, 0),
+                TaxRate = 8.00m,
+                ServiceChargeRate = 5.00m
+            });
+            await _context.SaveChangesAsync();
+        }
     }
 }

@@ -47,6 +47,34 @@ public class TablesController : ControllerBase
     }
 
     /// <summary>
+    /// API 6 — Tạo bàn ăn mới.
+    ///
+    /// POST /api/v1/tables
+    /// Role: MANAGER.
+    /// </summary>
+    [HttpPost]
+    [Authorize(Roles = Roles.Manager)]
+    public async Task<IActionResult> Create([FromBody] CreateTableRequest request)
+    {
+        var result = await _tableService.CreateAsync(request);
+        return Created("", ApiResponse<TableResponse>.Ok(result, ValidationMessages.TABLE_CREATED_SUCCESS));
+    }
+
+    /// <summary>
+    /// API 7 — Xóa (soft-delete) bàn ăn.
+    ///
+    /// DELETE /api/v1/tables/{id}
+    /// Role: MANAGER.
+    /// </summary>
+    [HttpDelete("{id:int}")]
+    [Authorize(Roles = Roles.Manager)]
+    public async Task<IActionResult> Delete(int id)
+    {
+        await _tableService.DeleteAsync(id);
+        return Ok(ApiResponse<object>.Ok(null!, ValidationMessages.TABLE_DELETED_SUCCESS));
+    }
+
+    /// <summary>
     /// API 2 — Khách quét mã QR tại bàn.
     ///
     /// POST /api/v1/tables/{id}/scan

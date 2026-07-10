@@ -292,4 +292,44 @@ public class PaymentService
     /// </summary>
     private static string GenerateInvoiceId(long orderCode) =>
         $"INV-{DateTime.UtcNow:yyyy}-{orderCode % 1_000_000:D6}";
+
+    // ═══════════════════════════════════════════════════════════════
+    // GET /api/v1/payments (Manager) — Lịch sử giao dịch
+    // ═══════════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// Lấy lịch sử giao dịch phân trang cho manager dashboard.
+    /// Lọc theo khoảng ngày (CreatedAt), trạng thái, phương thức thanh toán.
+    /// </summary>
+    public async Task<(List<PaymentHistoryResponse> Items, int TotalCount, int TotalPages)> GetHistoryAsync(
+        DateTime? fromDate, DateTime? toDate, string? status, string? paymentMethod, int page, int pageSize)
+    {
+        if (status != null && !Enum.TryParse<PaymentStatus>(status, true, out _))
+            throw new BusinessRuleViolationException(ValidationMessages.PAYMENT_STATUS_INVALID);
+
+        if (paymentMethod != null && !Enum.TryParse<PaymentMethod>(paymentMethod, true, out _))
+            throw new BusinessRuleViolationException(ValidationMessages.PAYMENT_METHOD_INVALID);
+
+        var (items, totalCount) = await _uow.Payments.GetPagedFilteredAsync(
+            fromDate, toDate, status, paymentMethod, page, pageSize);
+        var totalPages = (int)Math.Ceiling(totalCount / (double)pageSize);
+
+        return (items.Select(MapToHistoryResponse).ToList(), totalCount, totalPages);
+    }
+
+    private static PaymentHistoryResponse MapToHistoryResponse(Payment payment) => new()
+    {
+        Id = payment.Id,
+        InvoiceId = payment.InvoiceId,
+        SessionId = payment.SessionId,
+        TableId = payment.Session.TableId,
+        TableNumber = payment.Session.Table.TableNumber,
+        CustomerName = payment.Session.Customer?.FullName ?? payment.Session.GuestName ?? "Guest",
+        Amount = payment.Amount,
+        PaymentMethod = payment.PaymentMethod.ToString(),
+        PaymentStatus = payment.PaymentStatus.ToString(),
+        ExternalRef = payment.ExternalRef,
+        PaidAt = payment.PaidAt,
+        CreatedAt = payment.CreatedAt
+    };
 }

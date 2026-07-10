@@ -26,6 +26,8 @@ public class UnitOfWork : IUnitOfWork
 
     public ICouponRepository Coupons { get; }
     public IRepository<LoyaltyTransaction> LoyaltyTransactions { get; }
+    public IRepository<MenuCategory> MenuCategories { get; }
+    public ISettingsRepository Settings { get; }
 
     public UnitOfWork(SmartDineDbContext context)
     {
@@ -48,6 +50,8 @@ public class UnitOfWork : IUnitOfWork
         SessionParticipants = new GenericRepository<SessionParticipant>(context);
         Coupons = new CouponRepository(context);
         LoyaltyTransactions = new GenericRepository<LoyaltyTransaction>(context);
+        MenuCategories = new GenericRepository<MenuCategory>(context);
+        Settings = new SettingsRepository(context);
     }
 
     public async Task<int> SaveChangesAsync(CancellationToken ct = default) =>

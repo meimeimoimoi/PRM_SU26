@@ -407,6 +407,74 @@ public class TableService
     }
 
     // ═══════════════════════════════════════════════════════════════
+    // API 6: POST /api/v1/tables (Manager)
+    // ═══════════════════════════════════════════════════════════════
+    /// <summary>
+    /// Tạo bàn ăn mới.
+    ///
+    /// Luồng xử lý:
+    ///   1. Validate Capacity > 0.
+    ///   2. Kiểm tra TableNumber chưa tồn tại (unique).
+    ///   3. Tạo bàn với Status = AVAILABLE, QrCode theo quy ước smartdine://table/{number}.
+    ///   4. SaveChanges → trả về TableResponse.
+    ///
+    /// Error cases:
+    ///   - Capacity ≤ 0 → BusinessRuleViolationException (422).
+    ///   - TableNumber đã tồn tại → BusinessRuleViolationException (422).
+    /// </summary>
+    public async Task<TableResponse> CreateAsync(CreateTableRequest request)
+    {
+        if (request.Capacity <= 0)
+            throw new BusinessRuleViolationException(ValidationMessages.TABLE_CAPACITY_INVALID);
+
+        var existing = await _uow.Tables.GetByTableNumberAsync(request.TableNumber);
+        if (existing != null)
+            throw new BusinessRuleViolationException(
+                string.Format(ValidationMessages.TABLE_NUMBER_ALREADY_EXISTS, request.TableNumber));
+
+        var table = new Table
+        {
+            TableNumber = request.TableNumber,
+            Capacity = request.Capacity,
+            Status = TableStatus.AVAILABLE,
+            QrCode = $"smartdine://table/{request.TableNumber}"
+        };
+
+        await _uow.Tables.AddAsync(table);
+        await _uow.SaveChangesAsync();
+
+        return MapToResponse(table);
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // API 7: DELETE /api/v1/tables/{id} (Manager)
+    // ═══════════════════════════════════════════════════════════════
+    /// <summary>
+    /// Xóa (soft-delete) bàn ăn.
+    ///
+    /// Luồng xử lý:
+    ///   1. Tìm bàn theo ID → 404 nếu không tồn tại.
+    ///   2. Chặn xóa nếu bàn đang OCCUPIED (đang có khách ngồi).
+    ///   3. Soft-delete qua GenericRepository.DeleteAsync (IsDeleted = true).
+    ///
+    /// Error cases:
+    ///   - Bàn không tồn tại → EntityNotFoundException (404).
+    ///   - Bàn đang OCCUPIED → BusinessRuleViolationException (422).
+    /// </summary>
+    public async Task DeleteAsync(int id)
+    {
+        var table = await _uow.Tables.GetByIdAsync(id)
+            ?? throw new EntityNotFoundException("Table", id);
+
+        if (table.Status == TableStatus.OCCUPIED)
+            throw new BusinessRuleViolationException(
+                string.Format(ValidationMessages.TABLE_CANNOT_DELETE_OCCUPIED, table.TableNumber));
+
+        await _uow.Tables.DeleteAsync(id);
+        await _uow.SaveChangesAsync();
+    }
+
+    // ═══════════════════════════════════════════════════════════════
     // Helpers
     // ═══════════════════════════════════════════════════════════════
 

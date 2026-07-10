@@ -34,6 +34,34 @@ public class PaymentsController : ControllerBase
     }
 
     // ═══════════════════════════════════════════════════════════════
+    // GET /api/v1/payments
+    // ═══════════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// Lịch sử giao dịch phân trang cho manager dashboard.
+    /// Lọc theo khoảng ngày tạo, trạng thái, phương thức thanh toán.
+    /// Roles: MANAGER.
+    /// </summary>
+    [HttpGet]
+    [Authorize(Roles = Roles.Manager)]
+    public async Task<IActionResult> GetHistory(
+        [FromQuery] DateTime? fromDate,
+        [FromQuery] DateTime? toDate,
+        [FromQuery] string? status,
+        [FromQuery] string? paymentMethod,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 10)
+    {
+        if (page < 1) page = 1;
+        if (pageSize < 1) pageSize = 10;
+        if (pageSize > 100) pageSize = 100;
+
+        var (items, total, totalPages) = await _paymentService.GetHistoryAsync(
+            fromDate, toDate, status, paymentMethod, page, pageSize);
+        return Ok(PaginatedApiResponse<PaymentHistoryResponse>.Ok(items, total, page, totalPages));
+    }
+
+    // ═══════════════════════════════════════════════════════════════
     // POST /api/v1/payments/create-intent
     // ═══════════════════════════════════════════════════════════════
 

@@ -37,4 +37,12 @@ public interface IPaymentRepository : IRepository<Payment>
     Task<Payment?> GetByExternalRefAsync(string externalRef);
 
     Task<IReadOnlyList<Payment>> GetByDateRangeAsync(DateTime start, DateTime end);
+
+    /// <summary>
+    /// Lấy lịch sử giao dịch phân trang, lọc theo khoảng ngày tạo (CreatedAt, không phải PaidAt
+    /// vì PENDING/FAILED chưa có PaidAt), trạng thái, phương thức thanh toán.
+    /// Include Session.Table + Session.Customer để hiển thị cho manager dashboard.
+    /// </summary>
+    Task<(IReadOnlyList<Payment> Items, int TotalCount)> GetPagedFilteredAsync(
+        DateTime? fromDate, DateTime? toDate, string? status, string? paymentMethod, int page, int pageSize);
 }

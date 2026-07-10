@@ -23,6 +23,8 @@ public interface IUnitOfWork : IDisposable
 
     ICouponRepository Coupons { get; }
     IRepository<LoyaltyTransaction> LoyaltyTransactions { get; }
+    IRepository<MenuCategory> MenuCategories { get; }
+    ISettingsRepository Settings { get; }
 
     Task<int> SaveChangesAsync(CancellationToken ct = default);
 }

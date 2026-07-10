@@ -120,3 +120,15 @@ public class MenuCategoryResponse
     public string? Description { get; set; }
     public int ItemCount { get; set; }
 }
+
+public class CreateMenuCategoryRequest
+{
+    public string Name { get; set; } = string.Empty;
+    public string? Description { get; set; }
+}
+
+public class PatchMenuCategoryRequest
+{
+    public string? Name { get; set; }
+    public string? Description { get; set; }
+}
