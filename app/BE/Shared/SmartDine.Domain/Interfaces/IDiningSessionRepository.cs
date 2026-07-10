@@ -7,4 +7,6 @@ public interface IDiningSessionRepository : IRepository<DiningSession>
     Task<IReadOnlyList<DiningSession>> GetActiveSessionsAsync();
     Task<DiningSession?> GetActiveByTableIdAsync(int tableId);
     Task<DiningSession?> GetByIdWithParticipantsAsync(int id);
+
+    Task<DiningSession?> GetByIdWithParticipantsAndOrdersAsync(int id);
 }

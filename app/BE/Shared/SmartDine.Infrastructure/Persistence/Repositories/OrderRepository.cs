@@ -58,5 +58,6 @@ public class OrderRepository : GenericRepository<Order>, IOrderRepository
         await _dbSet.Include(o => o.OrderDetails).ThenInclude(d => d.MenuItem)
                     .Include(o => o.Session).ThenInclude(s => s.Table)
                     .Include(o => o.Session).ThenInclude(s => s.Customer)
+                    .Include(o => o.Session).ThenInclude(s => s.Participants)
                     .FirstOrDefaultAsync(o => o.Id == id);
 }

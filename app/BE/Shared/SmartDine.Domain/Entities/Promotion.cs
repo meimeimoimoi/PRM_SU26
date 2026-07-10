@@ -9,6 +9,7 @@ namespace SmartDine.Domain.Entities;
 /// </summary>
 public class Promotion : BaseEntity
 {
+    public string Code { get; set; } = string.Empty;
     public string? Name { get; set; }
     public string? Description { get; set; }
     public PromotionType DiscountType { get; set; } = PromotionType.PERCENT;

@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using SmartDine.Domain.Interfaces;
+using SmartDine.Infrastructure.ExternalServices;
 using SmartDine.Infrastructure.Persistence;
 using SmartDine.Infrastructure.Persistence.Repositories;
 using SmartDine.Infrastructure.Security;
@@ -48,6 +49,9 @@ public static class DependencyInjection
 
         // Fallback services
         services.AddScoped<IOrderNotificationService, Services.NullOrderNotificationService>();
+
+        // IPaymentGateway: fallback no-op cho test/monolith. Order.API ghi đè bằng PayOsGateway.
+        services.AddScoped<IPaymentGateway, Services.NullPaymentGateway>();
 
         // Seeder
         services.AddScoped<DbSeeder>();

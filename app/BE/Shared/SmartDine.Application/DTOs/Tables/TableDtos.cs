@@ -1,3 +1,5 @@
+using SmartDine.Domain.Enums;
+
 namespace SmartDine.Application.DTOs.Tables;
 
 // ─────────────────────────────────────────────────────────────
@@ -13,7 +15,7 @@ public class TableResponse
     public int Id { get; set; }
     public int TableNumber { get; set; }
     public int Capacity { get; set; }
-    public string Status { get; set; } = "AVAILABLE";
+    public string Status { get; set; } = nameof(TableStatus.AVAILABLE);
     public string? QrCode { get; set; }
 }
 
@@ -34,7 +36,7 @@ public class CreateTableRequest
 /// </summary>
 public class UpdateTableStatusRequest
 {
-    public string Status { get; set; } = "AVAILABLE";
+    public string Status { get; set; } = nameof(TableStatus.AVAILABLE);
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -62,7 +64,7 @@ public class ScanTableResponse
 {
     public int SessionId { get; set; }
     public int TableId { get; set; }
-    public string Status { get; set; } = "ACTIVE";
+    public string Status { get; set; } = nameof(DiningSessionStatus.ACTIVE);
     public bool IsNewSession { get; set; }
     public string Message { get; set; } = string.Empty;
 }

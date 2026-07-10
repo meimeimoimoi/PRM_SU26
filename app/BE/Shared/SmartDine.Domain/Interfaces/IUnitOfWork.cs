@@ -21,6 +21,8 @@ public interface IUnitOfWork : IDisposable
     IRepository<RecommendationLog> RecommendationLogs { get; }
     IRepository<SessionParticipant> SessionParticipants { get; }
 
+    ICouponRepository Coupons { get; }
+    IRepository<LoyaltyTransaction> LoyaltyTransactions { get; }
 
     Task<int> SaveChangesAsync(CancellationToken ct = default);
 }

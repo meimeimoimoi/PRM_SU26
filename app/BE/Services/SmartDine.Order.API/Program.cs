@@ -1,11 +1,13 @@
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using SmartDine.Infrastructure.Persistence;
+using SmartDine.Order.API.BackgroundServices;
 using SmartDine.Order.API.Middleware;
 using SmartDine.Order.API.Hubs;
 using SmartDine.Order.API.Services;
 using SmartDine.Application;
 using SmartDine.Infrastructure;
+using SmartDine.Infrastructure.ExternalServices;
 using SmartDine.Domain.Interfaces;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -56,6 +58,12 @@ builder.Services.AddSignalR();
 builder.Services.AddScoped<IOrderNotificationService, OrderNotificationService>();
 builder.Services.AddDistributedMemoryCache();
 
+// ===== Payment Gateway (PayOS) =====
+builder.Services.AddHttpClient<IPaymentGateway, PayOsGateway>();
+
+// ===== Background Jobs =====
+builder.Services.AddHostedService<PaymentExpiryJob>();
+
 // ===== Swagger Setup with JWT Auth =====
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
@@ -94,6 +102,7 @@ var app = builder.Build();
 
 // ===== Middleware Pipeline =====
 app.UseMiddleware<ExceptionHandlingMiddleware>();
+app.UseMiddleware<IdempotencyMiddleware>();
 
 if (app.Environment.IsDevelopment())
 {

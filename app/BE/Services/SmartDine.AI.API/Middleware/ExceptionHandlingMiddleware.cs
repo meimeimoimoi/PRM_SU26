@@ -1,3 +1,5 @@
+using SmartDine.Domain.Exceptions;
+
 namespace SmartDine.AI.API.Middleware;
 
 public class ExceptionHandlingMiddleware
@@ -17,6 +19,39 @@ public class ExceptionHandlingMiddleware
         {
             await _next(context);
         }
+        catch (EntityNotFoundException ex)
+        {
+            _logger.LogWarning(ex, "Entity not found: {Message}", ex.Message);
+            context.Response.StatusCode = StatusCodes.Status404NotFound;
+            await context.Response.WriteAsJsonAsync(new
+            {
+                success = false,
+                errors = new[] { ex.Message },
+                timestamp = DateTime.UtcNow
+            });
+        }
+        catch (BusinessRuleViolationException ex)
+        {
+            _logger.LogWarning(ex, "Business rule violation: {Message}", ex.Message);
+            context.Response.StatusCode = StatusCodes.Status422UnprocessableEntity;
+            await context.Response.WriteAsJsonAsync(new
+            {
+                success = false,
+                errors = new[] { ex.Message },
+                timestamp = DateTime.UtcNow
+            });
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            _logger.LogWarning(ex, "Unauthorized access");
+            context.Response.StatusCode = StatusCodes.Status403Forbidden;
+            await context.Response.WriteAsJsonAsync(new
+            {
+                success = false,
+                errors = new[] { "Unauthorized" },
+                timestamp = DateTime.UtcNow
+            });
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Unhandled exception in AI API: {Message}", ex.Message);
@@ -24,7 +59,7 @@ public class ExceptionHandlingMiddleware
             await context.Response.WriteAsJsonAsync(new
             {
                 success = false,
-                errors = new[] { "Internal server error in AI Service" },
+                errors = new[] { "Internal server error" },
                 timestamp = DateTime.UtcNow
             });
         }

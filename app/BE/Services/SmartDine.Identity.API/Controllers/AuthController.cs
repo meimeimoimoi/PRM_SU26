@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using SmartDine.Application.Constants;
 using SmartDine.Application.DTOs.Auth;
+using SmartDine.Domain.Constants;
 using SmartDine.Domain.Enums;
 using SmartDine.Application.DTOs.Common;
 using SmartDine.Application.Services;
@@ -104,8 +105,7 @@ public class AuthController : ControllerBase
     [Authorize]
     public async Task<IActionResult> Logout()
     {
-        var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
-        var role = User.FindFirstValue(ClaimTypes.Role)!;
+        var (userId, role) = ExtractIdentity();
         var userType = role == UserRole.CUSTOMER.ToString() ? UserType.CUSTOMER
                      : role == UserRole.GUEST.ToString() ? UserType.GUEST
                      : UserType.USER;
@@ -121,9 +121,22 @@ public class AuthController : ControllerBase
     [Authorize]
     public async Task<IActionResult> GetCurrentUser()
     {
-        var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
-        var role = User.FindFirstValue(ClaimTypes.Role)!;
+        var (userId, role) = ExtractIdentity();
         var result = await _authService.GetCurrentUserAsync(userId, role);
         return Ok(ApiResponse<UserInfoResponse>.Ok(result));
+    }
+
+    /// <summary>
+    /// Lấy (id, role) từ JWT claims hiện tại.
+    /// GUEST có sub (NameIdentifier) là UUID định danh phiên đăng nhập, không phải số,
+    /// nên id thực tế (sessionId) phải lấy từ custom claim "session_id" thay vì int.Parse(sub).
+    /// </summary>
+    private (int id, string role) ExtractIdentity()
+    {
+        var role = User.FindFirstValue(ClaimTypes.Role)!;
+        var rawId = role == UserRole.GUEST.ToString()
+            ? User.FindFirstValue(JwtClaimTypes.SessionId)!
+            : User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+        return (int.Parse(rawId), role);
     }
 }

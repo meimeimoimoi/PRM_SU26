@@ -5,6 +5,8 @@ using SmartDine.Application.Constants;
 using SmartDine.Application.DTOs.Common;
 using SmartDine.Application.DTOs.Menu;
 using SmartDine.Application.Services;
+using SmartDine.Domain.Constants;
+using SmartDine.Domain.Enums;
 
 namespace SmartDine.Menu.API.Controllers;
 
@@ -22,9 +24,9 @@ namespace SmartDine.Menu.API.Controllers;
 /// Authentication:
 ///   - API 1, 2: Public — ai cũng truy cập được, nhưng nếu có token thì
 ///     Backend dùng customerId để cá nhân hóa + ghi activity.
-///   - API 3, 5: [Authorize(Roles = "MANAGER")] — chỉ quản lý.
-///   - API 4: [Authorize(Roles = "MANAGER,CHEF")] — quản lý hoặc đầu bếp.
-///   - API 6: [Authorize(Roles = "CUSTOMER,GUEST")] — khách hàng.
+///   - API 3, 5: [Authorize(Roles = Roles.Manager)] — chỉ quản lý.
+///   - API 4: [Authorize(Roles = Roles.ManagerAndChef)] — quản lý hoặc đầu bếp.
+///   - API 6: [Authorize(Roles = Roles.AllDiners)] — khách hàng.
 /// </summary>
 [ApiController]
 [Route("api/v1/menu-items")]
@@ -88,7 +90,7 @@ public class MenuItemsController : ControllerBase
     ///   → AiRecommendationResponse { recommendation_id, data[] } → Client.
     /// </summary>
     [HttpGet("ai-recommendations")]
-    [Authorize(Roles = "CUSTOMER,GUEST")]
+    [Authorize(Roles = Roles.AllDiners)]
     public async Task<IActionResult> GetAiRecommendations([FromQuery] int limit = 5)
     {
         if (limit < 1) limit = 1;
@@ -138,7 +140,7 @@ public class MenuItemsController : ControllerBase
     ///   → ApiResponse (201 Created) → Client.
     /// </summary>
     [HttpPost]
-    [Authorize(Roles = "MANAGER")]
+    [Authorize(Roles = Roles.Manager)]
     public async Task<IActionResult> Create([FromBody] CreateMenuItemRequest request)
     {
         var result = await _menuService.CreateAsync(request);
@@ -161,7 +163,7 @@ public class MenuItemsController : ControllerBase
     ///   → ApiResponse → Client.
     /// </summary>
     [HttpPatch("{id:int}")]
-    [Authorize(Roles = "MANAGER,CHEF")]
+    [Authorize(Roles = Roles.ManagerAndChef)]
     public async Task<IActionResult> Patch(int id, [FromBody] PatchMenuItemRequest request)
     {
         var result = await _menuService.PatchAsync(id, request);
@@ -182,7 +184,7 @@ public class MenuItemsController : ControllerBase
     ///     → ApiResponse { success, message } → Client.
     /// </summary>
     [HttpDelete("{id:int}")]
-    [Authorize(Roles = "MANAGER")]
+    [Authorize(Roles = Roles.Manager)]
     public async Task<IActionResult> Delete(int id)
     {
         await _menuService.DeleteAsync(id);
@@ -203,7 +205,7 @@ public class MenuItemsController : ControllerBase
             return null;
 
         var role = User.FindFirst(ClaimTypes.Role)?.Value;
-        if (role != "CUSTOMER")
+        if (role != nameof(UserRole.CUSTOMER))
             return null;
 
         var idClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;

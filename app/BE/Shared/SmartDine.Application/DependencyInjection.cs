@@ -17,6 +17,7 @@ public static class DependencyInjection
         services.AddScoped<Services.MenuService>();
         services.AddScoped<Services.TableService>();
         services.AddScoped<Services.DiningSessionService>();
+        services.AddScoped<Services.PaymentService>();
 
         // FluentValidation
         services.AddValidatorsFromAssembly(Assembly.GetExecutingAssembly());

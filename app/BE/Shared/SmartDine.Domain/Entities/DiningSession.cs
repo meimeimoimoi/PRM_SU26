@@ -25,4 +25,5 @@ public class DiningSession : BaseEntity
     // Navigation
     public List<Order> Orders { get; set; } = new();
     public List<SessionParticipant> Participants { get; set; } = new();
+    public List<Payment> Payments { get; set; } = new();
 }
