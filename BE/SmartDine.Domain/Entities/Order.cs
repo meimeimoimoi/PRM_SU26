@@ -43,8 +43,10 @@ public class Order : BaseEntity
     {
         var validTransitions = new Dictionary<OrderStatus, OrderStatus[]>
         {
-            { OrderStatus.PENDING,   new[] { OrderStatus.COOKING, OrderStatus.COMPLETED, OrderStatus.CANCELLED } },
-            { OrderStatus.COOKING,   new[] { OrderStatus.COMPLETED, OrderStatus.CANCELLED } },
+            { OrderStatus.PENDING,   new[] { OrderStatus.CONFIRMED, OrderStatus.COOKING, OrderStatus.CANCELLED } },
+            { OrderStatus.CONFIRMED, new[] { OrderStatus.COOKING, OrderStatus.CANCELLED } },
+            { OrderStatus.COOKING,   new[] { OrderStatus.READY, OrderStatus.CANCELLED } },
+            { OrderStatus.READY,     new[] { OrderStatus.COMPLETED } },
             { OrderStatus.COMPLETED, Array.Empty<OrderStatus>() },
             { OrderStatus.CANCELLED, Array.Empty<OrderStatus>() }
         };
