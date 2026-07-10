@@ -1,4 +1,6 @@
+using System.Security.Cryptography;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using SmartDine.AI.API.Middleware;
@@ -34,25 +36,6 @@ builder.Services.AddAuthentication(options =>
 });
 
 builder.Services.AddAuthorization();
-
-// ===== Health Checks =====
-builder.Services.AddHealthChecks()
-    .AddCheck("ollama-health", async () =>
-    {
-        var httpClient = new HttpClient();
-        var ollamaUrl = builder.Configuration["Services:Ollama"];
-        try
-        {
-            var response = await httpClient.GetAsync($"{ollamaUrl}/api/tags");
-            return response.IsSuccessStatusCode
-                ? HealthCheckResult.Healthy("Ollama service is accessible")
-                : HealthCheckResult.Unhealthy($"Ollama service returned {response.StatusCode}");
-        }
-        catch (Exception ex)
-        {
-            return HealthCheckResult.Unhealthy($"Ollama service health check failed: {ex.Message}");
-        }
-    });
 
 // ===== HTTP Client Factory =====
 builder.Services.AddHttpClient();

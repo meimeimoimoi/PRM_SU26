@@ -4,13 +4,13 @@ EXPOSE 8080
 
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
-COPY ["SmartDine.Identity.API/SmartDine.Identity.API.csproj", "SmartDine.Identity.API/"]
-COPY ["SmartDine.Application/SmartDine.Application.csproj", "SmartDine.Application/"]
-COPY ["SmartDine.Domain/SmartDine.Domain.csproj", "SmartDine.Domain/"]
-COPY ["SmartDine.Infrastructure/SmartDine.Infrastructure.csproj", "SmartDine.Infrastructure/"]
-RUN dotnet restore "SmartDine.Identity.API/SmartDine.Identity.API.csproj"
+COPY ["Services/SmartDine.Identity.API/SmartDine.Identity.API.csproj", "Services/SmartDine.Identity.API/"]
+COPY ["Shared/SmartDine.Application/SmartDine.Application.csproj", "Shared/SmartDine.Application/"]
+COPY ["Shared/SmartDine.Domain/SmartDine.Domain.csproj", "Shared/SmartDine.Domain/"]
+COPY ["Shared/SmartDine.Infrastructure/SmartDine.Infrastructure.csproj", "Shared/SmartDine.Infrastructure/"]
+RUN dotnet restore "Services/SmartDine.Identity.API/SmartDine.Identity.API.csproj"
 COPY . .
-WORKDIR "/src/SmartDine.Identity.API"
+WORKDIR "/src/Services/SmartDine.Identity.API"
 RUN dotnet build "SmartDine.Identity.API.csproj" -c Release -o /app/build
 
 FROM build AS publish

@@ -1,5 +1,6 @@
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+using Microsoft.EntityFrameworkCore;
 using SmartDine.Infrastructure.Persistence;
 using SmartDine.Order.API.BackgroundServices;
 using SmartDine.Order.API.Middleware;
@@ -9,6 +10,8 @@ using SmartDine.Application;
 using SmartDine.Infrastructure;
 using SmartDine.Infrastructure.ExternalServices;
 using SmartDine.Domain.Interfaces;
+using System.Security.Cryptography;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -99,6 +102,32 @@ builder.Services.AddSwaggerGen(c =>
 });
 
 var app = builder.Build();
+
+// ===== Auto Migrate and Seed Database =====
+using (var scope = app.Services.CreateScope())
+{
+    var services = scope.ServiceProvider;
+    try
+    {
+        var context = services.GetRequiredService<SmartDineDbContext>();
+        if (context.Database.IsRelational())
+        {
+            await context.Database.MigrateAsync();
+        }
+        else
+        {
+            await context.Database.EnsureCreatedAsync();
+        }
+
+        var seeder = services.GetRequiredService<DbSeeder>();
+        await seeder.SeedAsync();
+    }
+    catch (Exception ex)
+    {
+        var logger = services.GetRequiredService<ILogger<Program>>();
+        logger.LogError(ex, "An error occurred while migrating or seeding the database.");
+    }
+}
 
 // ===== Middleware Pipeline =====
 app.UseMiddleware<ExceptionHandlingMiddleware>();

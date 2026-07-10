@@ -12,12 +12,13 @@
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
+    <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" Version="9.0.1" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="6.5.0" />
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\SmartDine.Application\SmartDine.Application.csproj" />
-    <ProjectReference Include="..\SmartDine.Infrastructure\SmartDine.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\Shared\SmartDine.Application\SmartDine.Application.csproj" />
+    <ProjectReference Include="..\..\Shared\SmartDine.Infrastructure\SmartDine.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>

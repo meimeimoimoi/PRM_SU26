@@ -1,1 +1,4 @@
-namespace SmartDine.Domain.Constants;public static class DomainMessages{    public const string ORDER_STATUS_TRANSITION_INVALID = "Kh+¦ng thß+â chuyß+ân trß¦íng th+íi -æ¦ín h+áng tß+½ {0} sang {1}.";}
+namespace SmartDine.Domain.Constants;
+public static class DomainMessages{    
+    public const string ORDER_STATUS_TRANSITION_INVALID = "Kh+ï¿½ng thï¿½+ï¿½ chuyï¿½+ï¿½n trß¦ï¿½ng th+ï¿½i -ï¿½ï¿½n h+ï¿½ng tï¿½+ï¿½ {0} sang {1}.";
+    }

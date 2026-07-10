@@ -7,8 +7,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\SmartDine.Domain\SmartDine.Domain.csproj" />
-    <ProjectReference Include="..\SmartDine.Application\SmartDine.Application.csproj" />
+    <ProjectReference Include="..\..\Shared\SmartDine.Domain\SmartDine.Domain.csproj" />
+    <ProjectReference Include="..\..\Shared\SmartDine.Application\SmartDine.Application.csproj" />
   </ItemGroup>
 
   <ItemGroup>

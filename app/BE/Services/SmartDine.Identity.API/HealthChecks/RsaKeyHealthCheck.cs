@@ -1,15 +1,16 @@
+using System.Security.Cryptography;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
-using SmartDine.Infrastructure.Security;
+using SmartDine.Domain.Interfaces;
 
 namespace SmartDine.Identity.API.HealthChecks;
 
 public class RsaKeyHealthCheck : IHealthCheck
 {
-    private readonly IConfiguration _configuration;
+    private readonly IRsaKeyProvider _keyProvider;
 
-    public RsaKeyHealthCheck(IConfiguration configuration)
+    public RsaKeyHealthCheck(IRsaKeyProvider keyProvider)
     {
-        _configuration = configuration;
+        _keyProvider = keyProvider;
     }
 
     public Task<HealthCheckResult> CheckHealthAsync(
@@ -18,10 +19,9 @@ public class RsaKeyHealthCheck : IHealthCheck
     {
         try
         {
-            var rsaKeyService = new RsaKeyService(_configuration);
-            var rsaKey = rsaKeyService.GetRsaKey();
+            var rsaParams = _keyProvider.PrivateKeyParameters;
 
-            if (rsaKey == null || !rsaKey.HasPrivateKey)
+            if (rsaParams.D == null)
             {
                 return Task.FromResult(
                     HealthCheckResult.Unhealthy("RSA key is not properly configured or missing private key"));

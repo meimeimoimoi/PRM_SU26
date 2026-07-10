@@ -1,1 +1,10 @@
-namespace SmartDine.Domain.Constants;/// <summary>/// T+¬n c+íc custom claim d+¦ng trong JWT (ngo+ái c+íc claim chuß¦¬n cß+ºa ClaimTypes)./// </summary>public static class JwtClaimTypes{    /// <summary>    /// Claim chß+¬a DiningSession.Id thß+¦c tß¦+. D+¦ng cho GUEST v+¼ claim "sub" (NameIdentifier)    /// cß+ºa GUEST l+á mß+Öt UUID -æß+ïnh danh phi+¬n -æ-âng nhß¦¡p, kh+¦ng phß¦úi sessionId.    /// </summary>    public const string SessionId = "session_id";}
+namespace SmartDine.Domain.Constants;
+/// <summary>/// T+ï¿½n c+ï¿½c custom claim d+ï¿½ng trong JWT (ngo+ï¿½i c+ï¿½c claim chuß¦ï¿½n cï¿½+ï¿½a ClaimTypes).
+/// </summary>
+public static class JwtClaimTypes{    
+/// /// <summary>    
+/// Claim chï¿½+ï¿½a DiningSession.Id thï¿½+ï¿½c tß¦+. D+ï¿½ng cho GUEST v+ï¿½ claim "sub" (NameIdentifier)    
+/// cï¿½+ï¿½a GUEST l+ï¿½ mï¿½+ï¿½t UUID -ï¿½ï¿½+ï¿½nh danh phi+ï¿½n -ï¿½-ï¿½ng nhß¦ï¿½p, kh+ï¿½ng phß¦ï¿½i sessionId.    
+/// </summary>    
+public const string SessionId = "session_id";
+}

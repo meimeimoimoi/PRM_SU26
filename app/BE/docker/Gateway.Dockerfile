@@ -4,10 +4,13 @@ EXPOSE 8080
 
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
-COPY ["SmartDine.Gateway/SmartDine.Gateway.csproj", "SmartDine.Gateway/"]
-RUN dotnet restore "SmartDine.Gateway/SmartDine.Gateway.csproj"
+COPY ["Services/SmartDine.Gateway/SmartDine.Gateway.csproj", "Services/SmartDine.Gateway/"]
+COPY ["Shared/SmartDine.Application/SmartDine.Application.csproj", "Shared/SmartDine.Application/"]
+COPY ["Shared/SmartDine.Domain/SmartDine.Domain.csproj", "Shared/SmartDine.Domain/"]
+COPY ["Shared/SmartDine.Infrastructure/SmartDine.Infrastructure.csproj", "Shared/SmartDine.Infrastructure/"]
+RUN dotnet restore "Services/SmartDine.Gateway/SmartDine.Gateway.csproj"
 COPY . .
-WORKDIR "/src/SmartDine.Gateway"
+WORKDIR "/src/Services/SmartDine.Gateway"
 RUN dotnet build "SmartDine.Gateway.csproj" -c Release -o /app/build
 
 FROM build AS publish

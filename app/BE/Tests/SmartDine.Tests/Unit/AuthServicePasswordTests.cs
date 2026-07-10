@@ -30,6 +30,16 @@ public class FakeUnitOfWork : IUnitOfWork
     IDiningSessionRepository IUnitOfWork.DiningSessions => throw new NotImplementedException();
     IPaymentRepository IUnitOfWork.Payments => throw new NotImplementedException();
     IReviewRepository IUnitOfWork.Reviews => throw new NotImplementedException();
+    ITableReservationRepository IUnitOfWork.TableReservations => throw new NotImplementedException();
+    IRefreshTokenRepository IUnitOfWork.RefreshTokens => throw new NotImplementedException();
+    IPasswordResetTokenRepository IUnitOfWork.PasswordResetTokens => throw new NotImplementedException();
+    ICouponRepository IUnitOfWork.Coupons => throw new NotImplementedException();
+    IRepository<CustomerActivity> IUnitOfWork.CustomerActivities => throw new NotImplementedException();
+    IRepository<MenuItemStatistics> IUnitOfWork.MenuItemStatisticsRepo => throw new NotImplementedException();
+    IRepository<BusinessContextLog> IUnitOfWork.BusinessContextLogs => throw new NotImplementedException();
+    IRepository<RecommendationLog> IUnitOfWork.RecommendationLogs => throw new NotImplementedException();
+    IRepository<SessionParticipant> IUnitOfWork.SessionParticipants => throw new NotImplementedException();
+    IRepository<LoyaltyTransaction> IUnitOfWork.LoyaltyTransactions => throw new NotImplementedException();
 
     public Task<int> SaveChangesAsync(CancellationToken ct = default) { SaveCount++; return Task.FromResult(1); }
     public int SaveCount { get; private set; }

@@ -4,6 +4,9 @@ using Microsoft.OpenApi.Models;
 using SmartDine.Menu.API.Middleware;
 using SmartDine.Application;
 using SmartDine.Infrastructure;
+using SmartDine.Infrastructure.Persistence;
+using System.Security.Cryptography;
+using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -83,6 +86,32 @@ builder.Services.AddSwaggerGen(c =>
 });
 
 var app = builder.Build();
+
+// ===== Auto Migrate and Seed Database =====
+using (var scope = app.Services.CreateScope())
+{
+    var services = scope.ServiceProvider;
+    try
+    {
+        var context = services.GetRequiredService<SmartDineDbContext>();
+        if (context.Database.IsRelational())
+        {
+            await context.Database.MigrateAsync();
+        }
+        else
+        {
+            await context.Database.EnsureCreatedAsync();
+        }
+
+        var seeder = services.GetRequiredService<DbSeeder>();
+        await seeder.SeedAsync();
+    }
+    catch (Exception ex)
+    {
+        var logger = services.GetRequiredService<ILogger<Program>>();
+        logger.LogError(ex, "An error occurred while migrating or seeding the database.");
+    }
+}
 
 // ===== Middleware Pipeline =====
 app.UseMiddleware<ExceptionHandlingMiddleware>();

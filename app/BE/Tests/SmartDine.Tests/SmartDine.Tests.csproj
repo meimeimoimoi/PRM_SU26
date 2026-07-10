@@ -22,9 +22,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\SmartDine.Application\SmartDine.Application.csproj" />
-    <ProjectReference Include="..\Shared\SmartDine.Domain\SmartDine.Domain.csproj" />
-    <ProjectReference Include="..\Shared\SmartDine.Infrastructure\SmartDine.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\Shared\SmartDine.Application\SmartDine.Application.csproj" />
+    <ProjectReference Include="..\..\Shared\SmartDine.Domain\SmartDine.Domain.csproj" />
+    <ProjectReference Include="..\..\Shared\SmartDine.Infrastructure\SmartDine.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>

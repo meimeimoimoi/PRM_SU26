@@ -4,13 +4,13 @@ EXPOSE 8080
 
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
-COPY ["SmartDine.Table.API/SmartDine.Table.API.csproj", "SmartDine.Table.API/"]
-COPY ["SmartDine.Application/SmartDine.Application.csproj", "SmartDine.Application/"]
-COPY ["SmartDine.Domain/SmartDine.Domain.csproj", "SmartDine.Domain/"]
-COPY ["SmartDine.Infrastructure/SmartDine.Infrastructure.csproj", "SmartDine.Infrastructure/"]
-RUN dotnet restore "SmartDine.Table.API/SmartDine.Table.API.csproj"
+COPY ["Services/SmartDine.Table.API/SmartDine.Table.API.csproj", "Services/SmartDine.Table.API/"]
+COPY ["Shared/SmartDine.Application/SmartDine.Application.csproj", "Shared/SmartDine.Application/"]
+COPY ["Shared/SmartDine.Domain/SmartDine.Domain.csproj", "Shared/SmartDine.Domain/"]
+COPY ["Shared/SmartDine.Infrastructure/SmartDine.Infrastructure.csproj", "Shared/SmartDine.Infrastructure/"]
+RUN dotnet restore "Services/SmartDine.Table.API/SmartDine.Table.API.csproj"
 COPY . .
-WORKDIR "/src/SmartDine.Table.API"
+WORKDIR "/src/Services/SmartDine.Table.API"
 RUN dotnet build "SmartDine.Table.API.csproj" -c Release -o /app/build
 
 FROM build AS publish

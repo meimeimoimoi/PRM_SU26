@@ -2,11 +2,12 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+using SmartDine.Identity.API.HealthChecks;
 using SmartDine.Identity.API.Middleware;
 using SmartDine.Application;
 using SmartDine.Infrastructure;
 using SmartDine.Infrastructure.Persistence;
-using SmartDine.Infrastructure.Security;
+using System.Security.Cryptography;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -15,7 +16,13 @@ builder.Services.AddInfrastructureServices(builder.Configuration);
 builder.Services.AddApplicationServices();
 
 // ===== Authentication & Authorization (RSA256) =====
-var rsaKeyService = new RsaKeyService(builder.Configuration);
+var rsaPublicKeyBase64 = builder.Configuration["Jwt:RsaPublicKey"];
+RSA? rsaPublicKey = null;
+if (!string.IsNullOrEmpty(rsaPublicKeyBase64))
+{
+    rsaPublicKey = RSA.Create();
+    rsaPublicKey.ImportRSAPublicKey(Convert.FromBase64String(rsaPublicKeyBase64), out _);
+}
 
 builder.Services.AddAuthentication(options =>
 {
@@ -32,7 +39,7 @@ builder.Services.AddAuthentication(options =>
         ValidateIssuerSigningKey = true,
         ValidIssuer = builder.Configuration["Jwt:Issuer"],
         ValidAudience = builder.Configuration["Jwt:Audience"],
-        IssuerSigningKey = new RsaSecurityKey(rsaKeyService.GetRsaKey())
+        IssuerSigningKey = rsaPublicKey != null ? new RsaSecurityKey(rsaPublicKey) : null
     };
 });
 

@@ -1,1 +1,20 @@
-using SmartDine.Domain.Enums;namespace SmartDine.Domain.Constants;/// <summary>/// Hß¦¦ng sß+æ role d+¦ng trong [Authorize(Roles = ...)]./// Compile-time const GÇö an to+án khi -æß+òi t+¬n enum v+¼ d+¦ng nameof()./// </summary>public static class Roles{    // GöÇGöÇ Single roles GöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇ    public const string Customer = nameof(UserRole.CUSTOMER);    public const string Guest    = nameof(UserRole.GUEST);    public const string Staff    = nameof(UserRole.STAFF);    public const string Chef     = nameof(UserRole.CHEF);    public const string Manager  = nameof(UserRole.MANAGER);    // GöÇGöÇ Role groups (comma-separated, d+¦ng cho Authorize attribute) GöÇGöÇ    /// <summary>CUSTOMER, GUEST GÇö kh+ích ngß+ôi b+án.</summary>    public const string AllDiners = Customer + "," + Guest;    /// <summary>CUSTOMER, GUEST, STAFF GÇö ai c+¦ thß+â -æß¦+t m+¦n.</summary>    public const string AllDinersAndStaff = Customer + "," + Guest + "," + Staff;    /// <summary>STAFF, CHEF, MANAGER GÇö nh+ón vi+¬n bß¦+p/phß+Ñc vß+Ñ.</summary>    public const string KitchenStaff = Staff + "," + Chef + "," + Manager;    /// <summary>MANAGER, CHEF GÇö quß¦ún l++ hoß¦+c -æß¦ºu bß¦+p.</summary>    public const string ManagerAndChef = Manager + "," + Chef;    /// <summary>STAFF, MANAGER GÇö quß¦ún l++ b+án / reservation.</summary>    public const string StaffAndManager = Staff + "," + Manager;    /// <summary>CUSTOMER, STAFF, MANAGER GÇö -æß¦+t b+án tr¦¦ß+¢c.</summary>    public const string CustomerAndManagement = Customer + "," + Staff + "," + Manager;    /// <summary>CUSTOMER, GUEST, STAFF, MANAGER GÇö tß¦Ñt cß¦ú trß+½ CHEF.</summary>    public const string AllExceptChef = Customer + "," + Guest + "," + Staff + "," + Manager;}
+using SmartDine.Domain.Enums;
+namespace SmartDine.Domain.Constants
+{
+    public static class Roles
+    {
+        public const string Customer = nameof(UserRole.CUSTOMER);
+        public const string Guest = nameof(UserRole.GUEST);
+        public const string Staff = nameof(UserRole.STAFF);
+        public const string Chef = nameof(UserRole.CHEF);
+        public const string Manager = nameof(UserRole.MANAGER);
+
+        public const string AllDiners = Customer + "," + Guest;
+        public const string AllDinersAndStaff = Customer + "," + Guest + "," + Staff;
+        public const string KitchenStaff = Staff + "," + Chef + "," + Manager;
+        public const string ManagerAndChef = Manager + "," + Chef;
+        public const string StaffAndManager = Staff + "," + Manager;
+        public const string CustomerAndManagement = Customer + "," + Staff + "," + Manager;
+        public const string AllExceptChef = Customer + "," + Guest + "," + Staff + "," + Manager;
+    }
+}

@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using SmartDine.Application.Constants;
 using SmartDine.Application.DTOs.Common;
+using SmartDine.Domain.Constants;
 using SmartDine.Domain.Enums;
 
 namespace SmartDine.AI.API.Controllers;
@@ -88,6 +89,7 @@ public class AiController : ControllerBase
     }
 
     [HttpPost("query")]
+    [Authorize(Roles = Roles.Manager)]
     public async Task<IActionResult> Query([FromBody] QueryRequest request)
     {
         if (string.IsNullOrWhiteSpace(request.Prompt))

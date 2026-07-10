@@ -3,32 +3,43 @@ using System.Security.Claims;
 using System.Security.Cryptography;
 using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
+using SmartDine.Domain.Interfaces;
 using SmartDine.Infrastructure.Security;
 
 namespace SmartDine.Tests;
 
+public class FakeRsaKeyProvider : IRsaKeyProvider
+{
+    public RSAParameters PrivateKeyParameters { get; }
+    public RSAParameters PublicKeyParameters { get; }
+
+    public FakeRsaKeyProvider()
+    {
+        using var rsa = RSA.Create(2048);
+        PrivateKeyParameters = rsa.ExportParameters(true);
+        PublicKeyParameters = rsa.ExportParameters(false);
+    }
+}
+
 public class JwtTokenServiceTests
 {
     private readonly JwtTokenService _jwtService;
-    private readonly RsaKeyService _rsaKeyService;
+    private readonly IRsaKeyProvider _rsaKeyProvider;
     private readonly IConfiguration _configuration;
 
     public JwtTokenServiceTests()
     {
-        var rsa = RSA.Create(2048);
-        var privateKeyBase64 = Convert.ToBase64String(rsa.ExportRSAPrivateKey());
+        _rsaKeyProvider = new FakeRsaKeyProvider();
 
         var config = new Dictionary<string, string?>
         {
-            { "Jwt:RsaPrivateKey", privateKeyBase64 },
             { "Jwt:Issuer", "SmartDineTest" },
             { "Jwt:Audience", "SmartDineTestApp" },
             { "Jwt:AccessTokenExpiryMinutes", "60" }
         };
 
         _configuration = new ConfigurationBuilder().AddInMemoryCollection(config).Build();
-        _rsaKeyService = new RsaKeyService(_configuration);
-        _jwtService = new JwtTokenService(_configuration, _rsaKeyService);
+        _jwtService = new JwtTokenService(_configuration, _rsaKeyProvider);
     }
 
     [Fact]
@@ -68,7 +79,8 @@ public class JwtTokenServiceTests
     {
         var (token, _) = _jwtService.GenerateAccessToken(1, "test@test.com", "Test", "STAFF");
 
-        var rsaKey = _rsaKeyService.GetRsaKey();
+        var rsa = RSA.Create();
+        rsa.ImportParameters(_rsaKeyProvider.PublicKeyParameters);
         var handler = new JwtSecurityTokenHandler();
 
         var validationParams = new TokenValidationParameters
@@ -79,7 +91,7 @@ public class JwtTokenServiceTests
             ValidateIssuerSigningKey = true,
             ValidIssuer = "SmartDineTest",
             ValidAudience = "SmartDineTestApp",
-            IssuerSigningKey = new RsaSecurityKey(rsaKey)
+            IssuerSigningKey = new RsaSecurityKey(rsa)
         };
 
         var principal = handler.ValidateToken(token, validationParams, out var securityToken);
