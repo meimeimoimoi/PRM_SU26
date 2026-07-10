@@ -4,27 +4,24 @@ using SmartDine.Infrastructure.Security;
 
 namespace SmartDine.Tests.Unit;
 
-public class RsaKeyProviderTests : IDisposable
+public class RsaKeyProviderTests
 {
-    private readonly string _privateKeyPath;
-    private readonly string _publicKeyPath;
+    private readonly string _privateKeyBase64;
+    private readonly string _publicKeyBase64;
 
     public RsaKeyProviderTests()
     {
-        _privateKeyPath = Path.Combine(Path.GetTempPath(), $"test_private_{Guid.NewGuid()}.pem");
-        _publicKeyPath  = Path.Combine(Path.GetTempPath(), $"test_public_{Guid.NewGuid()}.pem");
-
         using var rsa = RSA.Create(2048);
-        File.WriteAllText(_privateKeyPath, rsa.ExportPkcs8PrivateKeyPem());
-        File.WriteAllText(_publicKeyPath,  rsa.ExportSubjectPublicKeyInfoPem());
+        _privateKeyBase64 = Convert.ToBase64String(rsa.ExportRSAPrivateKey());
+        _publicKeyBase64 = Convert.ToBase64String(rsa.ExportRSAPublicKey());
     }
 
-    private IConfiguration BuildConfig(string? privatePath = null, string? publicPath = null)
+    private IConfiguration BuildConfig(string? privateKey = null, string? publicKey = null)
         => new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
-                ["Jwt:PrivateKeyPath"] = privatePath ?? _privateKeyPath,
-                ["Jwt:PublicKeyPath"]  = publicPath  ?? _publicKeyPath,
+                ["Jwt:RsaPrivateKey"] = privateKey ?? _privateKeyBase64,
+                ["Jwt:RsaPublicKey"] = publicKey ?? _publicKeyBase64,
             })
             .Build();
 
@@ -66,27 +63,28 @@ public class RsaKeyProviderTests : IDisposable
     }
 
     [Fact]
-    public void Constructor_ThrowsWhenPrivateKeyFileNotFound()
+    public void Constructor_ThrowsWhenPrivateKeyMissing()
     {
-        // Use a valid temp directory but with a non-existent filename → FileNotFoundException
-        var missingFile = Path.Combine(Path.GetTempPath(), $"missing_{Guid.NewGuid()}.pem");
-        var config = BuildConfig(privatePath: missingFile);
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Jwt:RsaPublicKey"] = _publicKeyBase64,
+            })
+            .Build();
 
-        Assert.Throws<FileNotFoundException>(() => new RsaKeyProvider(config));
+        Assert.Throws<InvalidOperationException>(() => new RsaKeyProvider(config));
     }
 
     [Fact]
-    public void Constructor_ThrowsWhenPublicKeyFileNotFound()
+    public void Constructor_ThrowsWhenPublicKeyMissing()
     {
-        var missingFile = Path.Combine(Path.GetTempPath(), $"missing_{Guid.NewGuid()}.pem");
-        var config = BuildConfig(publicPath: missingFile);
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Jwt:RsaPrivateKey"] = _privateKeyBase64,
+            })
+            .Build();
 
-        Assert.Throws<FileNotFoundException>(() => new RsaKeyProvider(config));
-    }
-
-    public void Dispose()
-    {
-        if (File.Exists(_privateKeyPath)) File.Delete(_privateKeyPath);
-        if (File.Exists(_publicKeyPath))  File.Delete(_publicKeyPath);
+        Assert.Throws<InvalidOperationException>(() => new RsaKeyProvider(config));
     }
 }

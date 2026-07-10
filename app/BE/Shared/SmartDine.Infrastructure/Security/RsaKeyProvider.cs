@@ -11,14 +11,16 @@ public class RsaKeyProvider : IRsaKeyProvider
 
     public RsaKeyProvider(IConfiguration configuration)
     {
-        var privatePem = File.ReadAllText(configuration["Jwt:PrivateKeyPath"]!);
+        var privateKeyBase64 = configuration["Jwt:RsaPrivateKey"]
+            ?? throw new InvalidOperationException("Missing configuration value 'Jwt:RsaPrivateKey'.");
         using var rsaPrivate = RSA.Create();
-        rsaPrivate.ImportFromPem(privatePem);
+        rsaPrivate.ImportRSAPrivateKey(Convert.FromBase64String(privateKeyBase64), out _);
         PrivateKeyParameters = rsaPrivate.ExportParameters(true);
 
-        var publicPem = File.ReadAllText(configuration["Jwt:PublicKeyPath"]!);
+        var publicKeyBase64 = configuration["Jwt:RsaPublicKey"]
+            ?? throw new InvalidOperationException("Missing configuration value 'Jwt:RsaPublicKey'.");
         using var rsaPublic = RSA.Create();
-        rsaPublic.ImportFromPem(publicPem);
+        rsaPublic.ImportRSAPublicKey(Convert.FromBase64String(publicKeyBase64), out _);
         PublicKeyParameters = rsaPublic.ExportParameters(false);
     }
 }
