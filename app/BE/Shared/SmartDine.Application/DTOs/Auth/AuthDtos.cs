@@ -120,6 +120,9 @@ public class UserInfoResponse
     public string Email { get; set; } = string.Empty;
     public string Role { get; set; } = string.Empty;
     public string? AvatarUrl { get; set; }
+    public string? PhoneNumber { get; set; }
+    public int? LoyaltyPoints { get; set; }
+    public string? MembershipLevel { get; set; }
 }
 
 // ─────────────────────────────────────────────────────────────

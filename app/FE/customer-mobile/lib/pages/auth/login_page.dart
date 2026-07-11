@@ -29,20 +29,23 @@ class LoginPage extends ConsumerStatefulWidget {
 class _LoginPageState extends ConsumerState<LoginPage> {
   final _nameController = TextEditingController();
   final _phoneController = TextEditingController();
+  final _tableIdController = TextEditingController(text: '1');
 
   @override
   void dispose() {
     _nameController.dispose();
     _phoneController.dispose();
+    _tableIdController.dispose();
     super.dispose();
   }
 
   void _handleGuestLogin() async {
     final name = _nameController.text.trim();
     final phone = _phoneController.text.trim();
+    final tableId = int.tryParse(_tableIdController.text.trim()) ?? 1;
     
     // In a real scenario, tableId would be scanned from QR code or retrieved from deep link
-    final success = await ref.read(authViewModelProvider.notifier).loginGuest(12, name, phone);
+    final success = await ref.read(authViewModelProvider.notifier).loginGuest(tableId, name, phone);
     
     if (success && mounted) {
       context.go('/home');
@@ -90,7 +93,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
               borderRadius: BorderRadius.circular(100.r),
             ),
             child: Text(
-              'Bàn 12',
+              'GUEST',
               style: TextStyle(
                 color: _AppColors.onPrimaryContainer,
                 fontSize: 12.sp,
@@ -187,7 +190,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Bàn số 12',
+                          'Bàn của bạn',
                           style: TextStyle(
                             color: _AppColors.onSurface,
                             fontSize: 20.sp,
@@ -233,6 +236,15 @@ class _LoginPageState extends ConsumerState<LoginPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  _buildLabel('Số Bàn', true),
+                  SizedBox(height: 8.h),
+                  _buildTextField(
+                    controller: _tableIdController,
+                    icon: Icons.table_restaurant,
+                    hintText: 'Nhập số bàn',
+                    keyboardType: TextInputType.number,
+                  ),
+                  SizedBox(height: 16.h),
                   _buildLabel('Tên của bạn', true),
                   SizedBox(height: 8.h),
                   _buildTextField(

@@ -1,4 +1,6 @@
+import 'dart:io';
 import 'package:dio/dio.dart';
+import 'package:dio/io.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../config/constants.dart';
@@ -17,6 +19,17 @@ final dioProvider = Provider<Dio>((ref) {
       'Accept': 'application/json',
     },
   ));
+
+  dio.httpClientAdapter = IOHttpClientAdapter(
+    createHttpClient: () {
+      final client = HttpClient();
+      // Bypass system proxy to prevent connecting to phantom ports like 59674
+      client.findProxy = (uri) {
+        return "DIRECT";
+      };
+      return client;
+    },
+  );
 
   dio.interceptors.add(InterceptorsWrapper(
     onRequest: (options, handler) async {
@@ -38,7 +51,7 @@ final dioProvider = Provider<Dio>((ref) {
           try {
             // Fetch a new access token
             final tokenResponse = await Dio().post(
-              '${dio.options.baseUrl}/auth/refresh-token',
+              '${dio.options.baseUrl}auth/refresh-token',
               data: {'refreshToken': refreshToken},
             );
             final newAccessToken = tokenResponse.data['data']['accessToken'];

@@ -13,12 +13,12 @@ class OrderRepository {
   OrderRepository(this._dio);
 
   Future<OrderResponse> placeOrder(PlaceOrderRequest request) async {
-    final response = await _dio.post('/orders', data: request.toJson());
+    final response = await _dio.post('orders', data: request.toJson());
     return OrderResponse.fromJson(response.data['data']);
   }
 
   Future<List<OrderResponse>> getMyOrders({int page = 1, int pageSize = 20}) async {
-    final response = await _dio.get('/orders/my', queryParameters: {
+    final response = await _dio.get('orders/my', queryParameters: {
       'page': page,
       'pageSize': pageSize,
     });

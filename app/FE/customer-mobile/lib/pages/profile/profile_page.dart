@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../viewmodels/auth_viewmodel.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../viewmodels/auth_viewmodel.dart';
 
 class _AppColors {
   static const Color primary = Color(0xFFad2c00);
@@ -20,8 +24,6 @@ class _AppColors {
   static const Color onPrimary = Color(0xFFffffff);
 }
 
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../viewmodels/auth_viewmodel.dart';
 
 class ProfilePage extends ConsumerWidget {
   const ProfilePage({super.key});
@@ -33,8 +35,19 @@ class ProfilePage extends ConsumerWidget {
     final guest = authState.guestSession;
     
     final name = user?.fullName ?? guest?.role ?? 'Khách';
-    final phone = user?.phoneNumber ?? 'Không có SĐT';
+    final phone = user?.phoneNumber != null && user!.phoneNumber!.isNotEmpty ? user.phoneNumber! : 'Không có SĐT';
     final isGuest = guest != null;
+    
+    final loyaltyPoints = user?.loyaltyPoints ?? 0;
+    String membership = isGuest ? 'KHÁCH VÃNG LAI' : 'THÀNH VIÊN MỚI';
+    if (user?.membershipLevel != null) {
+      final level = user!.membershipLevel!.toUpperCase();
+      if (level == 'BRONZE') membership = 'THÀNH VIÊN ĐỒNG';
+      else if (level == 'SILVER') membership = 'THÀNH VIÊN BẠC';
+      else if (level == 'GOLD') membership = 'THÀNH VIÊN VÀNG';
+      else if (level == 'VIP') membership = 'THÀNH VIÊN VIP';
+      else membership = 'THÀNH VIÊN $level';
+    }
 
     return Scaffold(
       backgroundColor: _AppColors.background,
@@ -118,7 +131,7 @@ class ProfilePage extends ConsumerWidget {
                           Icon(Icons.verified, color: _AppColors.onSecondaryContainer, size: 14.sp),
                           SizedBox(width: 4.w),
                           Text(
-                            isGuest ? 'KHÁCH VÃNG LAI' : 'THÀNH VIÊN BẠC',
+                            membership,
                             style: TextStyle(
                               color: _AppColors.onSecondaryContainer,
                               fontSize: 10.sp,
@@ -184,7 +197,7 @@ class ProfilePage extends ConsumerWidget {
                                 ),
                                 SizedBox(height: 4.h),
                                 Text(
-                                  '1,250 điểm',
+                                  '$loyaltyPoints điểm',
                                   style: TextStyle(
                                     color: Colors.white,
                                     fontSize: 26.sp,
@@ -227,7 +240,7 @@ class ProfilePage extends ConsumerWidget {
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             Text(
-                              'Còn 750 điểm tới hạng Vàng',
+                              isGuest ? 'Đăng ký tài khoản để tích điểm' : 'Tiếp tục tích điểm để thăng hạng',
                               style: TextStyle(
                                 color: Colors.white.withOpacity(0.9),
                                 fontSize: 14.sp,

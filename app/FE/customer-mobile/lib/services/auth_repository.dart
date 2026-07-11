@@ -13,7 +13,7 @@ class AuthRepository {
   AuthRepository(this._dio);
 
   Future<TokenResponse> login(String email, String password) async {
-    final response = await _dio.post('/auth/login', data: {
+    final response = await _dio.post('auth/login', data: {
       'email': email,
       'password': password,
     });
@@ -21,7 +21,7 @@ class AuthRepository {
   }
 
   Future<TokenResponse> register(String fullName, String email, String password, String? phoneNumber) async {
-    final response = await _dio.post('/auth/register', data: {
+    final response = await _dio.post('auth/register', data: {
       'fullName': fullName,
       'email': email,
       'password': password,
@@ -31,7 +31,7 @@ class AuthRepository {
   }
 
   Future<GuestLoginResponse> loginGuest(int tableId, String? guestName, String? guestPhone) async {
-    final response = await _dio.post('/auth/login-guest', data: {
+    final response = await _dio.post('auth/login-guest', data: {
       'tableId': tableId,
       if (guestName != null && guestName.isNotEmpty) 'guestName': guestName,
       if (guestPhone != null && guestPhone.isNotEmpty) 'guestPhone': guestPhone,
@@ -40,11 +40,11 @@ class AuthRepository {
   }
 
   Future<void> logout() async {
-    await _dio.post('/auth/logout');
+    await _dio.post('auth/logout');
   }
 
   Future<UserInfo> getCurrentUser() async {
-    final response = await _dio.get('/auth/me');
+    final response = await _dio.get('auth/me');
     return UserInfo.fromJson(response.data['data']);
   }
 }

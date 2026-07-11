@@ -3,6 +3,8 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../viewmodels/menu_viewmodel.dart';
+import '../../viewmodels/auth_viewmodel.dart';
+import '../../viewmodels/cart_viewmodel.dart';
 import '../../models/menu_models.dart';
 
 class _AppColors {
@@ -57,6 +59,13 @@ class _HomePageState extends ConsumerState<HomePage> {
 
   @override
   Widget build(BuildContext context) {
+    final authState = ref.watch(authViewModelProvider);
+    final tableNumber = authState.guestSession?.tableNumber ?? 1;
+
+    final cartState = ref.watch(cartViewModelProvider);
+    final cartItemCount = cartState.items.fold<int>(0, (sum, item) => sum + item.quantity);
+    final cartTotal = cartState.total;
+
     return Scaffold(
       backgroundColor: _AppColors.background,
       body: Stack(
@@ -99,7 +108,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                         Icon(Icons.table_restaurant, color: _AppColors.primary, size: 16.sp),
                         SizedBox(width: 4.w),
                         Text(
-                          'Bàn 12',
+                          'Bàn $tableNumber',
                           style: TextStyle(
                             color: _AppColors.primary,
                             fontSize: 12.sp,
@@ -431,10 +440,18 @@ class _HomePageState extends ConsumerState<HomePage> {
                                                 ),
                                               ],
                                             ),
-                                            child: Icon(
-                                              Icons.add,
-                                              color: Colors.white,
-                                              size: 20.sp,
+                                            child: InkWell(
+                                              onTap: () {
+                                                ref.read(cartViewModelProvider.notifier).addItem(item);
+                                                ScaffoldMessenger.of(context).showSnackBar(
+                                                  SnackBar(content: Text('Đã thêm ${item.name} vào giỏ hàng')),
+                                                );
+                                              },
+                                              child: Icon(
+                                                Icons.add,
+                                                color: Colors.white,
+                                                size: 20.sp,
+                                              ),
                                             ),
                                           ),
                                         ],
@@ -504,7 +521,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                           ),
                           child: Center(
                             child: Text(
-                              '3',
+                              '$cartItemCount',
                               style: TextStyle(
                                 color: Colors.white,
                                 fontSize: 10.sp,
@@ -529,7 +546,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                           ),
                         ),
                         Text(
-                          '3 món • 750k',
+                          '$cartItemCount món • ${cartTotal}k',
                           style: TextStyle(
                             color: Colors.white,
                             fontSize: 16.sp,

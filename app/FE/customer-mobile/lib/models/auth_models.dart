@@ -4,6 +4,9 @@ class UserInfo {
   final String email;
   final String role;
   final String? avatarUrl;
+  final String? phoneNumber;
+  final int? loyaltyPoints;
+  final String? membershipLevel;
 
   UserInfo({
     required this.id,
@@ -11,6 +14,9 @@ class UserInfo {
     required this.email,
     required this.role,
     this.avatarUrl,
+    this.phoneNumber,
+    this.loyaltyPoints,
+    this.membershipLevel,
   });
 
   factory UserInfo.fromJson(Map<String, dynamic> json) {
@@ -20,6 +26,9 @@ class UserInfo {
       email: json['email'] ?? '',
       role: json['role'] ?? '',
       avatarUrl: json['avatarUrl'],
+      phoneNumber: json['phoneNumber'],
+      loyaltyPoints: json['loyaltyPoints'],
+      membershipLevel: json['membershipLevel'],
     );
   }
 }

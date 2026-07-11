@@ -78,7 +78,7 @@ public class AuthService
             if (customer.PasswordHash == null || !_passwordHasher.VerifyPassword(request.Password, customer.PasswordHash))
                 throw new BusinessRuleViolationException(ValidationMessages.EMAIL_OR_PASSSWORD_INVALID);
 
-            return await GenerateTokenResponseAsync(customer.Id, customer.Email ?? string.Empty, customer.FullName ?? "Customer", UserRole.CUSTOMER.ToString(), UserType.CUSTOMER);
+            return await GenerateTokenResponseAsync(customer.Id, customer.Email ?? string.Empty, customer.FullName ?? "Customer", UserRole.CUSTOMER.ToString(), UserType.CUSTOMER, customer.Phone, customer.LoyaltyPoints, customer.MembershipLevel.ToString());
         }
 
         // Không tìm thấy → trả lỗi chung (chống enumeration)
@@ -126,7 +126,7 @@ public class AuthService
         await _uow.SaveChangesAsync();
 
         // Tự động login: tạo token ngay sau register
-        return await GenerateTokenResponseAsync(customer.Id, customer.Email, customer.FullName, UserRole.CUSTOMER.ToString(), UserType.CUSTOMER);
+        return await GenerateTokenResponseAsync(customer.Id, customer.Email, customer.FullName, UserRole.CUSTOMER.ToString(), UserType.CUSTOMER, customer.Phone, customer.LoyaltyPoints, customer.MembershipLevel.ToString());
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -364,7 +364,10 @@ public class AuthService
                     Id = customer.Id,
                     FullName = customer.FullName ?? "Customer",
                     Email = customer.Email ?? string.Empty,
-                    Role = UserRole.CUSTOMER.ToString()
+                    Role = UserRole.CUSTOMER.ToString(),
+                    PhoneNumber = customer.Phone,
+                    LoyaltyPoints = customer.LoyaltyPoints,
+                    MembershipLevel = customer.MembershipLevel.ToString()
                 };
             }
         }
@@ -509,7 +512,7 @@ public class AuthService
     ///   3. Lưu RefreshToken vào DB kèm JwtId (liên kết cặp token), ExpiresAt = 7 ngày.
     ///   4. Trả TokenResponse cho client.
     /// </summary>
-    private async Task<TokenResponse> GenerateTokenResponseAsync(int id, string email, string fullName, string role, UserType userType)
+    private async Task<TokenResponse> GenerateTokenResponseAsync(int id, string email, string fullName, string role, UserType userType, string? phone = null, int? loyaltyPoints = null, string? membershipLevel = null)
     {
         var (accessToken, jwtId) = _jwtService.GenerateAccessToken(id, email, fullName, role);
         var refreshToken = _jwtService.GenerateRefreshToken();
@@ -536,7 +539,10 @@ public class AuthService
                 Id = id,
                 FullName = fullName,
                 Email = email,
-                Role = role
+                Role = role,
+                PhoneNumber = phone,
+                LoyaltyPoints = loyaltyPoints,
+                MembershipLevel = membershipLevel
             }
         };
     }

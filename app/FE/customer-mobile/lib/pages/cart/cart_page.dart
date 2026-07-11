@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../viewmodels/cart_viewmodel.dart';
+import '../../viewmodels/auth_viewmodel.dart';
+
 
 class _AppColors {
   static const Color primary = Color(0xFFad2c00);
@@ -28,8 +32,6 @@ class _AppColors {
   static const Color onSecondary = Color(0xFFffffff);
 }
 
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../viewmodels/cart_viewmodel.dart';
 
 class CartPage extends ConsumerStatefulWidget {
   const CartPage({super.key});
@@ -43,6 +45,11 @@ class _CartPageState extends ConsumerState<CartPage> {
 
   @override
   Widget build(BuildContext context) {
+    final authState = ref.watch(authViewModelProvider);
+    final tableNumber = authState.guestSession?.tableNumber ?? 1;
+    final tableId = authState.guestSession?.tableId ?? 1;
+    final sessionId = authState.guestSession?.sessionId ?? 1;
+
     final cartState = ref.watch(cartViewModelProvider);
     final items = cartState.items;
 
@@ -62,7 +69,7 @@ class _CartPageState extends ConsumerState<CartPage> {
             Icon(Icons.restaurant, color: _AppColors.primary, size: 24.sp),
             SizedBox(width: 8.w),
             Text(
-              'Giỏ hàng bàn số 12',
+              'Giỏ hàng bàn số $tableNumber',
               style: TextStyle(
                 color: _AppColors.primary,
                 fontSize: 20.sp,
@@ -80,7 +87,7 @@ class _CartPageState extends ConsumerState<CartPage> {
               borderRadius: BorderRadius.circular(12.r),
             ),
             child: Text(
-              'Bàn 12',
+              'Bàn $tableNumber',
               style: TextStyle(
                 color: _AppColors.onPrimaryContainer,
                 fontSize: 12.sp,
@@ -552,7 +559,7 @@ class _CartPageState extends ConsumerState<CartPage> {
             ElevatedButton(
               onPressed: () async {
                 // Submit order to API
-                final success = await ref.read(cartViewModelProvider.notifier).checkout(12, 1); // Mock tableId and sessionId
+                final success = await ref.read(cartViewModelProvider.notifier).checkout(tableId, sessionId);
                 if (success && mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text('Đặt món thành công!')),

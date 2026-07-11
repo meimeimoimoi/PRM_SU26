@@ -13,19 +13,19 @@ class MenuRepository {
   MenuRepository(this._dio);
 
   Future<List<MenuItemSummary>> getMenuItems({int? categoryId, String? search, int page = 1, int limit = 10}) async {
-    final response = await _dio.get('/menu-items', queryParameters: {
+    final response = await _dio.get('menu-items', queryParameters: {
       if (categoryId != null) 'category_id': categoryId,
       if (search != null && search.isNotEmpty) 'search': search,
       'page': page,
       'limit': limit,
     });
     
-    final items = response.data['data']['items'] as List;
+    final items = response.data['data'] as List;
     return items.map((e) => MenuItemSummary.fromJson(e)).toList();
   }
 
   Future<List<AiRecommendationItem>> getAiRecommendations({int limit = 5}) async {
-    final response = await _dio.get('/menu-items/ai-recommendations', queryParameters: {
+    final response = await _dio.get('menu-items/ai-recommendations', queryParameters: {
       'limit': limit,
     });
     
