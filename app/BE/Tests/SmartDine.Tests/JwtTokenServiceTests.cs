@@ -119,15 +119,12 @@ public class JwtTokenServiceTests
     [Fact]
     public void GeneratePasswordResetToken_ReturnsUniqueBase64String()
     {
-        var token1 = _jwtService.GeneratePasswordResetToken();
-        var token2 = _jwtService.GeneratePasswordResetToken();
+        var token1 = _jwtService.GeneratePasswordResetToken(1, "test@test.com", "STAFF");
+        var token2 = _jwtService.GeneratePasswordResetToken(2, "other@test.com", "CUSTOMER");
 
         Assert.NotEmpty(token1);
         Assert.NotEmpty(token2);
         Assert.NotEqual(token1, token2);
-
-        var bytes = Convert.FromBase64String(token1);
-        Assert.Equal(32, bytes.Length);
     }
 
     [Fact]

@@ -12,7 +12,7 @@ using SmartDine.Domain.Enums;
 using SmartDine.Infrastructure.Persistence;
 
 namespace SmartDine.Tests;
-
+public partial class Program{}
 public class IntegrationTests : IClassFixture<CustomWebApplicationFactory<Program>>
 {
     private readonly CustomWebApplicationFactory<Program> _factory;

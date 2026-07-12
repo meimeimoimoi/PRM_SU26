@@ -319,7 +319,7 @@ public class AuthServiceTests
     {
         var user = new User { Id = 1, Email = "staff@test.com" };
         _userRepoMock.Setup(r => r.GetByEmailAsync("staff@test.com")).ReturnsAsync(user);
-        _jwtMock.Setup(j => j.GeneratePasswordResetToken()).Returns("reset_token_123");
+        _jwtMock.Setup(j => j.GeneratePasswordResetToken(1, "staff@test.com", "STAFF")).Returns("reset_token_123");
         _passwordResetTokenRepoMock.Setup(r => r.AddAsync(It.IsAny<PasswordResetToken>())).ReturnsAsync((PasswordResetToken t) => t);
 
         var result = await _authService.ForgotPasswordAsync(new ForgotPasswordRequest { Email = "staff@test.com" });
@@ -334,7 +334,7 @@ public class AuthServiceTests
         _userRepoMock.Setup(r => r.GetByEmailAsync("cust@test.com")).ReturnsAsync((User?)null);
         var customer = new Customer { Id = 5, Email = "cust@test.com" };
         _customerRepoMock.Setup(r => r.GetByEmailAsync("cust@test.com")).ReturnsAsync(customer);
-        _jwtMock.Setup(j => j.GeneratePasswordResetToken()).Returns("reset_cust");
+        _jwtMock.Setup(j => j.GeneratePasswordResetToken(5, "cust@test.com", "CUSTOMER")).Returns("reset_cust");
         _passwordResetTokenRepoMock.Setup(r => r.AddAsync(It.IsAny<PasswordResetToken>())).ReturnsAsync((PasswordResetToken t) => t);
 
         var result = await _authService.ForgotPasswordAsync(new ForgotPasswordRequest { Email = "cust@test.com" });
