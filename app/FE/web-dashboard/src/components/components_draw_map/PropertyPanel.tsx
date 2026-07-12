@@ -86,10 +86,14 @@ function StartNodeInspector({ node }: { node: GraphNode }) {
   const updateGraphNode = useMapStore((s) => s.updateGraphNode);
   const removeGraphNode = useMapStore((s) => s.removeGraphNode);
   const [thetaDeg, setThetaDeg] = useState(((node.theta ?? 0) * 180) / Math.PI);
+  const [localX, setLocalX] = useState(node.x);
+  const [localY, setLocalY] = useState(node.y);
 
   useEffect(() => {
     setThetaDeg(((node.theta ?? 0) * 180) / Math.PI);
-  }, [node.theta, node.id]);
+    setLocalX(node.x);
+    setLocalY(node.y);
+  }, [node.theta, node.x, node.y, node.id]);
 
   const commitTheta = useCallback(
     (deg: number | null) => {
@@ -108,10 +112,20 @@ function StartNodeInspector({ node }: { node: GraphNode }) {
       <Form layout="vertical">
         <div className="property-grid">
           <Form.Item label="X (m)" style={{ marginBottom: 8 }}>
-            <InputNumber className="full-width-control" value={node.x} step={0.1} disabled />
+            <InputNumber
+              className="full-width-control"
+              value={localX}
+              step={0.1}
+              onChange={(val) => { if (val !== null) { setLocalX(val); updateGraphNode(node.id, { x: val }); } }}
+            />
           </Form.Item>
           <Form.Item label="Y (m)" style={{ marginBottom: 8 }}>
-            <InputNumber className="full-width-control" value={node.y} step={0.1} disabled />
+            <InputNumber
+              className="full-width-control"
+              value={localY}
+              step={0.1}
+              onChange={(val) => { if (val !== null) { setLocalY(val); updateGraphNode(node.id, { y: val }); } }}
+            />
           </Form.Item>
         </div>
         <Form.Item label="Heading θ (degrees)" style={{ marginBottom: 4 }}>
@@ -140,7 +154,15 @@ function StartNodeInspector({ node }: { node: GraphNode }) {
 }
 
 function ChargingNodeInspector({ node }: { node: GraphNode }) {
+  const updateGraphNode = useMapStore((s) => s.updateGraphNode);
   const removeGraphNode = useMapStore((s) => s.removeGraphNode);
+  const [localX, setLocalX] = useState(node.x);
+  const [localY, setLocalY] = useState(node.y);
+
+  useEffect(() => {
+    setLocalX(node.x);
+    setLocalY(node.y);
+  }, [node.x, node.y, node.id]);
 
   return (
     <Card title="Charging Station" className="panel-card" extra={
@@ -149,10 +171,81 @@ function ChargingNodeInspector({ node }: { node: GraphNode }) {
       <Form layout="vertical">
         <div className="property-grid">
           <Form.Item label="X (m)" style={{ marginBottom: 8 }}>
-            <InputNumber className="full-width-control" value={node.x} step={0.1} disabled />
+            <InputNumber
+              className="full-width-control"
+              value={localX}
+              step={0.1}
+              onChange={(val) => { if (val !== null) { setLocalX(val); updateGraphNode(node.id, { x: val }); } }}
+            />
           </Form.Item>
           <Form.Item label="Y (m)" style={{ marginBottom: 8 }}>
-            <InputNumber className="full-width-control" value={node.y} step={0.1} disabled />
+            <InputNumber
+              className="full-width-control"
+              value={localY}
+              step={0.1}
+              onChange={(val) => { if (val !== null) { setLocalY(val); updateGraphNode(node.id, { y: val }); } }}
+            />
+          </Form.Item>
+        </div>
+      </Form>
+    </Card>
+  );
+}
+
+function GraphNodeInspector({ node }: { node: GraphNode }) {
+  const updateGraphNode = useMapStore((s) => s.updateGraphNode);
+  const removeGraphNode = useMapStore((s) => s.removeGraphNode);
+  const [localX, setLocalX] = useState(node.x);
+  const [localY, setLocalY] = useState(node.y);
+  const [localName, setLocalName] = useState(node.name);
+
+  useEffect(() => {
+    setLocalX(node.x);
+    setLocalY(node.y);
+    setLocalName(node.name);
+  }, [node.x, node.y, node.name, node.id]);
+
+  const typeLabel: Record<string, string> = {
+    waypoint: 'Waypoint',
+    delivery: 'Delivery Point',
+    kitchen: 'Kitchen',
+    charging: 'Charging Station',
+    robotStart: 'Start Position',
+  };
+
+  return (
+    <Card
+      title={typeLabel[node.type] ?? node.type}
+      className="panel-card"
+      extra={
+        <Button danger size="small" icon={<Trash2 size={14} />} onClick={() => removeGraphNode(node.id)}>
+          Delete
+        </Button>
+      }
+    >
+      <Form layout="vertical">
+        <Form.Item label="Name" style={{ marginBottom: 8 }}>
+          <Input
+            value={localName}
+            onChange={(e) => { setLocalName(e.target.value); updateGraphNode(node.id, { name: e.target.value }); }}
+          />
+        </Form.Item>
+        <div className="property-grid">
+          <Form.Item label="X (m)" style={{ marginBottom: 8 }}>
+            <InputNumber
+              className="full-width-control"
+              value={localX}
+              step={0.1}
+              onChange={(val) => { if (val !== null) { setLocalX(val); updateGraphNode(node.id, { x: val }); } }}
+            />
+          </Form.Item>
+          <Form.Item label="Y (m)" style={{ marginBottom: 8 }}>
+            <InputNumber
+              className="full-width-control"
+              value={localY}
+              step={0.1}
+              onChange={(val) => { if (val !== null) { setLocalY(val); updateGraphNode(node.id, { y: val }); } }}
+            />
           </Form.Item>
         </div>
       </Form>
@@ -179,7 +272,9 @@ export function PropertyPanel() {
         ? <StartNodeInspector node={selectedGraphNode} />
         : selectedGraphNode?.type === 'charging'
           ? <ChargingNodeInspector node={selectedGraphNode} />
-          : <InspectorForm selectedObject={selectedObject} onUpdate={updateObject} onDelete={removeObject} />,
+          : selectedGraphNode
+            ? <GraphNodeInspector node={selectedGraphNode} />
+            : <InspectorForm selectedObject={selectedObject} onUpdate={updateObject} onDelete={removeObject} />,
     },
     {
       key: 'console',
