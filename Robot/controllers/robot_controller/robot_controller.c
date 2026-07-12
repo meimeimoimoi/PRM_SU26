@@ -135,6 +135,9 @@ char current_target_name[64] = "";
 // Calibration flag — set by CALIBRATE command, consumed in main loop
 bool calibrate_requested = false;
 
+// Delivery confirmation flag — set true after arriving at delivery table
+bool waiting_for_confirmation = false;
+
 WbDeviceTag lidar;
 double lidar_ranges[LIDAR_MAX_SAMPLES];
 int lidar_actual_count = 0;
@@ -412,6 +415,7 @@ void read_robot_command(double *target_x, double *target_y, bool *target_receive
     
     if (fscanf(fp, "%31s %31s %31s", cmd, target, direction) == 3) {
         if (strcmp(cmd, "NAV_TO_TABLE") == 0) {
+            waiting_for_confirmation = false;
             if (resolve_graph_target(target, target_x, target_y, state)) {
                 *target_received = true;
                 *has_path = false;
@@ -445,6 +449,7 @@ void read_robot_command(double *target_x, double *target_y, bool *target_receive
                 *state = STATE_IDLE;
             }
         } else if (strcmp(cmd, "STOP") == 0) {
+            waiting_for_confirmation = false;
             *target_received = false;
             *has_path = false;
             *state = STATE_IDLE;
@@ -462,6 +467,16 @@ void read_robot_command(double *target_x, double *target_y, bool *target_receive
             *manual_v = 0.0;
             *manual_omega = 0.0;
             printf("Command: CALIBRATE — will reset position on next cycle\n");
+        } else if (strcmp(cmd, "CONFIRM") == 0) {
+            waiting_for_confirmation = false;
+            if (resolve_graph_target("Kitchen", target_x, target_y, state)) {
+                *target_received = true;
+                *has_path = false;
+                graph_route_len = 0;
+                graph_route_requested = true;
+                graph_path_active = false;
+                printf("Command: CONFIRM — returning to Kitchen (%.2f, %.2f)\n", *target_x, *target_y);
+            }
         }
     }
     fclose(fp);
@@ -1724,26 +1739,22 @@ int main(int argc, char **argv) {
             }
         }
 
-        // Keyboard input (chỉ giữ phím số để đi đến bàn, đã bỏ phím S)
+        // Keyboard input — only C for confirm
         int key = wb_keyboard_get_key();
-        if (key >= '1' && key <= '9') {
-            int idx = key - '1';
-            if (idx < num_waypoints && waypoints[idx].valid) {
-                target_x = waypoints[idx].x;
-                target_y = waypoints[idx].y;
+        if (key == 'C' || key == 'c') {
+            waiting_for_confirmation = false;
+            int k_idx = find_graph_node_index_by_name_or_id("Kitchen");
+            if (k_idx >= 0) {
+                target_x = graph_nodes[k_idx].x;
+                target_y = graph_nodes[k_idx].y;
                 target_received = true;
                 has_path = false;
                 robot_state = STATE_NAV_TO_TABLE;
-                strncpy(current_target_name, waypoints[idx].name, sizeof(current_target_name) - 1);
+                strncpy(current_target_name, graph_nodes[k_idx].name, sizeof(current_target_name) - 1);
                 current_target_name[sizeof(current_target_name) - 1] = '\0';
-                printf("Go to %s: (%.2f, %.2f)\n", waypoints[idx].name, target_x, target_y);
-            } else if (num_waypoints == 0 && (key == '1' || key == '2')) {
-                target_x = (key == '1') ? robot_x : -0.8;
-                target_y = (key == '1') ? robot_y : 1.5;
-                target_received = true;
-                has_path = false;
-                robot_state = STATE_NAV_TO_TABLE;
-                printf("Default target: (%.2f, %.2f)\n", target_x, target_y);
+                printf("Key C: Return to Kitchen (%.2f, %.2f)\n", target_x, target_y);
+            } else {
+                printf("Key C: Kitchen node not found in graph!\n");
             }
         }
 
@@ -1871,27 +1882,33 @@ int main(int argc, char **argv) {
             }
 
             if (dist_to_current < wp_accept || final_arrived) {
-                if (is_last_wp || final_arrived) {
-                    has_path = false;
-                    target_received = false;
-                    robot_state = STATE_IDLE;
-                    path_is_graph = false;
-                    path_len = 0;
-                    path_idx = 0;
-                    graph_route_len = 0;
-                    graph_route_requested = false;
-                    graph_path_active = false;
-                    printf("\n========== ARRIVED (d=%.3f, threshold=%.3f) ==========\n", dist_to_final, stop_dist);
-                    current_v = 0.0;
-                    current_omega = 0.0;
-                    if (left_motor && right_motor) {
-                        wb_motor_set_velocity(left_motor, 0.0);
-                        wb_motor_set_velocity(right_motor, 0.0);
-                    }
-                    clear_path_file();
-                    write_robot_state(robot_x, robot_y, robot_theta, 0.0, 0.0, get_state_string(robot_state));
-                    continue;
+            if (is_last_wp || final_arrived) {
+                has_path = false;
+                target_received = false;
+                robot_state = STATE_IDLE;
+                path_is_graph = false;
+                path_len = 0;
+                path_idx = 0;
+                graph_route_len = 0;
+                graph_route_requested = false;
+                graph_path_active = false;
+                printf("\n========== ARRIVED (d=%.3f, threshold=%.3f) ==========\n", dist_to_final, stop_dist);
+                current_v = 0.0;
+                current_omega = 0.0;
+                if (left_motor && right_motor) {
+                    wb_motor_set_velocity(left_motor, 0.0);
+                    wb_motor_set_velocity(right_motor, 0.0);
                 }
+                clear_path_file();
+                if (is_table_target()) {
+                    waiting_for_confirmation = true;
+                    write_robot_state(robot_x, robot_y, robot_theta, 0.0, 0.0, "WAITING_AT_TABLE");
+                    printf("WAITING: At delivery table. Send CONFIRM to return to Kitchen.\n");
+                } else {
+                    write_robot_state(robot_x, robot_y, robot_theta, 0.0, 0.0, get_state_string(robot_state));
+                }
+                continue;
+            }
 
                 // === Stop-and-turn at intermediate waypoint ===
                 // Rotate in place to face the next waypoint before advancing
