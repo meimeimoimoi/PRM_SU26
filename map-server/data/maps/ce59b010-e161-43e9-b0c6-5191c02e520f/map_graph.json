@@ -39,23 +39,23 @@
       "id": "delivery-table-103",
       "type": "delivery",
       "name": "Table 103_Delivery",
-      "x": 2.6875,
+      "x": 2.9375,
       "y": 5.768750000000001,
       "theta": 0,
       "tableNumber": 103,
-      "deliveryOffsetX": -80.25,
+      "deliveryOffsetX": -75.25,
       "deliveryOffsetY": 13.62499999999999
     },
     {
       "id": "delivery-table-104",
       "type": "delivery",
       "name": "Table 104_Delivery",
-      "x": 2.575,
-      "y": -0.40625,
+      "x": 2.66875,
+      "y": -0.46875,
       "theta": 0,
       "tableNumber": 104,
-      "deliveryOffsetX": -94.5,
-      "deliveryOffsetY": -0.8750000000000002
+      "deliveryOffsetX": -92.625,
+      "deliveryOffsetY": 0.3749999999999998
     },
     {
       "id": "kitchen-kitchen-107",

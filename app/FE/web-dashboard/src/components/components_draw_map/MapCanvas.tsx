@@ -635,6 +635,8 @@ export function MapCanvas() {
     nodeStartX?: number;
     nodeStartY?: number;
     nodeStartTheta?: number;
+    startObjX?: number;
+    startObjY?: number;
     kind: 'object' | 'node' | 'theta' | null;
   }>({
     id: null,
@@ -890,8 +892,8 @@ export function MapCanvas() {
           const dy = canvasY - dragState.startY;
           let newWidth = dragState.startWidth;
           let newHeight = dragState.startHeight;
-          let newX = obj.x;
-          let newY = obj.y;
+          let newX = dragState.startObjX ?? obj.x;
+          let newY = dragState.startObjY ?? obj.y;
 
           switch (dragState.handle) {
             case 'br':
@@ -901,29 +903,29 @@ export function MapCanvas() {
             case 'tl':
               newWidth = Math.max(10, dragState.startWidth - dx);
               newHeight = Math.max(10, dragState.startHeight - dy);
-              newX = obj.x + (dragState.startWidth - newWidth);
-              newY = obj.y + (dragState.startHeight - newHeight);
+              newX = (dragState.startObjX ?? obj.x) + (dragState.startWidth - newWidth);
+              newY = (dragState.startObjY ?? obj.y) + (dragState.startHeight - newHeight);
               break;
             case 'tr':
               newWidth = Math.max(10, dragState.startWidth + dx);
               newHeight = Math.max(10, dragState.startHeight - dy);
-              newY = obj.y + (dragState.startHeight - newHeight);
+              newY = (dragState.startObjY ?? obj.y) + (dragState.startHeight - newHeight);
               break;
             case 'bl':
               newWidth = Math.max(10, dragState.startWidth - dx);
               newHeight = Math.max(10, dragState.startHeight + dy);
-              newX = obj.x + (dragState.startWidth - newWidth);
+              newX = (dragState.startObjX ?? obj.x) + (dragState.startWidth - newWidth);
               break;
             case 'top':
               newHeight = Math.max(10, dragState.startHeight - dy);
-              newY = obj.y + (dragState.startHeight - newHeight);
+              newY = (dragState.startObjY ?? obj.y) + (dragState.startHeight - newHeight);
               break;
             case 'bottom':
               newHeight = Math.max(10, dragState.startHeight + dy);
               break;
             case 'left':
               newWidth = Math.max(10, dragState.startWidth - dx);
-              newX = obj.x + (dragState.startWidth - newWidth);
+              newX = (dragState.startObjX ?? obj.x) + (dragState.startWidth - newWidth);
               break;
             case 'right':
               newWidth = Math.max(10, dragState.startWidth + dx);
@@ -1277,6 +1279,8 @@ export function MapCanvas() {
         startAngle: 0,
         startDeliveryOffsetX: obj.deliveryOffsetX || 0,
         startDeliveryOffsetY: obj.deliveryOffsetY || 0,
+        startObjX: obj.x,
+        startObjY: obj.y,
         kind: 'object',
       });
       (e.target as HTMLElement).setPointerCapture(e.pointerId);

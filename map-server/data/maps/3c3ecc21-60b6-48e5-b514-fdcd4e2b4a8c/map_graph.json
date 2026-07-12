@@ -39,23 +39,23 @@
       "id": "delivery-table-103",
       "type": "delivery",
       "name": "Table 103_Delivery",
-      "x": 2.6875,
-      "y": 5.768750000000001,
+      "x": 3.75,
+      "y": 5.550000000000001,
       "theta": 0,
       "tableNumber": 103,
-      "deliveryOffsetX": -80.25,
-      "deliveryOffsetY": 13.62499999999999
+      "deliveryOffsetX": -59,
+      "deliveryOffsetY": 18.000000000000007
     },
     {
       "id": "delivery-table-104",
       "type": "delivery",
       "name": "Table 104_Delivery",
-      "x": 2.575,
-      "y": -0.40625,
+      "x": 3.95,
+      "y": -0.5,
       "theta": 0,
       "tableNumber": 104,
-      "deliveryOffsetX": -94.5,
-      "deliveryOffsetY": -0.8750000000000002
+      "deliveryOffsetX": -67,
+      "deliveryOffsetY": 1.000000000000002
     },
     {
       "id": "kitchen-kitchen-107",
@@ -110,27 +110,6 @@
       "to": "kitchen-kitchen-107",
       "bidirectional": true,
       "weight": 15.035048756678595
-    },
-    {
-      "id": "edge-9",
-      "from": "kitchen-kitchen-107",
-      "to": "delivery-table-101",
-      "bidirectional": true,
-      "weight": 14.299172265531276
-    },
-    {
-      "id": "edge-10",
-      "from": "delivery-table-103",
-      "to": "delivery-table-101",
-      "bidirectional": true,
-      "weight": 7.004462863060949
-    },
-    {
-      "id": "edge-11",
-      "from": "delivery-table-104",
-      "to": "delivery-table-102",
-      "bidirectional": true,
-      "weight": 7.20017360901805
     }
   ]
 }

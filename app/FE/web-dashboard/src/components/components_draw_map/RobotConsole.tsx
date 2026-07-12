@@ -63,8 +63,7 @@ export const RobotConsole: React.FC = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ command, target, direction }),
       });
-    } catch (error) {
-      console.error('Lỗi gửi lệnh điều khiển:', error);
+    } catch (_error) {
     }
   };
 

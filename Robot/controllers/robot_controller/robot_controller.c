@@ -26,7 +26,7 @@ static bool resolve_graph_target(const char *target, double *x, double *y, enum 
 #define TIME_STEP 64
 
 // Robot parameters
-#define MAX_SPEED 10.5
+#define MAX_SPEED 12.5
 #define MAX_ACCEL 0.25
 #define MAX_OMEGA 2.0
 #define MAX_OMEGA_ACCEL 1.0
