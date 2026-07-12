@@ -1,3 +1,5 @@
+using Prometheus;
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Register YARP Reverse Proxy
@@ -21,9 +23,11 @@ builder.Services.AddCors(options =>
 var app = builder.Build();
 
 app.UseCors("AllowAll");
+app.UseHttpMetrics();
 
-// Map Health Check Endpoint
+// Map Health Check & Metrics Endpoints
 app.MapHealthChecks("/health");
+app.MapMetrics("/metrics");
 
 // Map YARP Gateway
 app.MapReverseProxy();

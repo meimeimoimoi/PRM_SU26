@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+using Prometheus;
 using SmartDine.AI.API.Middleware;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -36,6 +37,9 @@ builder.Services.AddAuthentication(options =>
 });
 
 builder.Services.AddAuthorization();
+
+// ===== Health Checks =====
+builder.Services.AddHealthChecks();
 
 // ===== HTTP Client Factory =====
 builder.Services.AddHttpClient();
@@ -80,6 +84,7 @@ builder.Services.AddSwaggerGen(c =>
 var app = builder.Build();
 
 // ===== Middleware Pipeline =====
+app.UseHttpMetrics();
 app.UseMiddleware<ExceptionHandlingMiddleware>();
 
 if (app.Environment.IsDevelopment())
@@ -94,5 +99,7 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
+app.MapHealthChecks("/health");
+app.MapMetrics("/metrics");
 
 app.Run();

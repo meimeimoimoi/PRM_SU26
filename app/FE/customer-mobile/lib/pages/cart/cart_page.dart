@@ -32,7 +32,6 @@ class _AppColors {
   static const Color onSecondary = Color(0xFFffffff);
 }
 
-
 class CartPage extends ConsumerStatefulWidget {
   const CartPage({super.key});
 

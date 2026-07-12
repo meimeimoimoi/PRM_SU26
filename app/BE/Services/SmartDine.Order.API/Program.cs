@@ -12,6 +12,7 @@ using SmartDine.Infrastructure.ExternalServices;
 using SmartDine.Domain.Interfaces;
 using System.Security.Cryptography;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Prometheus;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -130,6 +131,7 @@ using (var scope = app.Services.CreateScope())
 }
 
 // ===== Middleware Pipeline =====
+app.UseHttpMetrics();
 app.UseMiddleware<ExceptionHandlingMiddleware>();
 app.UseMiddleware<IdempotencyMiddleware>();
 
@@ -146,5 +148,7 @@ app.UseAuthorization();
 
 app.MapControllers();
 app.MapHub<OrderHub>("/hubs/orders");
+app.MapHealthChecks("/health");
+app.MapMetrics("/metrics");
 
 app.Run();

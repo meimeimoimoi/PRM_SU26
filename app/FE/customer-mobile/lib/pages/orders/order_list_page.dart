@@ -24,7 +24,6 @@ class _AppColors {
   static const Color onPrimary = Color(0xFFffffff);
 }
 
-
 class OrderListPage extends ConsumerWidget {
   const OrderListPage({super.key});
 
