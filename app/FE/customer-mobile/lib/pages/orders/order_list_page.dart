@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../viewmodels/order_viewmodel.dart';
+
 
 class _AppColors {
   static const Color primary = Color(0xFFad2c00);
@@ -20,9 +23,6 @@ class _AppColors {
   static const Color error = Color(0xFFba1a1a);
   static const Color onPrimary = Color(0xFFffffff);
 }
-
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../viewmodels/order_viewmodel.dart';
 
 class OrderListPage extends ConsumerWidget {
   const OrderListPage({super.key});

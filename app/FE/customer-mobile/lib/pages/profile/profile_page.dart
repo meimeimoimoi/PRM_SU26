@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../viewmodels/auth_viewmodel.dart';
+
 
 class _AppColors {
   static const Color primary = Color(0xFFad2c00);
@@ -19,9 +22,6 @@ class _AppColors {
   static const Color errorContainer = Color(0xFFffdad6);
   static const Color onPrimary = Color(0xFFffffff);
 }
-
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../viewmodels/auth_viewmodel.dart';
 
 class ProfilePage extends ConsumerWidget {
   const ProfilePage({super.key});

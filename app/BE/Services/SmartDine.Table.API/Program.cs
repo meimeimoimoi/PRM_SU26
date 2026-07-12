@@ -7,6 +7,7 @@ using SmartDine.Table.API.Middleware;
 using SmartDine.Application;
 using SmartDine.Infrastructure;
 using System.Security.Cryptography;
+using Prometheus;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -114,6 +115,7 @@ using (var scope = app.Services.CreateScope())
 }
 
 // ===== Middleware Pipeline =====
+app.UseHttpMetrics();
 app.UseMiddleware<ExceptionHandlingMiddleware>();
 
 if (app.Environment.IsDevelopment())
@@ -128,5 +130,7 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
+app.MapHealthChecks("/health");
+app.MapMetrics("/metrics");
 
 app.Run();
