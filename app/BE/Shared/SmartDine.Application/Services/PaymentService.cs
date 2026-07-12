@@ -219,8 +219,10 @@ public class PaymentService
 
     /// <summary>
     /// Cộng điểm loyalty sau thanh toán thành công.
-    /// Tỷ lệ: 1 điểm / 1.000 VND. Chỉ áp dụng cho CUSTOMER (participant có CustomerId).
-    /// Tự động nâng tier nếu đủ điều kiện.
+    /// amount_eligible = payment.Amount (đã trừ chiết khấu). earn_points = floor(amount_eligible / 1000).
+    /// Chỉ áp dụng cho CUSTOMER (participant có CustomerId).
+    ///
+    /// Không xử lý tier ở đây — nâng/hạ hạng là một luồng riêng, xét trên TotalSpent tích lũy.
     ///
     /// Ai dùng: HandleWebhookAsync — nội bộ service.
     /// </summary>
@@ -237,21 +239,13 @@ public class PaymentService
         var customer = await _uow.Customers.GetByIdAsync(customerId.Value);
         if (customer == null) return;
 
-        var earnedPoints = (int)(amount / 1000) * PointsPerThousandVnd;
+        var amountEligible = amount;
+        var earnedPoints = (int)(amountEligible / 1000) * PointsPerThousandVnd;
         if (earnedPoints <= 0) return;
 
         customer.LoyaltyPoints += earnedPoints;
-        customer.TotalSpent += amount;
+        customer.TotalSpent += amountEligible;
         customer.VisitCount += 1;
-
-        // Nâng tier dựa trên TotalSpent
-        customer.MembershipLevel = customer.TotalSpent switch
-        {
-            >= 10_000_000 => LoyaltyTier.PLATINUM,
-            >= 5_000_000  => LoyaltyTier.GOLD,
-            >= 1_000_000  => LoyaltyTier.SILVER,
-            _             => LoyaltyTier.BRONZE
-        };
 
         await _uow.Customers.UpdateAsync(customer);
 
