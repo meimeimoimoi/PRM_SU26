@@ -139,6 +139,27 @@ function StartNodeInspector({ node }: { node: GraphNode }) {
   );
 }
 
+function ChargingNodeInspector({ node }: { node: GraphNode }) {
+  const removeGraphNode = useMapStore((s) => s.removeGraphNode);
+
+  return (
+    <Card title="Charging Station" className="panel-card" extra={
+      <Button danger size="small" icon={<Trash2 size={14} />} onClick={() => removeGraphNode(node.id)}>Delete</Button>
+    }>
+      <Form layout="vertical">
+        <div className="property-grid">
+          <Form.Item label="X (m)" style={{ marginBottom: 8 }}>
+            <InputNumber className="full-width-control" value={node.x} step={0.1} disabled />
+          </Form.Item>
+          <Form.Item label="Y (m)" style={{ marginBottom: 8 }}>
+            <InputNumber className="full-width-control" value={node.y} step={0.1} disabled />
+          </Form.Item>
+        </div>
+      </Form>
+    </Card>
+  );
+}
+
 export function PropertyPanel() {
   const objects = useMapStore((s) => s.objects);
   const selectedObjectId = useMapStore((s) => s.selectedObjectId);
@@ -156,7 +177,9 @@ export function PropertyPanel() {
       label: 'Inspector',
       children: selectedGraphNode?.type === 'robotStart'
         ? <StartNodeInspector node={selectedGraphNode} />
-        : <InspectorForm selectedObject={selectedObject} onUpdate={updateObject} onDelete={removeObject} />,
+        : selectedGraphNode?.type === 'charging'
+          ? <ChargingNodeInspector node={selectedGraphNode} />
+          : <InspectorForm selectedObject={selectedObject} onUpdate={updateObject} onDelete={removeObject} />,
     },
     {
       key: 'console',

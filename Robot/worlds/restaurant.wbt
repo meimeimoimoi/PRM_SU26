@@ -3,20 +3,17 @@
 EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/backgrounds/protos/TexturedBackground.proto"
 EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/backgrounds/protos/TexturedBackgroundLight.proto"
 EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/floors/protos/Floor.proto"
-EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/samples/robotbenchmark/wall_following/protos/WallFollowingPioneer3dx.proto"
-EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/devices/sick/protos/SickLms291.proto"
-EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/devices/microsoft/protos/Kinect.proto"
-EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/robots/mir/mir100/protos/Mir100UltrasonicSensor.proto"
-EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/devices/sharp/protos/SharpGP2Y0A41SK0F.proto"
 EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/apartment_structure/protos/Wall.proto"
 EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/tables/protos/Table.proto"
 EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/chairs/protos/Chair.proto"
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/robots/pal_robotics/tiago_base/protos/TiagoBase.proto"
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/devices/sick/protos/SickLms291.proto"
 
 WorldInfo {
 }
 Viewpoint {
-  orientation -0.31815976704286575 0.5654546312678629 0.7609437709929392 1.2734080129179324
-  position -4.586098911639462 -7.3636343531980355 10.159975897809684
+  orientation -0.1442322953857432 0.2973684179137207 0.9438056309406353 0.9494431026470276
+  position -8.678104257437177 -10.787075277807634 6.018110886507665
   follow "floor"
   followType "Mounted Shot"
 }
@@ -25,8 +22,196 @@ TexturedBackground {
 TexturedBackgroundLight {
 }
 Floor {
-  translation 0 0 1
+  translation 0.0333 0.2357 1.0918
   size 20 20
+}
+TiagoBase {
+  hidden translation_17 0 -0.202 0
+  hidden rotation_17 0.9996404144801617 0.018960990775256824 -0.018961080316030766 1.5711596893635609
+  hidden translation_18 0 0.202 0
+  hidden rotation_18 0.9996404142328136 0.018961013880331477 -0.01896107025140107 1.571159660477197
+  hidden translation_19 0.1694992448010019 -0.10199998201566592 -0.03300917470581277
+  hidden rotation_19 1.6581214647339189e-06 0.007858717019007732 -0.9999691198052397 0.00040542428034893015
+  hidden translation_20 -0.016 0 -0.04
+  hidden rotation_20 0.981948420306863 -0.13374821202449033 -0.1337487033100075 4.694169818048654
+  hidden translation_21 0.16949925713439012 0.10200001797721552 -0.03301900597844831
+  hidden rotation_21 1.6271009995446085e-06 0.007754105930428518 -0.9999699364673781 0.0004027582246458866
+  hidden translation_22 -0.016 0 -0.04
+  hidden rotation_22 0.9819452521675108 -0.13375984133040217 -0.1337603326586365 4.694166592198391
+  hidden translation_23 -0.17350073088615425 -0.10199998081437331 -0.033100940990170136
+  hidden rotation_23 1.5413842113968455e-06 0.005526246771995433 -0.999984730180536 0.00047620723064929245
+  hidden translation_24 -0.016 0 -0.04
+  hidden rotation_24 0.9819622306363917 -0.13369750612084605 -0.13369799722010964 4.694183879828164
+  hidden translation_25 -0.17350071855001567 0.10200001917770088 -0.03311077226280945
+  hidden rotation_25 1.5109996984106223e-06 0.005423212784290046 -0.9999852942722773 0.00047354577019927536
+  hidden translation_26 -0.016 0 -0.04
+  hidden rotation_26 0.9819590633692933 -0.13370913679759727 -0.1337096279395832 4.694180654910575
+  translation 0.0007344505449732332 -4.955281079473562e-05 1.1847049149058546
+  rotation 0.4341254814289099 0.9008297168706336 0.006394339441367813 0.00384128435530871
+  controller "robot_controller"
+  bodySlot [
+    GPS {
+    }
+    SickLms291 {
+      translation 0.31 0 0.05
+    }
+    Solid {
+      translation -0.01 0 0.53
+      children [
+        Shape {
+          appearance PBRAppearance {
+          }
+          geometry Cylinder {
+            height 0.005
+            radius 0.25
+          }
+        }
+      ]
+      name "khay_do_an(1)"
+      boundingObject Shape {
+        appearance PBRAppearance {
+        }
+        geometry Cylinder {
+          height 0.005
+          radius 0.25
+        }
+      }
+      physics Physics {
+        density 1
+        mass 0.1
+      }
+    }
+    Solid {
+      translation 0 0 0.32
+      children [
+        Shape {
+          appearance PBRAppearance {
+          }
+          geometry Cylinder {
+            height 0.005
+            radius 0.25
+          }
+        }
+      ]
+      name "khay_do_an"
+      boundingObject Shape {
+        appearance PBRAppearance {
+        }
+        geometry Cylinder {
+          height 0.005
+          radius 0.25
+        }
+      }
+      physics Physics {
+        density 11
+        mass 0.5
+      }
+    }
+    Solid {
+      translation 0.07 -0.21 0.34
+      children [
+        Shape {
+          appearance PBRAppearance {
+          }
+          geometry Cylinder {
+            height 0.4
+            radius 0.01
+          }
+        }
+      ]
+      name "cot(3)"
+      boundingObject Shape {
+        appearance PBRAppearance {
+        }
+        geometry Cylinder {
+          height 0.4
+          radius 0.01
+        }
+      }
+      physics Physics {
+        density 11
+        mass 1.5
+      }
+    }
+    Solid {
+      translation -0.1 -0.21 0.34
+      children [
+        Shape {
+          appearance PBRAppearance {
+          }
+          geometry Cylinder {
+            height 0.4
+            radius 0.01
+          }
+        }
+      ]
+      name "cot(2)"
+      boundingObject Shape {
+        appearance PBRAppearance {
+        }
+        geometry Cylinder {
+          height 0.4
+          radius 0.01
+        }
+      }
+      physics Physics {
+        density 11
+        mass 1.5
+      }
+    }
+    Solid {
+      translation 0.08 0.2 0.34
+      children [
+        Shape {
+          appearance PBRAppearance {
+          }
+          geometry Cylinder {
+            height 0.4
+            radius 0.01
+          }
+        }
+      ]
+      name "cot(1)"
+      boundingObject Shape {
+        appearance PBRAppearance {
+        }
+        geometry Cylinder {
+          height 0.4
+          radius 0.01
+        }
+      }
+      physics Physics {
+        density 11
+        mass 1.5
+      }
+    }
+    Solid {
+      translation -0.14 0.18 0.34
+      children [
+        Shape {
+          appearance PBRAppearance {
+          }
+          geometry Cylinder {
+            height 0.4
+            radius 0.01
+          }
+        }
+      ]
+      name "cot"
+      boundingObject Shape {
+        appearance PBRAppearance {
+        }
+        geometry Cylinder {
+          height 0.4
+          radius 0.01
+        }
+      }
+      physics Physics {
+        density 11
+        mass 0.5
+      }
+    }
+  ]
 }
 Table {
   translation 6.71 5.83 0
@@ -45,7 +230,6 @@ Table {
 }
 Chair {
   translation 7.44 6.46 0
-  rotation 0 0 1 3.14159
 }
 Chair {
   translation 7.48 5.42 0
@@ -186,237 +370,4 @@ Wall {
   rotation -0.5773509358554485 0.5773489358556708 0.5773509358554485 -2.094395307179586
   name "wall(10)"
   size 0.1 0.5 1
-}
-WallFollowingPioneer3dx {
-  hidden position_0_0 -0.9703878980865741
-  hidden position_0_1 5.487097185164748
-  hidden position_0_2 37.501471247654244
-  hidden position_0_3 1.4466744158505333e-07
-  hidden linearVelocity_0 -1.6153973488929852e-09 1.383255248373654e-09 -2.890340748182008e-12
-  hidden angularVelocity_0 -3.4219114147379705e-11 7.17653939768279e-11 -3.653509991145811e-09
-  hidden translation_1 -0.1918 0 -4.336808689942018e-19
-  hidden rotation_1 0 0 -1 0.9703878980865741
-  hidden position_1_0 77.04223591371473
-  hidden linearVelocity_1 -1.925734023796131e-09 8.438903354838075e-10 -1.0529478260635133e-11
-  hidden angularVelocity_1 -6.530828054537215e-10 2.5774849367141877e-10 -3.80860692946693e-08
-  hidden translation_2 -0.0128 0 -0.0521
-  hidden rotation_2 0 1 0 1.6440122275596962
-  hidden linearVelocity_2 -2.4078825807697917e-09 7.649331418590002e-10 -2.7445352830478426e-12
-  hidden angularVelocity_2 -3.1160096427202404e-08 -4.7893162803018284e-09 -3.756484486200901e-08
-  hidden translation_4 -8.26106705126008e-05 0.165 -3.4736923645841276e-05
-  hidden rotation_4 0 1 0 5.487097185164748
-  hidden linearVelocity_4 -2.1769744336047024e-09 1.7326724182447337e-09 1.281255886204987e-11
-  hidden angularVelocity_4 -1.952457771949495e-08 -4.170733624968436e-08 -3.5288371996024797e-09
-  hidden translation_9 -2.2698800579407826e-05 -0.165 -2.250432500797519e-06
-  hidden rotation_9 0 -0.9999999999999999 0 0.19764059542327453
-  hidden linearVelocity_9 -1.0840067289121938e-09 1.2230057242892934e-09 -1.0421302062463691e-11
-  hidden angularVelocity_9 -6.921842462348863e-09 -1.4692221423989376e-08 -3.6094520779477603e-09
-  hidden linearVelocity_28 -3.22099729442107e-08 -6.407157683494154e-08 2.002710821521035e-10
-  hidden angularVelocity_28 -1.3168085061343695e-06 6.144362649656436e-07 2.3338181087857515e-08
-  hidden translation_39 0 0 0.05
-  hidden linearVelocity_39 -1.3649026797679654e-09 1.9560207187296896e-09 6.01382055265276e-12
-  hidden angularVelocity_39 -3.421905475713842e-11 7.176523410610649e-11 -3.6535099547321126e-09
-  translation 0.41378465255025537 1.4447078811216822 1.0917684598747426
-  rotation 0.009586743157818104 -0.0007075692292004062 0.9999537957832912 2.70509132196751
-  controller "robot_controller"
-  extensionSlot [
-    HingeJoint {
-      device [
-        RotationalMotor {
-          name "front_wheel_motor"
-        }
-      ]
-      endPoint Solid {
-        translation 0.0899999999999997 6.755206432192639e-08 -0.0500000000002915
-        rotation 1 0 0 1.5707976778412855
-        children [
-          Shape {
-            geometry Cylinder {
-              height 0.02
-              radius 0.04
-            }
-          }
-        ]
-        boundingObject Cylinder {
-          height 0.02
-          radius 0.04
-        }
-        physics Physics {
-        }
-      }
-    }
-    SharpGP2Y0A41SK0F {
-      translation -0.18 0.13 0.15
-      rotation 0 0 1 1.5708
-    }
-    Solid {
-      translation 0 0 0.32
-      children [
-        Shape {
-          appearance PBRAppearance {
-          }
-          geometry Cylinder {
-            height 0.005
-            radius 0.2
-          }
-        }
-      ]
-      name "khay_do_an"
-      boundingObject Shape {
-        appearance PBRAppearance {
-        }
-        geometry Cylinder {
-          height 0.005
-          radius 0.2
-        }
-      }
-      physics Physics {
-        density 11
-        mass 0.5
-      }
-    }
-    Solid {
-      translation -0.01 0 0.53
-      children [
-        Shape {
-          appearance PBRAppearance {
-          }
-          geometry Cylinder {
-            height 0.005
-            radius 0.2
-          }
-        }
-      ]
-      name "khay_do_an(1)"
-      boundingObject Shape {
-        appearance PBRAppearance {
-        }
-        geometry Cylinder {
-          height 0.005
-          radius 0.2
-        }
-      }
-      physics Physics {
-        density 1
-        mass 0.1
-      }
-    }
-    Solid {
-      translation -0.11 0.15 0.34
-      children [
-        Shape {
-          appearance PBRAppearance {
-          }
-          geometry Cylinder {
-            height 0.4
-            radius 0.01
-          }
-        }
-      ]
-      name "cot"
-      boundingObject Shape {
-        appearance PBRAppearance {
-        }
-        geometry Cylinder {
-          height 0.4
-          radius 0.01
-        }
-      }
-      physics Physics {
-        density 11
-        mass 0.5
-      }
-    }
-    Solid {
-      translation 0.05 0.18 0.34
-      children [
-        Shape {
-          appearance PBRAppearance {
-          }
-          geometry Cylinder {
-            height 0.4
-            radius 0.01
-          }
-        }
-      ]
-      name "cot(1)"
-      boundingObject Shape {
-        appearance PBRAppearance {
-        }
-        geometry Cylinder {
-          height 0.4
-          radius 0.01
-        }
-      }
-      physics Physics {
-        density 11
-        mass 1.5
-      }
-    }
-    Solid {
-      translation -0.1 -0.16 0.34
-      children [
-        Shape {
-          appearance PBRAppearance {
-          }
-          geometry Cylinder {
-            height 0.4
-            radius 0.01
-          }
-        }
-      ]
-      name "cot(2)"
-      boundingObject Shape {
-        appearance PBRAppearance {
-        }
-        geometry Cylinder {
-          height 0.4
-          radius 0.01
-        }
-      }
-      physics Physics {
-        density 11
-        mass 1.5
-      }
-    }
-    Solid {
-      translation 0.07 -0.17 0.34
-      children [
-        Shape {
-          appearance PBRAppearance {
-          }
-          geometry Cylinder {
-            height 0.4
-            radius 0.01
-          }
-        }
-      ]
-      name "cot(3)"
-      boundingObject Shape {
-        appearance PBRAppearance {
-        }
-        geometry Cylinder {
-          height 0.4
-          radius 0.01
-        }
-      }
-      physics Physics {
-        density 11
-        mass 1.5
-      }
-    }
-    Mir100UltrasonicSensor {
-      translation 0.12 0.06 -0.04
-      name "Mir100UltrasonicSensor(1)"
-    }
-    Mir100UltrasonicSensor {
-      translation 0.12 -0.06 -0.04
-    }
-    Kinect {
-      translation 0.15 0 0.54
-    }
-    SickLms291 {
-      translation 0 0 0.2
-    }
-  ]
 }

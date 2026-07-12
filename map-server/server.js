@@ -23,6 +23,8 @@ app.use(express.json({ limit: '10mb' }));
 // ---------------------------------------------------------------------------
 const WEBOTS_CONTROLLER_DIR = process.env.WEBOTS_CONTROLLER_DIR ||
   'D:/User/refactor/PRM_SU26/Robot/controllers/robot_controller';
+const WEBOTS_WORLDS_DIR = process.env.WEBOTS_WORLDS_DIR ||
+  'D:/User/refactor/PRM_SU26/Robot/worlds';
 
 
 
@@ -187,6 +189,7 @@ free_thresh: 0.196
     robotStart: {
       x: payload.robot_start_world_x,
       y: payload.robot_start_world_y,
+      theta: payload.robot_start_world_theta || 0,
     },
     createdAt: new Date().toISOString(),
   };

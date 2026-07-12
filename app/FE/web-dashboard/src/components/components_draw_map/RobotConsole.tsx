@@ -6,6 +6,7 @@ import {
   ArrowRight,
   ArrowUp,
   Circle,
+  Crosshair,
   Home,
   Navigation,
 } from 'lucide-react';
@@ -175,6 +176,18 @@ export const RobotConsole: React.FC = () => {
                 block
               >
                 Về Điểm Xuất Phát
+              </Button>
+            </Col>
+          </Row>
+          <Row gutter={8} style={{ marginTop: '8px' }}>
+            <Col span={24}>
+              <Button
+                icon={<Crosshair size={14} />}
+                onClick={() => sendControlCommand('CALIBRATE')}
+                disabled={telemetry.status === 'OFFLINE'}
+                block
+              >
+                Hiệu Chuẩn (Calibrate)
               </Button>
             </Col>
           </Row>

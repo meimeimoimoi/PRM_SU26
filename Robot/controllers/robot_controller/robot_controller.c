@@ -128,6 +128,9 @@ double current_v = 0.0, current_omega = 0.0;
 // Track current target waypoint name for dynamic stopping
 char current_target_name[64] = "";
 
+// Calibration flag — set by CALIBRATE command, consumed in main loop
+bool calibrate_requested = false;
+
 WbDeviceTag lidar;
 double lidar_ranges[LIDAR_MAX_SAMPLES];
 int lidar_actual_count = 0;
@@ -312,12 +315,13 @@ bool load_map(const char *f) {
 
 // ------------------------------------------------------------
 // Đọc metadata robotStart từ file (lưu vào biến truyền vào)
-void load_meta(double *start_x, double *start_y) {
+void load_meta(double *start_x, double *start_y, double *start_theta) {
     FILE *fp = fopen("map_meta.json", "r");
     if (!fp) {
         printf("No map_meta.json found. Using default start (0,0).\n");
         *start_x = 0.0;
         *start_y = 0.0;
+        *start_theta = 0.0;
         return;
     }
     char buf[1024];
@@ -337,6 +341,11 @@ void load_meta(double *start_x, double *start_y) {
             yy = strchr(yy, ':');
             if (yy) sscanf(yy + 1, "%lf", start_y);
         }
+        char *tt = strstr(px, "\"theta\"");
+        if (tt) {
+            tt = strchr(tt, ':');
+            if (tt) sscanf(tt + 1, "%lf", start_theta);
+        }
     } else {
         // Fallback for old format
         px = strstr(buf, "\"robot_start_x\"");
@@ -350,7 +359,7 @@ void load_meta(double *start_x, double *start_y) {
             if (py) sscanf(py + 1, "%lf", start_y);
         }
     }
-    printf("Loaded robot start position from meta: (%.2f, %.2f)\n", *start_x, *start_y);
+    printf("Loaded robot start from meta: (%.2f, %.2f) theta=%.2f\n", *start_x, *start_y, *start_theta);
 }
 
 // Ghi planned path ra file để UI hiển thị
@@ -441,6 +450,14 @@ void read_robot_command(double *target_x, double *target_y, bool *target_receive
             wb_motor_set_velocity(right_motor, 0.0);
             clear_path_file();
             printf("Command: STOP\n");
+        } else if (strcmp(cmd, "CALIBRATE") == 0) {
+            calibrate_requested = true;
+            *target_received = false;
+            *has_path = false;
+            *state = STATE_IDLE;
+            *manual_v = 0.0;
+            *manual_omega = 0.0;
+            printf("Command: CALIBRATE — will reset position on next cycle\n");
         }
     }
     fclose(fp);
@@ -1222,6 +1239,15 @@ void dwa_control(double robot_x, double robot_y, double robot_theta,
         min_v = fmax(0.0, current_v - MAX_ACCEL * TIME_STEP / 1000.0);
     }
 
+    // Speed reduction based on heading error
+    // Large error → near-zero forward speed so DWA must rotate in place
+    // Small error → full speed allowed
+    double h_abs = fabs(h_err);
+    if (h_abs > 0.5) {
+        double speed_factor = fmax(0.01, 1.0 - (h_abs - 0.5));
+        max_v = fmin(max_v, MAX_SPEED * speed_factor);
+    }
+
     double min_omega = fmax(-MAX_OMEGA, current_omega - MAX_OMEGA_ACCEL * TIME_STEP / 1000.0);
     double max_omega = fmin(MAX_OMEGA, current_omega + MAX_OMEGA_ACCEL * PREDICT_TIME);
 
@@ -1352,16 +1378,24 @@ int main(int argc, char **argv) {
     init_dynamic_map();
     compute_distance_transform();
 
-    WbDeviceTag left_motor = wb_robot_get_device("left wheel");
-    WbDeviceTag right_motor = wb_robot_get_device("right wheel");
-    WbDeviceTag left_enc = wb_robot_get_device("left wheel sensor");
-    WbDeviceTag right_enc = wb_robot_get_device("right wheel sensor");
-    wb_motor_set_position(left_motor, INFINITY);
-    wb_motor_set_position(right_motor, INFINITY);
-    wb_motor_set_velocity(left_motor, 0.0);
-    wb_motor_set_velocity(right_motor, 0.0);
-    wb_position_sensor_enable(left_enc, TIME_STEP);
-    wb_position_sensor_enable(right_enc, TIME_STEP);
+    WbDeviceTag left_motor = wb_robot_get_device("wheel_left_joint");
+    WbDeviceTag right_motor = wb_robot_get_device("wheel_right_joint");
+    WbDeviceTag left_enc = wb_robot_get_device("wheel_left_joint_sensor");
+    WbDeviceTag right_enc = wb_robot_get_device("wheel_right_joint_sensor");
+    printf("Devices: left_motor=%u right_motor=%u left_enc=%u right_enc=%u\n",
+           left_motor, right_motor, left_enc, right_enc);
+    if (left_motor && right_motor) {
+        wb_motor_set_position(left_motor, INFINITY);
+        wb_motor_set_position(right_motor, INFINITY);
+        wb_motor_set_velocity(left_motor, 0.0);
+        wb_motor_set_velocity(right_motor, 0.0);
+    } else {
+        printf("[WARN] Motor tags invalid! Retrying after first step...\n");
+    }
+    if (left_enc && right_enc) {
+        wb_position_sensor_enable(left_enc, TIME_STEP);
+        wb_position_sensor_enable(right_enc, TIME_STEP);
+    }
 
     lidar = wb_robot_get_device("Sick LMS 291");
     if (lidar == 0) lidar = wb_robot_get_device("lidar");
@@ -1384,14 +1418,37 @@ int main(int argc, char **argv) {
     if (gps != 0) {
         wb_gps_enable(gps, TIME_STEP);
     }
-    WbDeviceTag iu = wb_robot_get_device("inertial_ unit");
+    WbDeviceTag iu = wb_robot_get_device("inertial unit");
     if (iu != 0) {
         wb_inertial_unit_enable(iu, TIME_STEP);
     }
 
     wb_robot_step(TIME_STEP);
-    last_left = wb_position_sensor_get_value(left_enc);
-    last_right = wb_position_sensor_get_value(right_enc);
+
+    if (!left_motor || !right_motor || !left_enc || !right_enc) {
+        printf("[RETRY] Re-obtaining device tags after first step...\n");
+        left_motor = wb_robot_get_device("wheel_left_joint");
+        right_motor = wb_robot_get_device("wheel_right_joint");
+        left_enc = wb_robot_get_device("wheel_left_joint_sensor");
+        right_enc = wb_robot_get_device("wheel_right_joint_sensor");
+        printf("[RETRY] left_motor=%u right_motor=%u left_enc=%u right_enc=%u\n",
+               left_motor, right_motor, left_enc, right_enc);
+        if (left_motor && right_motor) {
+            wb_motor_set_position(left_motor, INFINITY);
+            wb_motor_set_position(right_motor, INFINITY);
+            wb_motor_set_velocity(left_motor, 0.0);
+            wb_motor_set_velocity(right_motor, 0.0);
+        }
+        if (left_enc && right_enc) {
+            wb_position_sensor_enable(left_enc, TIME_STEP);
+            wb_robot_step(TIME_STEP);
+        }
+    }
+
+    if (left_enc && right_enc) {
+        last_left = wb_position_sensor_get_value(left_enc);
+        last_right = wb_position_sensor_get_value(right_enc);
+    }
 
     load_wp(waypoints, &num_waypoints);
     if (!parse_graph_json("graph.json")) {
@@ -1399,9 +1456,10 @@ int main(int argc, char **argv) {
     }
 
     // Đọc điểm xuất phát từ meta
+    double start_theta = 0.0;
     start_x = 0.0;
     start_y = 0.0;
-    load_meta(&start_x, &start_y);
+    load_meta(&start_x, &start_y, &start_theta);
 
     // === DEBUG: Kiểm tra static_map tại vùng robot start ===
     {
@@ -1475,28 +1533,39 @@ int main(int argc, char **argv) {
         robot_theta = 0.0;
     }
 
-    // =============================================================
-    // TỰ ĐỘNG ĐI ĐẾN ĐIỂM XUẤT PHÁT KHI RUN (nếu chưa ở đó)
-    // =============================================================
-    double dist_to_start = hypot(robot_x - start_x, robot_y - start_y);
-    if (dist_to_start < 0.1) {
-        target_x = robot_x;
-        target_y = robot_y;
-        target_received = false;
-        robot_state = STATE_IDLE;
-        printf("Robot already at start point (%.2f, %.2f). Waiting for commands.\n", start_x, start_y);
-    } else {
-        target_x = start_x;
-        target_y = start_y;
-        target_received = true;
-        has_path = false;
-        robot_state = STATE_RETURN_TO_KITCHEN;
-        printf("Auto navigating to start point (%.2f, %.2f) ...\n", start_x, start_y);
+    // Override heading from map_meta if robot is near start position
+    if (fabs(robot_theta - start_theta) > 0.01 &&
+        hypot(robot_x - start_x, robot_y - start_y) < 0.3) {
+        robot_theta = start_theta;
+        printf("Override robot theta from map_meta: %.2f rad\n", start_theta);
     }
+
+    // Robot luôn ở trạng thái chờ lệnh, không tự động di chuyển
+    target_x = robot_x;
+    target_y = robot_y;
+    target_received = false;
+    robot_state = STATE_IDLE;
+    printf("Robot at (%.2f, %.2f). Waiting for commands.\n", robot_x, robot_y);
 
     printf("=== Phase 3 DWA OK - He thong da san sang ===\n");
 
     while (wb_robot_step(TIME_STEP) != -1) {
+        // Re-obtain device tags if any became invalid
+        if (!left_motor || !right_motor || !left_enc || !right_enc) {
+            left_motor = wb_robot_get_device("wheel_left_joint");
+            right_motor = wb_robot_get_device("wheel_right_joint");
+            left_enc = wb_robot_get_device("wheel_left_joint_sensor");
+            right_enc = wb_robot_get_device("wheel_right_joint_sensor");
+            if (left_motor && right_motor) {
+                wb_motor_set_position(left_motor, INFINITY);
+                wb_motor_set_position(right_motor, INFINITY);
+            }
+            if (left_enc && right_enc) {
+                wb_position_sensor_enable(left_enc, TIME_STEP);
+                wb_position_sensor_enable(right_enc, TIME_STEP);
+            }
+        }
+
         // Update position from GPS and InertialUnit if available, otherwise fallback to Odometry
         bool pos_updated = false;
         if (gps != 0) {
@@ -1514,7 +1583,7 @@ int main(int argc, char **argv) {
             }
         }
 
-        if (!pos_updated) {
+        if (!pos_updated && left_enc && right_enc) {
             // Odometry fallback
             double left = wb_position_sensor_get_value(left_enc);
             double right = wb_position_sensor_get_value(right_enc);
@@ -1533,7 +1602,7 @@ int main(int argc, char **argv) {
                 while (robot_theta > M_PI) robot_theta -= 2 * M_PI;
                 while (robot_theta < -M_PI) robot_theta += 2 * M_PI;
             }
-        } else {
+        } else if (left_enc && right_enc) {
             // Keep encoder history updated so fallback works if needed
             last_left = wb_position_sensor_get_value(left_enc);
             last_right = wb_position_sensor_get_value(right_enc);
@@ -1550,6 +1619,24 @@ int main(int argc, char **argv) {
         double manual_v = 0.0, manual_omega = 0.0;
         read_robot_command(&target_x, &target_y, &target_received, &has_path, &robot_state, left_motor, right_motor, &manual_v, &manual_omega);
 
+        // 1b. Calibrate: reset position to map_meta start (charging station)
+        if (calibrate_requested) {
+            robot_x = start_x;
+            robot_y = start_y;
+            robot_theta = start_theta;
+            if (left_enc && right_enc) {
+                last_left = wb_position_sensor_get_value(left_enc);
+                last_right = wb_position_sensor_get_value(right_enc);
+            }
+            target_x = robot_x;
+            target_y = robot_y;
+            target_received = false;
+            has_path = false;
+            calibrate_requested = false;
+            printf("CALIBRATE: Position reset to start (%.2f, %.2f) theta=%.2f\n",
+                   robot_x, robot_y, robot_theta);
+        }
+
         if (robot_state == STATE_MANUAL_MOVE) {
             current_v = manual_v;
             current_omega = manual_omega;
@@ -1557,8 +1644,10 @@ int main(int argc, char **argv) {
             compute_wheel_speeds(current_v, current_omega, &vl, &vr);
             vl = fmin(fmax(vl, -MAX_SPEED), MAX_SPEED);
             vr = fmin(fmax(vr, -MAX_SPEED), MAX_SPEED);
-            wb_motor_set_velocity(left_motor, vl);
-            wb_motor_set_velocity(right_motor, vr);
+            if (left_motor && right_motor) {
+                wb_motor_set_velocity(left_motor, vl);
+                wb_motor_set_velocity(right_motor, vr);
+            }
 
             write_robot_state(robot_x, robot_y, robot_theta, current_v, current_omega, get_state_string(robot_state));
             continue;
@@ -1634,8 +1723,10 @@ int main(int argc, char **argv) {
                 printf("\n========== ARRIVED (already at goal, d=%.3f < %.3f) ==========\n",
                        dist_to_goal, stop_dist);
                 current_v = 0.0; current_omega = 0.0;
-                wb_motor_set_velocity(left_motor, 0.0);
-                wb_motor_set_velocity(right_motor, 0.0);
+                if (left_motor && right_motor) {
+                    wb_motor_set_velocity(left_motor, 0.0);
+                    wb_motor_set_velocity(right_motor, 0.0);
+                }
                 clear_path_file();
                 write_robot_state(robot_x, robot_y, robot_theta, 0.0, 0.0, get_state_string(robot_state));
                 continue;
@@ -1756,8 +1847,10 @@ int main(int argc, char **argv) {
                     printf("\n========== ARRIVED (d=%.3f, threshold=%.3f) ==========\n", dist_to_final, stop_dist);
                     current_v = 0.0;
                     current_omega = 0.0;
-                    wb_motor_set_velocity(left_motor, 0.0);
-                    wb_motor_set_velocity(right_motor, 0.0);
+                    if (left_motor && right_motor) {
+                        wb_motor_set_velocity(left_motor, 0.0);
+                        wb_motor_set_velocity(right_motor, 0.0);
+                    }
                     clear_path_file();
                     write_robot_state(robot_x, robot_y, robot_theta, 0.0, 0.0, get_state_string(robot_state));
                     continue;
@@ -1822,8 +1915,10 @@ int main(int argc, char **argv) {
         } else {
             current_v = 0.0;
             current_omega = 0.0;
-            wb_motor_set_velocity(left_motor, 0.0);
-            wb_motor_set_velocity(right_motor, 0.0);
+            if (left_motor && right_motor) {
+                wb_motor_set_velocity(left_motor, 0.0);
+                wb_motor_set_velocity(right_motor, 0.0);
+            }
             write_robot_state(robot_x, robot_y, robot_theta, 0.0, 0.0, get_state_string(robot_state));
             continue;
         }
@@ -1841,8 +1936,10 @@ int main(int argc, char **argv) {
         compute_wheel_speeds(current_v, current_omega, &vl, &vr);
         vl = fmin(fmax(vl, -MAX_SPEED), MAX_SPEED);
         vr = fmin(fmax(vr, -MAX_SPEED), MAX_SPEED);
-        wb_motor_set_velocity(left_motor, vl);
-        wb_motor_set_velocity(right_motor, vr);
+        if (left_motor && right_motor) {
+            wb_motor_set_velocity(left_motor, vl);
+            wb_motor_set_velocity(right_motor, vr);
+        }
 
         write_robot_state(robot_x, robot_y, robot_theta, current_v, current_omega, get_state_string(robot_state));
 

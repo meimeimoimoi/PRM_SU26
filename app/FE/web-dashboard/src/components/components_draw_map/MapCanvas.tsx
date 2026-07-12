@@ -27,6 +27,7 @@ const toolLabels: Record<MapTool, string> = {
   table: 'Table',
   wall: 'Wall',
   robotStart: 'Start Position',
+  chargingStation: 'Charging Station',
   waypoint: 'Waypoint',
   edge: 'Connect Edge',
 };
@@ -425,6 +426,7 @@ export function MapCanvas() {
   const updateGraphNode = useMapStore((s) => s.updateGraphNode);
   const addGraphEdge = useMapStore((s) => s.addGraphEdge);
   const removeGraphNode = useMapStore((s) => s.removeGraphNode);
+  const removeGraphEdge = useMapStore((s) => s.removeGraphEdge);
 
   const [robotState, setRobotState] = useState<{ x: number; y: number; theta: number; status: string } | null>(null);
   const [robotPath, setRobotPath] = useState<{ x: number; y: number }[]>([]);
@@ -955,8 +957,14 @@ export function MapCanvas() {
       if (e.code === 'Delete' || e.code === 'Backspace') {
         const active = document.activeElement;
         if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA')) return;
-        const selId = useMapStore.getState().selectedObjectId;
-        if (selId) removeObject(selId);
+        const st = useMapStore.getState();
+        if (st.selectedGraphEdgeId) {
+          removeGraphEdge(st.selectedGraphEdgeId);
+        } else if (st.selectedGraphNodeId) {
+          removeGraphNode(st.selectedGraphNodeId);
+        } else if (st.selectedObjectId) {
+          removeObject(st.selectedObjectId);
+        }
       }
     };
     const up = (e: KeyboardEvent) => {
@@ -968,7 +976,7 @@ export function MapCanvas() {
       window.removeEventListener('keydown', down);
       window.removeEventListener('keyup', up);
     };
-  }, [removeObject, setEdgeDraftFromNodeId, setSelectedObject, setSelectedGraphNode, setSelectedGraphEdge]);
+  }, [removeObject, removeGraphNode, removeGraphEdge, setEdgeDraftFromNodeId, setSelectedObject, setSelectedGraphNode, setSelectedGraphEdge]);
 
   useEffect(() => {
     graphNodeCounter = Math.max(graphNodeCounter, graphNodes.length + 1);
@@ -1048,6 +1056,20 @@ export function MapCanvas() {
           id: nodeId,
           type: 'robotStart',
           name: 'Start',
+          x: worldPoint.x,
+          y: worldPoint.y,
+          theta: 0,
+        });
+        return;
+      }
+
+      if (selectedTool === 'chargingStation') {
+        graphNodeCounter++;
+        const nodeId = `charging-${graphNodeCounter}`;
+        addGraphNode({
+          id: nodeId,
+          type: 'charging',
+          name: `Charging ${graphNodeCounter}`,
           x: worldPoint.x,
           y: worldPoint.y,
           theta: 0,
@@ -1255,8 +1277,17 @@ export function MapCanvas() {
                   inset: 0,
                   width: '100%',
                   height: '100%',
-                  pointerEvents: 'none',
+                  pointerEvents: 'auto',
                   zIndex: 20,
+                }}
+                onClick={(ev) => {
+                  ev.stopPropagation();
+                  setSelectedGraphEdge(edge.id);
+                }}
+                onContextMenu={(ev) => {
+                  ev.preventDefault();
+                  ev.stopPropagation();
+                  removeGraphEdge(edge.id);
                 }}
               >
                 <defs>
@@ -1264,6 +1295,14 @@ export function MapCanvas() {
                     <path d="M0,0 L0,6 L8,3 z" fill={isSelected ? '#52c41a' : '#666'} />
                   </marker>
                 </defs>
+                {/* Invisible wider click target */}
+                <line
+                  x1={fromPx.x} y1={fromPx.y}
+                  x2={toPx.x} y2={toPx.y}
+                  stroke="transparent"
+                  strokeWidth={20}
+                  style={{ cursor: isSelected ? 'default' : 'pointer' }}
+                />
                 <line
                   x1={fromPx.x}
                   y1={fromPx.y}
@@ -1274,6 +1313,7 @@ export function MapCanvas() {
                   strokeDasharray={edge.bidirectional ? '0' : '8 5'}
                   markerEnd={edge.bidirectional ? undefined : 'url(#arrowhead)'}
                   opacity={0.85}
+                  style={{ pointerEvents: 'none' }}
                 />
               </svg>
             );
@@ -1503,10 +1543,10 @@ export function MapCanvas() {
                     }}
                     style={{
                       position: 'absolute',
-                      left: pos.x - 18,
-                      top: pos.y - 18,
-                      width: 36,
-                      height: 36,
+                      left: pos.x - 10,
+                      top: pos.y - 10,
+                      width: 20,
+                      height: 20,
                       zIndex: 90,
                       transform: `rotate(${thetaDeg}deg)`,
                       transformOrigin: 'center center',
@@ -1520,10 +1560,10 @@ export function MapCanvas() {
                     }}
                     title={`Start (θ=${(thetaRad * 180 / Math.PI).toFixed(1)}°)`}
                   >
-                    <svg width="36" height="36" viewBox="0 0 36 36">
-                      <circle cx="18" cy="18" r="18" fill="#52c41a" />
+                    <svg width="20" height="20" viewBox="0 0 20 20">
+                      <circle cx="10" cy="10" r="10" fill="#52c41a" />
                       <path
-                        d="M 26 18 L 10 26 L 14 18 L 10 10 Z"
+                        d="M 14 10 L 6 14 L 8 10 L 6 6 Z"
                         fill="white" opacity="0.9"
                       />
                     </svg>
@@ -1761,6 +1801,7 @@ export function MapCanvas() {
                   left: pos.x - 16,
                   top: pos.y - 16,
                   zIndex: 100,
+                  pointerEvents: 'none',
                   transform: `rotate(${-((robotState.theta || 0) * 180) / Math.PI}deg)`,
                   transformOrigin: 'center center',
                   display: 'flex',

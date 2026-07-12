@@ -99,11 +99,13 @@ export const Toolbar = () => {
     const startObj = objects.find((obj) => obj.type === 'robotStart');
     let robot_start_world_x = 0;
     let robot_start_world_y = 0;
+    let robot_start_world_theta = 0;
 
     if (startNode) {
       // GraphNode already stores world coordinates directly.
       robot_start_world_x = startNode.x;
       robot_start_world_y = startNode.y;
+      robot_start_world_theta = startNode.theta ?? 0;
     } else if (startObj) {
       const startPx = startObj.x + startObj.width / 2;
       const startPy = startObj.y + startObj.height / 2;
@@ -119,6 +121,7 @@ export const Toolbar = () => {
       resolution,
       robot_start_world_x,
       robot_start_world_y,
+      robot_start_world_theta,
       objects,
       graph: graphText,
       waypoints: waypointsText, // <--- Đính kèm chuỗi text vào payload
