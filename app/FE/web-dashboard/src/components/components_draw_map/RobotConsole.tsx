@@ -45,7 +45,11 @@ export const RobotConsole: React.FC = () => {
       try {
         const res = await fetch('http://localhost:3001/api/robot/status');
         const data = await res.json();
-        setTelemetry(data);
+        if (data && data.status !== 'OFFLINE') {
+          setTelemetry(data);
+        } else {
+          setTelemetry((prev) => ({ ...prev, status: 'OFFLINE' }));
+        }
       } catch (err) {
         setTelemetry((prev) => ({ ...prev, status: 'OFFLINE' }));
       }

@@ -6,7 +6,7 @@ minimizedPerspectives: 000000ff00000000fd00000002000000010000022b00000313fc02000
 maximizedDockId: -1
 centralWidgetVisible: 1
 projectionMode: PERSPECTIVE
-orthographicViewHeight: 15.935
+orthographicViewHeight: 16.2476
 textFiles: 0 "controllers/robot_controller/robot_controller.c" "../../../../ProgramFile/Webots/unnamed.txt"
 consoles: Console:All:All
 renderingDevicePerspectives: Pioneer 3-DX:kinect color;0;1;0.0712136;0.131937

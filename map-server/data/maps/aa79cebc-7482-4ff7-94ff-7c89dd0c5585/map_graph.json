@@ -28,12 +28,12 @@
       "id": "delivery-table-102",
       "type": "delivery",
       "name": "Table 102_Delivery",
-      "x": -3.1071428571428585,
-      "y": -1.521428571428571,
+      "x": -3.25,
+      "y": -0.45,
       "theta": 0,
       "tableNumber": 102,
-      "deliveryOffsetX": 76.71428571428571,
-      "deliveryOffsetY": 10.999999999999972
+      "deliveryOffsetX": 75.99999999999999,
+      "deliveryOffsetY": 26.000000000000004
     },
     {
       "id": "delivery-table-103",
@@ -50,12 +50,12 @@
       "id": "delivery-table-104",
       "type": "delivery",
       "name": "Table 104_Delivery",
-      "x": 2.6821428571428556,
-      "y": -1.4419642857142863,
+      "x": 2.575,
+      "y": -0.40625,
       "theta": 0,
       "tableNumber": 104,
-      "deliveryOffsetX": -92.35714285714288,
-      "deliveryOffsetY": 19.839285714285726
+      "deliveryOffsetX": -94.5,
+      "deliveryOffsetY": -0.8750000000000002
     },
     {
       "id": "kitchen-kitchen-107",

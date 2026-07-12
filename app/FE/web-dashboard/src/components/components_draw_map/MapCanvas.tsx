@@ -486,11 +486,12 @@ export function MapCanvas() {
         const data = await res.json();
         if (data && data.status !== 'OFFLINE') {
           setRobotState(data);
-        } else {
-          setRobotState(null);
         }
+        // else: keep last known valid state to avoid flicker from
+        // transient file-read races (controller writes robot_state.txt
+        // every ~32ms via fopen+truncate, server reads every 150ms)
       } catch (err) {
-        setRobotState(null);
+        // ignore network errors silently; keep last known state
       }
     };
     const fetchRobotPath = async () => {

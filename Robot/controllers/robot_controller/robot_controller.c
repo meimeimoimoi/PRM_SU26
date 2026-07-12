@@ -26,10 +26,10 @@ static bool resolve_graph_target(const char *target, double *x, double *y, enum 
 #define TIME_STEP 64
 
 // Robot parameters
-#define MAX_SPEED 12.5
-#define MAX_ACCEL 0.25
-#define MAX_OMEGA 2.0
-#define MAX_OMEGA_ACCEL 1.0
+#define MAX_SPEED 15.5
+#define MAX_ACCEL 0.40
+#define MAX_OMEGA 1.8
+#define MAX_OMEGA_ACCEL 1.2
 #define WHEEL_RADIUS 0.0975
 #define WHEEL_BASE 0.381
 
@@ -45,7 +45,7 @@ static bool resolve_graph_target(const char *target, double *x, double *y, enum 
 #define SMOOTH_GAIN 0.15
 #define OMEGA_SMOOTH_MAX 0.1
 #define OMEGA_SMOOTH_ROTATE 0.3
-#define MAX_FWD_VEL 0.5
+#define MAX_FWD_VEL 0.7
 #define TURN_IN_PLACE_THRESHOLD 1.7
 #define SQRT2_MINUS_1 0.41421356237
 
@@ -371,7 +371,7 @@ void load_meta(double *start_x, double *start_y, double *start_theta) {
 
 // Ghi planned path ra file để UI hiển thị
 void write_path_to_file(double robot_x, double robot_y) {
-    FILE *fp = fopen("robot_path.txt", "w");
+    FILE *fp = fopen("robot_path.tmp", "w");
     if (!fp) return;
     fprintf(fp, "%.4f %.4f\n", robot_x, robot_y);
     if (path_is_graph) {
@@ -389,19 +389,26 @@ void write_path_to_file(double robot_x, double robot_y) {
     }
     fprintf(fp, "%.4f %.4f\n", target_x, target_y);
     fclose(fp);
+    remove("robot_path.txt");
+    rename("robot_path.tmp", "robot_path.txt");
 }
 
 void clear_path_file(void) {
-    FILE *fp = fopen("robot_path.txt", "w");
+    FILE *fp = fopen("robot_path.tmp", "w");
     if (fp) { fprintf(fp, "NONE\n"); fclose(fp); }
+    remove("robot_path.txt");
+    rename("robot_path.tmp", "robot_path.txt");
 }
 
 // Ghi trạng thái robot ra file robot_state.txt
+// Write to temp file first, then rename so readers never see a truncated file.
 void write_robot_state(double x, double y, double theta, double v, double omega, const char *status) {
-    FILE *fp = fopen("robot_state.txt", "w");
+    FILE *fp = fopen("robot_state.tmp", "w");
     if (fp) {
         fprintf(fp, "%.4f %.4f %.4f %.4f %.4f %s\n", x, y, theta, v, omega, status);
         fclose(fp);
+        remove("robot_state.txt");
+        rename("robot_state.tmp", "robot_state.txt");
     }
 }
 
