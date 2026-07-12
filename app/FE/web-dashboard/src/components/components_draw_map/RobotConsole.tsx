@@ -9,6 +9,7 @@ import {
   Crosshair,
   Home,
   Navigation,
+  Utensils,
 } from 'lucide-react';
 import { useMapStore } from '../../store/mapStore';
 
@@ -25,6 +26,8 @@ export const RobotConsole: React.FC = () => {
   const graphNodes = useMapStore((state) => state.graphNodes);
   // Lấy delivery nodes từ graph thay vì objects — để target gửi cho robot khớp với graph.json
   const deliveryNodes = graphNodes.filter((node) => node.type === 'delivery');
+  const kitchenNodes = graphNodes.filter((node) => node.type === 'kitchen');
+  const kitchenNode = kitchenNodes[0];
 
   const [selectedTable, setSelectedTable] = useState<string | undefined>(undefined);
   const [telemetry, setTelemetry] = useState<Telemetry>({
@@ -73,6 +76,12 @@ export const RobotConsole: React.FC = () => {
 
   const handleReturnHome = () => {
     sendControlCommand('NAV_TO_TABLE', 'robotStart');
+  };
+
+  const handleReturnToKitchen = () => {
+    if (kitchenNode) {
+      sendControlCommand('NAV_TO_TABLE', kitchenNode.id);
+    }
   };
 
   const getStatusColor = (status: string) => {
@@ -157,7 +166,7 @@ export const RobotConsole: React.FC = () => {
             }))}
           />
           <Row gutter={8}>
-            <Col span={12}>
+            <Col span={8}>
               <Button
                 type="primary"
                 icon={<Navigation size={14} />}
@@ -168,14 +177,24 @@ export const RobotConsole: React.FC = () => {
                 Giao Hàng
               </Button>
             </Col>
-            <Col span={12}>
+            <Col span={8}>
               <Button
                 icon={<Home size={14} />}
                 onClick={handleReturnHome}
                 disabled={telemetry.status === 'OFFLINE'}
                 block
               >
-                Về Điểm Xuất Phát
+                Về XP
+              </Button>
+            </Col>
+            <Col span={8}>
+              <Button
+                icon={<Utensils size={14} />}
+                onClick={handleReturnToKitchen}
+                disabled={telemetry.status === 'OFFLINE' || !kitchenNode}
+                block
+              >
+                Về Bếp
               </Button>
             </Col>
           </Row>

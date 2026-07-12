@@ -39,12 +39,12 @@
       "id": "delivery-table-105",
       "type": "delivery",
       "name": "Table 105_Delivery",
-      "x": -3.1,
-      "y": -2.036363636363636,
+      "x": -3.418181818181819,
+      "y": 1.5090909090909095,
       "theta": 0,
       "tableNumber": 105,
-      "deliveryOffsetX": 66,
-      "deliveryOffsetY": 63.72727272727273
+      "deliveryOffsetX": 59.636363636363626,
+      "deliveryOffsetY": -7.1818181818181825
     },
     {
       "id": "delivery-table-106",

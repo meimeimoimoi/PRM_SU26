@@ -28,6 +28,7 @@ const toolLabels: Record<MapTool, string> = {
   wall: 'Wall',
   robotStart: 'Start Position',
   chargingStation: 'Charging Station',
+  kitchen: 'Kitchen',
   waypoint: 'Waypoint',
   edge: 'Connect Edge',
 };
@@ -169,6 +170,31 @@ function MapObjectShape({
             onResizeStart(e, object.id, 'delivery');
           }}
           title="Điểm giao hàng"
+        />
+      )}
+
+      {/* Điểm bếp (Kitchen Point) cho kitchen */}
+      {object.type === 'kitchen' && (
+        <div
+          className="delivery-point-handle"
+          style={{
+            position: 'absolute',
+            width: '16px',
+            height: '16px',
+            background: '#e17055', // cam
+            border: '2px solid white',
+            borderRadius: '50%',
+            left: `calc(50% - 8px + ${object.deliveryOffsetX || 0}px)`,
+            top: `calc(50% - 8px + ${object.deliveryOffsetY || 0}px)`,
+            cursor: 'grab',
+            zIndex: 30,
+            boxShadow: '0 2px 6px rgba(0,0,0,0.5)',
+          }}
+          onPointerDown={(e) => {
+            e.stopPropagation();
+            onResizeStart(e, object.id, 'delivery');
+          }}
+          title="Điểm bếp"
         />
       )}
 
@@ -783,6 +809,28 @@ export function MapCanvas() {
             }
           }
 
+          // Sync kitchen node offset back to the parent kitchen object
+          if (node.type === 'kitchen') {
+            const objectId = node.id.replace('kitchen-', '');
+            const parentObj = objects.find((o) => o.id === objectId);
+            if (parentObj) {
+              const kitchenCenterWorld = pixelToWorld(
+                parentObj.x + parentObj.width / 2,
+                parentObj.y + parentObj.height / 2,
+                floorSize,
+                resolution,
+              );
+              const offsetWorldX = nextX - kitchenCenterWorld.x;
+              const offsetWorldY = kitchenCenterWorld.y - nextY;
+              const offsetPxX = offsetWorldX / resolution;
+              const offsetPxY = offsetWorldY / resolution;
+              updateObject(parentObj.id, {
+                deliveryOffsetX: offsetPxX,
+                deliveryOffsetY: offsetPxY,
+              });
+            }
+          }
+
           return;
         }
 
@@ -917,7 +965,7 @@ export function MapCanvas() {
       const dy = e.clientY - panStart.current.y;
       setPan({ x: panStart.current.panX + dx, y: panStart.current.panY + dy });
     },
-    [dragState, objects, pan, zoom, updateObject, applySnap],
+    [dragState, objects, pan, zoom, updateObject, applySnap, updateGraphNode],
   );
 
   const handlePointerUp = useCallback(() => {
@@ -1005,7 +1053,7 @@ export function MapCanvas() {
       }
 
       const tool = selectedTool as MapObjectType;
-      if (tool !== 'robotStart' && tool !== 'waypoint' && objectPhysicalSizes[tool]) {
+      if (tool !== 'robotStart' && tool !== 'waypoint' && tool !== 'kitchen' && objectPhysicalSizes[tool]) {
         objectCounter++;
         const defaultSize = objectPhysicalSizes[tool];
         const widthPx = Math.round(defaultSize.width / resolution);
@@ -1073,6 +1121,29 @@ export function MapCanvas() {
           x: worldPoint.x,
           y: worldPoint.y,
           theta: 0,
+        });
+        return;
+      }
+
+      if (selectedTool === 'kitchen') {
+        objectCounter++;
+        const defaultSize = objectPhysicalSizes['kitchen']!;
+        const widthPx = Math.round(defaultSize.width / resolution);
+        const heightPx = Math.round(defaultSize.height / resolution);
+        const mapSize = getMapPixels(floorSize, resolution);
+        const clampedX = Math.max(0, Math.min(mapSize - widthPx, Math.round(gridLocalX - widthPx / 2)));
+        const clampedY = Math.max(0, Math.min(mapSize - heightPx, Math.round(gridLocalY - heightPx / 2)));
+        addObject({
+          id: `kitchen-${objectCounter}`,
+          type: 'kitchen',
+          name: `Kitchen ${objectCounter}`,
+          x: clampedX,
+          y: clampedY,
+          width: widthPx,
+          height: heightPx,
+          rotation: 0,
+          deliveryOffsetX: 0,
+          deliveryOffsetY: 0,
         });
         return;
       }
@@ -1277,17 +1348,8 @@ export function MapCanvas() {
                   inset: 0,
                   width: '100%',
                   height: '100%',
-                  pointerEvents: 'auto',
+                  pointerEvents: 'none',
                   zIndex: 20,
-                }}
-                onClick={(ev) => {
-                  ev.stopPropagation();
-                  setSelectedGraphEdge(edge.id);
-                }}
-                onContextMenu={(ev) => {
-                  ev.preventDefault();
-                  ev.stopPropagation();
-                  removeGraphEdge(edge.id);
                 }}
               >
                 <defs>
@@ -1301,7 +1363,16 @@ export function MapCanvas() {
                   x2={toPx.x} y2={toPx.y}
                   stroke="transparent"
                   strokeWidth={20}
-                  style={{ cursor: isSelected ? 'default' : 'pointer' }}
+                  style={{ cursor: isSelected ? 'default' : 'pointer', pointerEvents: 'auto' }}
+                  onClick={(ev) => {
+                    ev.stopPropagation();
+                    setSelectedGraphEdge(edge.id);
+                  }}
+                  onContextMenu={(ev) => {
+                    ev.preventDefault();
+                    ev.stopPropagation();
+                    removeGraphEdge(edge.id);
+                  }}
                 />
                 <line
                   x1={fromPx.x}

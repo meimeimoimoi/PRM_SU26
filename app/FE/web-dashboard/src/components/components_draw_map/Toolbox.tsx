@@ -8,6 +8,7 @@ import {
   Navigation,
   Plus,
   Square,
+  Utensils,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { MapTool } from '@/types/map';
@@ -26,6 +27,7 @@ const tools: ToolDefinition[] = [
   { tool: 'table', label: 'Table', Icon: Square },
   { tool: 'robotStart', label: 'Start Position', Icon: Navigation },
   { tool: 'chargingStation', label: 'Charging Station', Icon: BatteryCharging },
+  { tool: 'kitchen', label: 'Kitchen', Icon: Utensils },
   { tool: 'waypoint', label: 'Waypoint', Icon: Plus },
   { tool: 'edge', label: 'Connect Edge', Icon: Link2 },
 ];
