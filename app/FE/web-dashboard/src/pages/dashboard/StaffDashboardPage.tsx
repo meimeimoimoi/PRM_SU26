@@ -1,4 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
+import { useSelector } from 'react-redux';
+import { selectCurrentUser } from '@/store/slices/authSlice';
 import { 
   Button, 
   message, 
@@ -19,7 +21,6 @@ import {
   FireOutlined, 
   CoffeeOutlined, 
   DoubleRightOutlined,
-  ThunderboltOutlined,
   CheckOutlined,
   PrinterOutlined,
   DollarCircleOutlined,
@@ -33,6 +34,7 @@ import '@/styles/StaffDashboardPage.css';
 const { TabPane } = Tabs;
 
 const StaffDashboardPage: React.FC = () => {
+  const user = useSelector(selectCurrentUser);
   // Kitchen Queue State
   const [kitchenItems, setKitchenItems] = useState<KitchenItem[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
@@ -140,31 +142,19 @@ const StaffDashboardPage: React.FC = () => {
       okText: 'Thanh toán & Đóng bàn',
       okType: 'primary',
       cancelText: 'Hủy',
-      onOk: () => {
-        // Direct local update to simulate session closing
-        setActiveOrders((prev) => prev.filter((o) => o.tableNumber !== tableNo));
-        setKitchenItems((prev) => prev.filter((item) => item.tableNumber !== tableNo));
-        setBillingModalVisible(false);
-        setSelectedTable(null);
-        message.success(`Thanh toán thành công! Bàn ${tableNo} hiện đã trống.`);
+      onOk: async () => {
+        try {
+          await orderService.completePaymentByTable(tableNo);
+          setActiveOrders((prev) => prev.filter((o) => o.tableNumber !== tableNo));
+          setKitchenItems((prev) => prev.filter((item) => item.tableNumber !== tableNo));
+          setBillingModalVisible(false);
+          setSelectedTable(null);
+          message.success(`Thanh toán thành công! Bàn ${tableNo} hiện đã trống.`);
+        } catch (err) {
+          message.error('Không thể xác nhận thanh toán trên hệ thống.');
+        }
       }
     });
-  };
-
-  // Order Simulator: Inject a random kitchen item & order
-  const handleSimulateOrder = () => {
-    const newKitchenItems = orderService.simulateNewOrder();
-    
-    // Add new items to state
-    setKitchenItems((prev) => [...newKitchenItems, ...prev]);
-    
-    // Refresh active orders list
-    orderService.getActiveOrders().then(orders => {
-      setActiveOrders(orders);
-    });
-
-    const primaryItem = newKitchenItems[0];
-    message.info(`🔔 Order mới từ Bàn ${primaryItem.tableNumber}: ${primaryItem.quantity}x ${primaryItem.name}`);
   };
 
   // Group kitchen queue items by status
@@ -238,7 +228,7 @@ const StaffDashboardPage: React.FC = () => {
 
   return (
     <div className="staff-dashboard-container">
-      {/* Header section with simulator */}
+      {/* Header section */}
       <div className="staff-header-row">
         <div>
           <h2 className="staff-header-title">
@@ -249,20 +239,13 @@ const StaffDashboardPage: React.FC = () => {
           </p>
         </div>
         <Button 
-          type="primary" 
-          danger
-          icon={<ThunderboltOutlined />} 
-          onClick={handleSimulateOrder}
+          type="default" 
+          icon={<PlayCircleOutlined />} 
+          onClick={loadData}
           className="staff-btn-simulate"
         >
-          Giả lập Khách đặt món
+          Tải lại dữ liệu
         </Button>
-      </div>
-
-      {/* Simulator Banner */}
-      <div className="staff-simulation-banner">
-        <span>💡 <strong>Hướng dẫn nhanh:</strong> Bấm nút đỏ góc trên để tạo ngẫu nhiên đơn đặt món mới gửi tới cả bếp và hóa đơn thanh toán!</span>
-        <Button size="small" type="link" onClick={loadData}>Tải lại dữ liệu</Button>
       </div>
 
       {/* Statistics Row */}
@@ -618,7 +601,7 @@ const StaffDashboardPage: React.FC = () => {
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
               <span className="label-gray">Nhân viên phụ trách:</span>
-              <span className="val-dark">Sarah Williams</span>
+              <span className="val-dark">{user?.fullName || 'Sarah Williams'}</span>
             </div>
 
             <h4 className="bill-section-title">Danh sách món ăn đã đặt</h4>

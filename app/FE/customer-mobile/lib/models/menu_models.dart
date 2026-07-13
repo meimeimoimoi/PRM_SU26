@@ -28,6 +28,29 @@ class MenuItemSummary {
   }
 }
 
+class MenuCategory {
+  final int id;
+  final String name;
+  final String? description;
+  final int itemCount;
+
+  MenuCategory({
+    required this.id,
+    required this.name,
+    this.description,
+    required this.itemCount,
+  });
+
+  factory MenuCategory.fromJson(Map<String, dynamic> json) {
+    return MenuCategory(
+      id: json['id'] ?? 0,
+      name: json['name'] ?? '',
+      description: json['description'],
+      itemCount: json['itemCount'] ?? 0,
+    );
+  }
+}
+
 class AiRecommendationItem {
   final int id;
   final String name;

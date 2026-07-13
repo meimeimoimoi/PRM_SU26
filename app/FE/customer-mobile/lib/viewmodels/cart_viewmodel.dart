@@ -2,7 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/order_models.dart';
 import '../models/menu_models.dart';
 import '../services/order_repository.dart';
-import '../viewmodels/auth_viewmodel.dart';
+import 'order_viewmodel.dart';
 
 class CartItem {
   final MenuItemSummary menuItem;
@@ -59,8 +59,8 @@ class CartViewModel extends StateNotifier<CartState> {
     state = state.copyWith(items: state.items.where((element) => element.menuItem.id != itemId).toList());
   }
 
-  Future<bool> checkout(int tableId, int sessionId) async {
-    if (state.items.isEmpty) return false;
+  Future<int?> checkout(int tableId, int sessionId) async {
+    if (state.items.isEmpty) return null;
 
     state = state.copyWith(isSubmitting: true, error: null);
     try {
@@ -74,12 +74,13 @@ class CartViewModel extends StateNotifier<CartState> {
         )).toList(),
       );
       
-      await _orderRepository.placeOrder(request);
+      final order = await _orderRepository.placeOrder(request);
       state = CartState(); // Clear cart on success
-      return true;
+      _ref.invalidate(orderListProvider);
+      return order.id;
     } catch (e) {
       state = state.copyWith(isSubmitting: false, error: e.toString());
-      return false;
+      return null;
     }
   }
 }

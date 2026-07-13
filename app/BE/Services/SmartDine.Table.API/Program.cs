@@ -103,9 +103,6 @@ using (var scope = app.Services.CreateScope())
         {
             await context.Database.EnsureCreatedAsync();
         }
-
-        var seeder = services.GetRequiredService<DbSeeder>();
-        await seeder.SeedAsync();
     }
     catch (Exception ex)
     {

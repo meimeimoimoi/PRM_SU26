@@ -4,5 +4,5 @@ export interface Transaction {
   tableNo: string;
   totalAmount: number;
   paymentMethod: string;
-  status: 'Completed' | 'Cancelled' | 'Refunded';
+  status: string;
 }

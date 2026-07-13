@@ -37,7 +37,10 @@ final GoRouter appRouter = GoRouter(
     ),
     GoRoute(
       path: AppRoutes.checkout,
-      builder: (context, state) => const CheckoutPage(),
+      builder: (context, state) {
+        final orderId = state.extra as int?;
+        return CheckoutPage(orderId: orderId);
+      },
     ),
     GoRoute(
       path: AppRoutes.orders,
@@ -46,6 +49,13 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: AppRoutes.invoice,
       builder: (context, state) => const OrderHistoryPage(),
+    ),
+    GoRoute(
+      path: '${AppRoutes.orderTracking}/:orderId',
+      builder: (context, state) {
+        final orderId = int.tryParse(state.pathParameters['orderId'] ?? '') ?? 0;
+        return OrderTrackingPage(orderId: orderId);
+      },
     ),
     GoRoute(
       path: AppRoutes.orderTracking,

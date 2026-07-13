@@ -22,7 +22,9 @@ class _AppColors {
 }
 
 class CheckoutPage extends ConsumerWidget {
-  const CheckoutPage({super.key});
+  const CheckoutPage({super.key, this.orderId});
+
+  final int? orderId;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -168,7 +170,13 @@ class CheckoutPage extends ConsumerWidget {
                       ),
                       SizedBox(height: 16.h),
                       ElevatedButton(
-                        onPressed: () => context.push('/orders'),
+                        onPressed: () {
+                          if (orderId != null) {
+                            context.push('/order_tracking/$orderId');
+                          } else {
+                            context.go('/orders');
+                          }
+                        },
                         style: ElevatedButton.styleFrom(
                           backgroundColor: _AppColors.surfaceContainer,
                           foregroundColor: _AppColors.onSurface,

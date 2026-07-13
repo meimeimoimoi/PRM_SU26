@@ -217,13 +217,14 @@
 
 /* Dish Kanban Card */
 .staff-item-card {
-  background: #fff;
-  border-radius: 10px;
-  border: 1px solid #e2e8f0;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02);
-  transition: transform 0.2s, box-shadow 0.2s;
-  position: relative;
-  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-height: 140px; /* Dùng min-height thay vì height cố định */
+  padding: 12px;
+  margin-bottom: 12px;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
 }
 
 .staff-item-card:hover {
@@ -282,7 +283,8 @@
 }
 
 .staff-card-body {
-  padding: 16px;
+  flex-grow: 1;
+  padding: 8px 0 16px 0; /* Tăng padding-bottom (16px) để tạo khoảng trống */
 }
 
 .staff-item-name {
@@ -293,10 +295,10 @@
 }
 
 .staff-item-qty {
-  margin-top: 6px;
-  font-size: 13px;
-  font-weight: 600;
-  color: #4a5568;
+  font-size: 14px;
+  color: #555;
+  margin-top: 4px;
+  line-height: 1.5;
 }
 
 .staff-item-notes {

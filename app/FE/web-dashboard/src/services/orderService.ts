@@ -24,114 +24,25 @@ export interface OrderResponse {
   items: OrderDetailItem[];
 }
 
-// Global variable to hold local mock state for simulator and offline operations
-let mockActiveOrders: OrderResponse[] = [
-  {
-    id: 8921,
-    tableNumber: 5,
-    customerName: 'Anh Tuấn',
-    totalAmount: 180000,
-    discountAmount: 0,
-    finalAmount: 180000,
-    status: 'PENDING',
-    createdAt: new Date(Date.now() - 12 * 60 * 1000).toISOString(),
-    items: [
-      {
-        id: 1001,
-        menuItemId: 1,
-        name: 'Phở Bò Đặc Biệt',
-        unitPrice: 65000,
-        quantity: 2,
-        notes: 'Không hành, nhiều bánh phở',
-        status: 'WAITING'
-      },
-      {
-        id: 1002,
-        menuItemId: 2,
-        name: 'Gỏi Cuốn Tôm Thịt',
-        unitPrice: 15000,
-        quantity: 3,
-        notes: 'Nước chấm tương đen',
-        status: 'WAITING'
-      }
-    ]
-  },
-  {
-    id: 8922,
-    tableNumber: 12,
-    customerName: 'Chị Vy',
-    totalAmount: 135000,
-    discountAmount: 15000,
-    finalAmount: 120000,
-    status: 'PREPARING',
-    createdAt: new Date(Date.now() - 20 * 60 * 1000).toISOString(),
-    items: [
-      {
-        id: 1003,
-        menuItemId: 3,
-        name: 'Bánh Mì Thịt Nướng',
-        unitPrice: 35000,
-        quantity: 3,
-        notes: 'Cắt đôi bánh mì',
-        status: 'DOING'
-      },
-      {
-        id: 1004,
-        menuItemId: 4,
-        name: 'Cà Phê Sữa Đá',
-        unitPrice: 30000,
-        quantity: 1,
-        status: 'DONE'
-      }
-    ]
-  },
-  {
-    id: 8923,
-    tableNumber: 3,
-    customerName: 'Minh Hoàng',
-    totalAmount: 45000,
-    discountAmount: 0,
-    finalAmount: 45000,
-    status: 'PENDING',
-    createdAt: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
-    items: [
-      {
-        id: 1005,
-        menuItemId: 5,
-        name: 'Trà Đào Đá Xay',
-        unitPrice: 45000,
-        quantity: 1,
-        notes: 'Nhiều đào',
-        status: 'WAITING'
-      }
-    ]
-  }
-];
-
 export const orderService = {
-  // Lấy toàn bộ đơn hàng đang hoạt động từ backend
   getActiveOrders: async (): Promise<OrderResponse[]> => {
-    try {
-      const response = await apiClient.get<any>('/orders/active');
-      const data = response.data.data || response.data;
-      if (data && Array.isArray(data) && data.length > 0) {
-        return data;
-      }
-      return mockActiveOrders;
-    } catch (error) {
-      console.warn('API /orders/active lỗi hoặc chưa khởi chạy. Sử dụng dữ liệu offline.');
-      return mockActiveOrders;
-    }
+    const response = await apiClient.get<any>('/orders/active');
+    const data = response.data.data || response.data;
+    return Array.isArray(data) ? data : [];
   },
 
-  // Lấy các món ăn cần chế biến cho bếp bằng cách làm phẳng (flatten) các Order
+  getTodayOrders: async (): Promise<OrderResponse[]> => {
+    const response = await apiClient.get<any>('/orders/today');
+    const data = response.data.data || response.data;
+    return Array.isArray(data) ? data : [];
+  },
+
   getKitchenItems: async (): Promise<KitchenItem[]> => {
     const orders = await orderService.getActiveOrders();
     const items: KitchenItem[] = [];
 
     orders.forEach((order) => {
       order.items.forEach((item) => {
-        // Chỉ hiện thị các món chưa giao (SERVED) hoặc đã hủy (CANCELLED)
         if (item.status !== 'SERVED' && item.status !== 'CANCELLED') {
           const orderedTime = new Date(order.createdAt).getTime();
           const elapsed = Math.floor((Date.now() - orderedTime) / 1000);
@@ -150,97 +61,14 @@ export const orderService = {
       });
     });
 
-    // Sắp xếp thời gian cũ hơn lên đầu (FIFO)
     return items.sort((a, b) => new Date(a.orderedAt).getTime() - new Date(b.orderedAt).getTime());
   },
 
-  // Cập nhật trạng thái của món ăn
   updateItemStatus: async (itemId: number, newStatus: KitchenItemStatus): Promise<boolean> => {
-    try {
-      // Gọi API cập nhật trạng thái món ăn nếu backend hỗ trợ
-      await apiClient.patch(`/kitchen/items/${itemId}/status`, { status: newStatus });
-    } catch (e) {
-      // Fallback: Cập nhật trong mockActiveOrders local để simulator chạy đồng bộ
-      mockActiveOrders = mockActiveOrders.map((order) => {
-        const updatedItems = order.items.map((item) => {
-          if (item.id === itemId) {
-            return { ...item, status: newStatus };
-          }
-          return item;
-        });
-        return { ...order, items: updatedItems };
-      });
-    }
+    await apiClient.patch(`/orders/items/${itemId}/status`, { status: newStatus });
     return true;
   },
 
-  // Giả lập khách hàng đặt món mới
-  simulateNewOrder: (tableNo?: number): KitchenItem[] => {
-    const randomDishes = [
-      { name: 'Phở Bò Đặc Biệt', price: 65000, notes: 'Nước béo, nhiều hành' },
-      { name: 'Gỏi Cuốn Tôm Thịt', price: 15000, notes: 'Không hành hẹ' },
-      { name: 'Bánh Mì Thịt Nướng', price: 35000, notes: 'Không ớt' },
-      { name: 'Cà Phê Sữa Đá', price: 30000, notes: 'Ít sữa nhiều đá' },
-      { name: 'Trà Đào Đá Xay', price: 45000, notes: 'Thêm thạch đào' },
-      { name: 'Phở Gà Trứng Non', price: 60000, notes: 'Không da gà' }
-    ];
-
-    const randomTable = tableNo || Math.floor(1 + Math.random() * 15);
-    const orderId = Math.floor(1000 + Math.random() * 9000);
-    
-    // Chọn ngẫu nhiên 1-3 món
-    const itemsCount = Math.floor(1 + Math.random() * 3);
-    const items: OrderDetailItem[] = [];
-    const kitchenItems: KitchenItem[] = [];
-
-    let total = 0;
-    for (let i = 0; i < itemsCount; i++) {
-      const dish = randomDishes[Math.floor(Math.random() * randomDishes.length)];
-      const itemId = Math.floor(10000 + Math.random() * 90000);
-      const qty = Math.floor(1 + Math.random() * 2);
-      
-      items.push({
-        id: itemId,
-        menuItemId: i + 1,
-        name: dish.name,
-        unitPrice: dish.price,
-        quantity: qty,
-        notes: Math.random() > 0.4 ? dish.notes : undefined,
-        status: 'WAITING'
-      });
-
-      kitchenItems.push({
-        id: itemId,
-        orderId: orderId,
-        tableNumber: randomTable,
-        name: dish.name,
-        quantity: qty,
-        notes: Math.random() > 0.4 ? dish.notes : undefined,
-        status: 'WAITING',
-        orderedAt: new Date().toISOString(),
-        elapsedSeconds: 0
-      });
-
-      total += dish.price * qty;
-    }
-
-    const newOrder: OrderResponse = {
-      id: orderId,
-      tableNumber: randomTable,
-      customerName: `Khách Bàn ${randomTable}`,
-      totalAmount: total,
-      discountAmount: 0,
-      finalAmount: total,
-      status: 'PENDING',
-      createdAt: new Date().toISOString(),
-      items: items
-    };
-
-    mockActiveOrders = [newOrder, ...mockActiveOrders];
-    return kitchenItems;
-  },
-
-  // In hóa đơn món ăn cho bếp chế biến
   printKitchenTicket: (item: { orderId: number; tableNumber: number; name: string; quantity: number; notes?: string; orderedAt: string }) => {
     const printWindow = window.open('', '_blank');
     if (!printWindow) return;
@@ -462,5 +290,10 @@ export const orderService = {
       </html>
     `);
     printWindow.document.close();
+  },
+
+  completePaymentByTable: async (tableNumber: number): Promise<boolean> => {
+    await apiClient.post(`/payments/complete-by-table/${tableNumber}`);
+    return true;
   }
 };

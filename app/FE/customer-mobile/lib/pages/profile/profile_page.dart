@@ -89,10 +89,21 @@ class ProfilePage extends ConsumerWidget {
                     border: Border.all(color: _AppColors.primaryContainer, width: 2),
                   ),
                   child: ClipOval(
-                    child: Image.network(
-                      'https://lh3.googleusercontent.com/aida-public/AB6AXuCu5YfCa6oZa9ZAq8fcb1EFOfjc3-Vf6uR3HzW_5oVoL2_f4BkzyeBOl3Z8uXGKRvZxZP0fvd_DVHJqKAFvv4DZp3_A6Wz58pBAWAJ2ljXhP9mVXcSATn4rR1tdSD_LCXmJ5NGQBSRkEImbNFwegAR9H3z5wfXpx8av2c5LXU7q82we_FSlLS1XfDrOk7znj4t7k3HBry7-rJo5fD8RdykQtUvrOu_eTXT-T3DSLKRwQVI9auXMHOpXIcYM3jmbdN1wyCyVD_3pkUEg',
-                      fit: BoxFit.cover,
-                    ),
+                    child: user?.avatarUrl != null && user!.avatarUrl!.isNotEmpty
+                        ? Image.network(
+                            user.avatarUrl!,
+                            fit: BoxFit.cover,
+                            width: 80.r,
+                            height: 80.r,
+                            errorBuilder: (_, __, ___) => Container(
+                              color: _AppColors.primaryContainer,
+                              child: Icon(Icons.person, color: Colors.white, size: 40.sp),
+                            ),
+                          )
+                        : Container(
+                            color: _AppColors.primaryContainer,
+                            child: Icon(Icons.person, color: Colors.white, size: 40.sp),
+                          ),
                   ),
                 ),
                 SizedBox(width: 16.w),
@@ -311,21 +322,6 @@ class ProfilePage extends ConsumerWidget {
                   _buildMenuItem(
                     icon: Icons.confirmation_number,
                     title: 'Mã giảm giá của tôi',
-                    badge: Container(
-                      padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 2.h),
-                      decoration: BoxDecoration(
-                        color: _AppColors.primary,
-                        borderRadius: BorderRadius.circular(4.r),
-                      ),
-                      child: Text(
-                        '3 MỚI',
-                        style: TextStyle(
-                          color: _AppColors.onPrimary,
-                          fontSize: 10.sp,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
                     onTap: () {},
                   ),
                 ],

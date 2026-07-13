@@ -96,119 +96,45 @@ class _CartPageState extends ConsumerState<CartPage> {
           ),
         ],
       ),
-      body: SingleChildScrollView(
+      body: items.isEmpty
+          ? Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.shopping_cart_outlined, size: 80.sp, color: _AppColors.outlineVariant),
+                  SizedBox(height: 24.h),
+                  Text(
+                    'Giỏ hàng trống',
+                    style: TextStyle(
+                      color: _AppColors.onSurface,
+                      fontSize: 22.sp,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  SizedBox(height: 8.h),
+                  Text(
+                    'Thêm món từ thực đơn để bắt đầu',
+                    style: TextStyle(color: _AppColors.secondary, fontSize: 16.sp),
+                  ),
+                  SizedBox(height: 32.h),
+                  ElevatedButton(
+                    onPressed: () => context.go('/home'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _AppColors.primary,
+                      foregroundColor: _AppColors.onPrimary,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
+                      padding: EdgeInsets.symmetric(horizontal: 32.w, vertical: 16.h),
+                    ),
+                    child: Text('Xem thực đơn', style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.bold)),
+                  ),
+                ],
+              ),
+            )
+          : SingleChildScrollView(
         padding: EdgeInsets.symmetric(horizontal: 20.w, vertical: 24.h),
-        child: Column(
+          child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Participants Widget
-            Container(
-              padding: EdgeInsets.all(16.r),
-              decoration: BoxDecoration(
-                color: _AppColors.surfaceContainerLowest,
-                borderRadius: BorderRadius.circular(16.r),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.04),
-                    blurRadius: 20,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: Column(
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'Thành viên cùng bàn',
-                        style: TextStyle(
-                          color: _AppColors.onSurface,
-                          fontSize: 20.sp,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      Container(
-                        padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 4.h),
-                        decoration: BoxDecoration(
-                          color: _AppColors.tertiaryContainer,
-                          borderRadius: BorderRadius.circular(100.r),
-                        ),
-                        child: Text(
-                          '2 Đang chờ',
-                          style: TextStyle(
-                            color: _AppColors.onTertiaryContainer,
-                            fontSize: 12.sp,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  SizedBox(height: 16.h),
-                  Row(
-                    children: [
-                      SizedBox(
-                        width: 70.w,
-                        height: 40.r,
-                        child: Stack(
-                          children: [
-                            Positioned(
-                              left: 0,
-                              child: Container(
-                                width: 40.r,
-                                height: 40.r,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  border: Border.all(color: _AppColors.surface, width: 2),
-                                  image: const DecorationImage(
-                                    image: NetworkImage('https://lh3.googleusercontent.com/aida-public/AB6AXuD2cqWJtrn1AhSQzwqG-YMEBB91R4Y708Hen-QNuo-y1EW0FRdgOQOOY0k6L2xtLwv3TgbOTqSCfweHmlfXtF26bxfJPHDs9aGh2G0rubsII8riIyXXmJpbRjPVBiq0Gas0ZFiV-8UpV-AmpxikMl2kQtQkTuw2uwJozAiCDjc9iWSj3sua8UewEC_1Ew2Kabl_D9hI4k8roxG5lu1eL---v-Ou42vNdr5vynWNsOmvPrg9e7E0laBCEGoAle_gMU60cPWCTpdw23XQ'),
-                                    fit: BoxFit.cover,
-                                  ),
-                                ),
-                              ),
-                            ),
-                            Positioned(
-                              left: 30.w,
-                              child: Container(
-                                width: 40.r,
-                                height: 40.r,
-                                decoration: BoxDecoration(
-                                  color: _AppColors.secondaryFixed,
-                                  shape: BoxShape.circle,
-                                  border: Border.all(color: _AppColors.surface, width: 2),
-                                ),
-                                child: Icon(Icons.person, color: _AppColors.secondary, size: 20.sp),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      SizedBox(width: 8.w),
-                      Text(
-                        'Anh Hoàng, Khách 2',
-                        style: TextStyle(
-                          color: _AppColors.onSurfaceVariant,
-                          fontSize: 16.sp,
-                        ),
-                      ),
-                      const Spacer(),
-                      Container(
-                        width: 40.r,
-                        height: 40.r,
-                        decoration: const BoxDecoration(
-                          color: _AppColors.surfaceContainerHigh,
-                          shape: BoxShape.circle,
-                        ),
-                        child: Icon(Icons.person_add, color: _AppColors.primary, size: 20.sp),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            SizedBox(height: 24.h),
-
             // Item List
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -310,22 +236,8 @@ class _CartPageState extends ConsumerState<CartPage> {
                             ),
                             SizedBox(height: 12.h),
                             Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              mainAxisAlignment: MainAxisAlignment.end,
                               children: [
-                                Row(
-                                  children: [
-                                    Icon(Icons.person, color: _AppColors.tertiary, size: 16.sp),
-                                    SizedBox(width: 4.w),
-                                    Text(
-                                      'Bạn',
-                                      style: TextStyle(
-                                        color: _AppColors.tertiary,
-                                        fontSize: 12.sp,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                  ],
-                                ),
                                 Container(
                                   padding: EdgeInsets.all(4.r),
                                   decoration: BoxDecoration(
@@ -457,27 +369,6 @@ class _CartPageState extends ConsumerState<CartPage> {
                       ),
                     ],
                   ),
-                  SizedBox(height: 16.h),
-                  Container(
-                    padding: EdgeInsets.all(12.r),
-                    decoration: BoxDecoration(
-                      color: _AppColors.secondaryContainer,
-                      borderRadius: BorderRadius.circular(8.r),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(Icons.check_circle, color: _AppColors.onSecondaryContainer, size: 20.sp),
-                        SizedBox(width: 8.w),
-                        Text(
-                          'Mã "WELCOME" đã được áp dụng - Giảm 10%',
-                          style: TextStyle(
-                            color: _AppColors.onSecondaryContainer,
-                            fontSize: 14.sp,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
                 ],
               ),
             ),
@@ -558,12 +449,12 @@ class _CartPageState extends ConsumerState<CartPage> {
             ElevatedButton(
               onPressed: () async {
                 // Submit order to API
-                final success = await ref.read(cartViewModelProvider.notifier).checkout(tableId, sessionId);
-                if (success && mounted) {
+                final orderId = await ref.read(cartViewModelProvider.notifier).checkout(tableId, sessionId);
+                if (orderId != null && mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text('Đặt món thành công!')),
                   );
-                  context.push('/checkout');
+                  context.push('/checkout', extra: orderId);
                 } else {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(content: Text(cartState.error ?? 'Lỗi khi đặt món')),

@@ -43,7 +43,7 @@ public class PaymentsController : ControllerBase
     /// Roles: MANAGER.
     /// </summary>
     [HttpGet]
-    [Authorize(Roles = Roles.Manager)]
+    [Authorize(Roles = Roles.StaffAndManager)]
     public async Task<IActionResult> GetHistory(
         [FromQuery] DateTime? fromDate,
         [FromQuery] DateTime? toDate,
@@ -120,6 +120,30 @@ public class PaymentsController : ControllerBase
 
         var result = await _paymentService.HandleWebhookAsync(rawBody, signature);
         return Ok(result);
+    }
+
+    /// <summary>
+    /// POST /api/v1/payments/{id}/complete — Hoàn tất thanh toán thủ công (CASH hoặc xử lý sự cố).
+    /// Roles: STAFF, MANAGER.
+    /// </summary>
+    [HttpPost("{id:int}/complete")]
+    [Authorize(Roles = Roles.StaffAndManager)]
+    public async Task<IActionResult> CompletePayment(int id)
+    {
+        var success = await _paymentService.CompletePaymentAsync(id);
+        return Ok(ApiResponse<bool>.Ok(success, "Thanh toán đã được xác nhận thành công."));
+    }
+
+    /// <summary>
+    /// POST /api/v1/payments/complete-by-table/{tableNumber} — Hoàn tất thanh toán thủ công cho bàn.
+    /// Roles: STAFF, MANAGER.
+    /// </summary>
+    [HttpPost("complete-by-table/{tableNumber:int}")]
+    [Authorize(Roles = Roles.StaffAndManager)]
+    public async Task<IActionResult> CompletePaymentByTable(int tableNumber)
+    {
+        var success = await _paymentService.CompletePaymentByTableAsync(tableNumber);
+        return Ok(ApiResponse<bool>.Ok(success, "Thanh toán đã được xác nhận thành công."));
     }
 
     // ═══════════════════════════════════════════════════════════════

@@ -162,6 +162,61 @@ public class OrderService
         return MapToResponse(order, menuItems);
     }
 
+    public async Task<bool> UpdateItemStatusAsync(int itemId, string newStatus)
+    {
+        var item = await _uow.OrderDetails.GetByIdAsync(itemId);
+        if (item == null)
+            throw new EntityNotFoundException("OrderDetail", itemId);
+
+        if (!Enum.TryParse<OrderDetailStatus>(newStatus, true, out var parsedStatus))
+            throw new BusinessRuleViolationException(ValidationMessages.ORDER_STATUS_INVALID);
+
+        item.Status = parsedStatus;
+        if (parsedStatus == OrderDetailStatus.DONE)
+        {
+            item.CompletedAt = DateTime.UtcNow;
+        }
+
+        var order = await _uow.Orders.GetByIdAsync(item.OrderId);
+        if (order != null)
+        {
+            var activeItems = order.OrderDetails.Where(d => d.Status != OrderDetailStatus.CANCELLED && d.Status != OrderDetailStatus.RETURNED).ToList();
+            if (activeItems.Any())
+            {
+                if (activeItems.All(d => d.Status == OrderDetailStatus.SERVED))
+                {
+                    if (order.Status != OrderStatus.COMPLETED)
+                    {
+                        order.Status = OrderStatus.COMPLETED;
+                    }
+                }
+                else if (activeItems.All(d => d.Status == OrderDetailStatus.DONE || d.Status == OrderDetailStatus.SERVED))
+                {
+                    if (order.Status != OrderStatus.READY && order.Status != OrderStatus.COMPLETED)
+                    {
+                        order.Status = OrderStatus.READY;
+                    }
+                }
+                else if (activeItems.Any(d => d.Status == OrderDetailStatus.DOING || d.Status == OrderDetailStatus.DONE || d.Status == OrderDetailStatus.SERVED))
+                {
+                    if (order.Status == OrderStatus.PENDING || order.Status == OrderStatus.CONFIRMED)
+                    {
+                        order.Status = OrderStatus.COOKING;
+                    }
+                }
+            }
+        }
+
+        await _uow.SaveChangesAsync();
+
+        if (order != null)
+        {
+            await _notificationService.NotifyOrderStatusChangedAsync(order.Id, order.Session.TableId, order.Status.ToString());
+        }
+
+        return true;
+    }
+
     public async Task<OrderResponse> GetByIdAsync(int orderId)
     {
         var order = await _uow.Orders.GetByIdAsync(orderId)
@@ -227,6 +282,32 @@ public class OrderService
             .ToList();
     }
 
+    public async Task<List<OrderResponse>> GetByGuestSessionIdAsync(string guestSessionId, int page = 1, int pageSize = 20)
+    {
+        var orders = await _uow.Orders.GetByGuestSessionIdAsync(guestSessionId, page, pageSize);
+        return orders.Select(o => MapToResponse(o,
+            o.OrderDetails.Select(i => i.MenuItem).Where(m => m != null).ToList()!))
+            .ToList();
+    }
+
+    /// <summary>
+    /// GET /api/v1/orders/session/{sessionId} — Toàn bộ đơn hàng trong phiên ăn (mọi participant),
+    /// khác với GetByGuestSessionIdAsync vốn chỉ trả đơn của riêng lần đăng nhập GUEST hiện tại.
+    /// </summary>
+    public async Task<List<OrderResponse>> GetBySessionIdAsync(
+        int sessionId, int? callerCustomerId, string? callerGuestSessionId, bool isStaff)
+    {
+        var session = await _uow.DiningSessions.GetByIdWithParticipantsAsync(sessionId)
+            ?? throw new EntityNotFoundException("DiningSession", sessionId);
+
+        EnsureCallerIsParticipant(session.Participants, callerCustomerId, callerGuestSessionId, isStaff);
+
+        var orders = await _uow.Orders.GetByDiningSessionIdAsync(sessionId);
+        return orders.Select(o => MapToResponse(o,
+            o.OrderDetails.Select(i => i.MenuItem).Where(m => m != null).ToList()!))
+            .ToList();
+    }
+
     // ═══════════════════════════════════════════════════════════════
     // Helpers
     // ═══════════════════════════════════════════════════════════════
@@ -258,6 +339,7 @@ public class OrderService
         return new OrderResponse
         {
             Id = order.Id,
+            SessionId = order.SessionId,
             CustomerId = order.Session?.CustomerId,
             CustomerName = order.Session?.Customer?.FullName ?? order.Session?.GuestName,
             TableNumber = order.Session?.Table?.TableNumber ?? 0,

@@ -8,6 +8,7 @@ public class UnitOfWork : IUnitOfWork
     private readonly SmartDineDbContext _context;
 
     public IOrderRepository Orders { get; }
+    public IRepository<OrderDetail> OrderDetails { get; }
     public IMenuItemRepository MenuItems { get; }
     public IUserRepository Users { get; }
     public ICustomerRepository Customers { get; }
@@ -33,6 +34,7 @@ public class UnitOfWork : IUnitOfWork
     {
         _context = context;
         Orders = new OrderRepository(context);
+        OrderDetails = new GenericRepository<OrderDetail>(context);
         MenuItems = new MenuItemRepository(context);
         Users = new UserRepository(context);
         Customers = new CustomerRepository(context);

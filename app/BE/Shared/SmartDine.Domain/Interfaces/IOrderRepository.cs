@@ -11,4 +11,5 @@ public interface IOrderRepository : IRepository<Order>
     Task<IReadOnlyList<Order>> GetActiveOrdersAsync();
     Task<IReadOnlyList<Order>> GetTodayOrdersAsync();
     Task<IReadOnlyList<Order>> GetByDiningSessionIdAsync(int sessionId);
+    Task<IReadOnlyList<Order>> GetByGuestSessionIdAsync(string guestSessionId, int page, int pageSize);
 }

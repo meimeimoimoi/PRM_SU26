@@ -43,6 +43,7 @@ public class OrderRepository : GenericRepository<Order>, IOrderRepository
     {
         var today = DateTime.UtcNow.Date;
         return await _dbSet.Include(o => o.OrderDetails).ThenInclude(d => d.MenuItem)
+                           .Include(o => o.Session).ThenInclude(s => s.Table)
                            .Where(o => o.CreatedAt >= today)
                            .OrderByDescending(o => o.CreatedAt)
                            .ToListAsync();
@@ -50,8 +51,19 @@ public class OrderRepository : GenericRepository<Order>, IOrderRepository
 
     public async Task<IReadOnlyList<Order>> GetByDiningSessionIdAsync(int sessionId) =>
         await _dbSet.Include(o => o.OrderDetails).ThenInclude(d => d.MenuItem)
+                    .Include(o => o.Session).ThenInclude(s => s.Table)
+                    .Include(o => o.Session).ThenInclude(s => s.Customer)
                     .Where(o => o.SessionId == sessionId)
                     .OrderBy(o => o.CreatedAt)
+                    .ToListAsync();
+
+    public async Task<IReadOnlyList<Order>> GetByGuestSessionIdAsync(string guestSessionId, int page, int pageSize) =>
+        await _dbSet.Include(o => o.OrderDetails).ThenInclude(d => d.MenuItem)
+                    .Include(o => o.Session).ThenInclude(s => s.Table)
+                .Where(o => o.Session.Participants.Any(p =>
+                    p.GuestSessionId == guestSessionId && p.LeftAt == null))
+                    .OrderByDescending(o => o.CreatedAt)
+                    .Skip((page - 1) * pageSize).Take(pageSize)
                     .ToListAsync();
 
     public override async Task<Order?> GetByIdAsync(int id) =>

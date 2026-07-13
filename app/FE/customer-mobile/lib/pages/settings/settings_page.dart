@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../viewmodels/auth_viewmodel.dart';
 
 class _AppColors {
   static const Color primary = Color(0xFFad2c00);
@@ -20,19 +22,25 @@ class _AppColors {
   static const Color outlineVariant = Color(0xFFe3beb5);
 }
 
-class SettingsPage extends StatefulWidget {
+class SettingsPage extends ConsumerStatefulWidget {
   const SettingsPage({super.key});
 
   @override
-  State<SettingsPage> createState() => _SettingsPageState();
+  ConsumerState<SettingsPage> createState() => _SettingsPageState();
 }
 
-class _SettingsPageState extends State<SettingsPage> {
+class _SettingsPageState extends ConsumerState<SettingsPage> {
   bool _notificationsEnabled = true;
   bool _darkModeEnabled = false;
 
   @override
   Widget build(BuildContext context) {
+    final authState = ref.watch(authViewModelProvider);
+    final isLoggedIn = authState.status == AuthStateStatus.authenticated;
+    final isGuest = authState.status == AuthStateStatus.guest;
+    final userName = authState.user?.fullName ?? (isGuest ? 'Khách' : 'Người dùng');
+    final userRole = authState.user?.role ?? authState.guestSession?.role ?? 'GUEST';
+
     return Scaffold(
       backgroundColor: _AppColors.background,
       appBar: AppBar(
@@ -78,57 +86,45 @@ class _SettingsPageState extends State<SettingsPage> {
                   ),
                 ],
               ),
-              child: Stack(
-                clipBehavior: Clip.none,
+              child: Row(
                 children: [
-                  Positioned(
-                    right: -24.w,
-                    top: -24.h,
-                    child: Container(
-                      width: 96.r,
-                      height: 96.r,
-                      decoration: BoxDecoration(
-                        color: _AppColors.primaryFixed.withOpacity(0.3),
-                        shape: BoxShape.circle,
-                      ),
+                  Container(
+                    width: 64.r,
+                    height: 64.r,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(color: _AppColors.primary, width: 2),
+                    ),
+                    child: Icon(
+                      isLoggedIn ? Icons.person : Icons.person_outline,
+                      color: _AppColors.primary,
+                      size: 32.sp,
                     ),
                   ),
-                  Row(
-                    children: [
-                      Container(
-                        width: 64.r,
-                        height: 64.r,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          border: Border.all(color: _AppColors.primary, width: 2),
-                          image: const DecorationImage(
-                            image: NetworkImage('https://lh3.googleusercontent.com/aida-public/AB6AXuAOFqA8TxruFSZNphZEr0q7xuit-j5qgERV0AkO-eFQiHTx46nLrymTph3IM9LaTynB96ov_GVDJRx98stURchVfZO4h-NQqvWZTk_KivNSF76uFS_cUnd-t_ERZbng4DRw1wvgd4MDlkFYdezSCUqwD7IRSgmL_WDy4U1JeTs-OmkhW_CYNp-ESZnRI1HJ9G5ySxV86Pp44tzyIAEp4vxFPDiNhZZ6UEFu9L7qFvcpj047O5VxvPkv7mtRXh6YVdHDwRVtHbZn2J_I'),
-                            fit: BoxFit.cover,
+                  SizedBox(width: 16.w),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '$userName',
+                          style: TextStyle(
+                            color: _AppColors.onSurface,
+                            fontSize: 20.sp,
+                            fontWeight: FontWeight.w600,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        Text(
+                          isGuest ? 'Khách' : 'Thành viên ${userRole == 'CUSTOMER' ? 'tiêu chuẩn' : userRole}',
+                          style: TextStyle(
+                            color: _AppColors.onSurfaceVariant,
+                            fontSize: 14.sp,
                           ),
                         ),
-                      ),
-                      SizedBox(width: 16.w),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Nguyễn Văn A',
-                            style: TextStyle(
-                              color: _AppColors.onSurface,
-                              fontSize: 20.sp,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          Text(
-                            'Thành viên Vàng • 1,250 điểm',
-                            style: TextStyle(
-                              color: _AppColors.onSurfaceVariant,
-                              fontSize: 14.sp,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ],
               ),
@@ -258,7 +254,12 @@ class _SettingsPageState extends State<SettingsPage> {
             
             // Logout Button
             ElevatedButton(
-              onPressed: () => context.go('/login'), // Logout logic
+              onPressed: () async {
+                await ref.read(authViewModelProvider.notifier).logout();
+                if (mounted) {
+                  context.go('/login');
+                }
+              },
               style: ElevatedButton.styleFrom(
                 backgroundColor: _AppColors.surfaceContainer,
                 foregroundColor: _AppColors.secondary,

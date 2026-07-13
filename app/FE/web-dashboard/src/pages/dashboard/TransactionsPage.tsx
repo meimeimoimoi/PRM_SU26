@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   Table, 
   Tag, 
@@ -6,7 +6,6 @@ import {
   Card, 
   Input, 
   Select, 
-  DatePicker, 
   message, 
   Tooltip,
   Modal
@@ -18,58 +17,51 @@ import {
 } from '@ant-design/icons';
 
 import { Transaction } from '@/types/transaction';
+import { apiClient } from '../../services/api/client';
 
 const { Option } = Select;
-const { RangePicker } = DatePicker;
 
 const TransactionsPage: React.FC = () => {
   const [searchText, setSearchText] = useState<string>('');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  // Initial mock data matching the screenshot exactly!
-  const transactions: Transaction[] = [
-    {
-      id: '#ORD-8921',
-      dateTime: 'Oct 24, 2023 • 19:45',
-      tableNo: 'T-12',
-      totalAmount: 145.50,
-      paymentMethod: 'Credit Card',
-      status: 'Completed'
-    },
-    {
-      id: '#ORD-8920',
-      dateTime: 'Oct 24, 2023 • 19:30',
-      tableNo: 'T-04',
-      totalAmount: 82.00,
-      paymentMethod: 'QR Pay',
-      status: 'Completed'
-    },
-    {
-      id: '#ORD-8919',
-      dateTime: 'Oct 24, 2023 • 19:15',
-      tableNo: 'Bar-02',
-      totalAmount: 34.00,
-      paymentMethod: 'Cash',
-      status: 'Cancelled'
-    },
-    {
-      id: '#ORD-8918',
-      dateTime: 'Oct 24, 2023 • 18:50',
-      tableNo: 'T-08',
-      totalAmount: 210.75,
-      paymentMethod: 'Credit Card',
-      status: 'Refunded'
-    },
-    {
-      id: '#ORD-8917',
-      dateTime: 'Oct 24, 2023 • 18:30',
-      tableNo: 'T-15',
-      totalAmount: 95.20,
-      paymentMethod: 'QR Pay',
-      status: 'Completed'
-    }
-  ];
+  useEffect(() => {
+    const fetchPayments = async () => {
+      setLoading(true);
+      try {
+        const response = await apiClient.get<any>('/payments', {
+          params: { pageSize: 100 }
+        });
+        const data = response.data.data || response.data;
+        const items = Array.isArray(data) ? data : (data.items || []);
+
+        const mapped: Transaction[] = items.map((p: any) => ({
+          id: p.invoiceId ? `#INV-${p.invoiceId}` : `#PAY-${p.id}`,
+          dateTime: p.paidAt 
+            ? new Date(p.paidAt).toLocaleString('vi-VN')
+            : p.createdAt 
+            ? new Date(p.createdAt).toLocaleString('vi-VN')
+            : 'N/A',
+          tableNo: p.tableNumber ? `T-${p.tableNumber}` : 'N/A',
+          totalAmount: p.amount !== undefined ? p.amount : (p.totalAmount || 0),
+          paymentMethod: p.paymentMethod || p.method || 'N/A',
+          status: p.paymentStatus || p.status || 'PENDING',
+        }));
+
+        setTransactions(mapped);
+      } catch (err) {
+        console.warn('API /payments unavailable, showing empty list.', err);
+        setTransactions([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchPayments();
+  }, []);
 
   // Search & Filter
   const filteredTransactions = useMemo(() => {
@@ -85,19 +77,16 @@ const TransactionsPage: React.FC = () => {
 
       return matchesSearch && matchesStatus;
     });
-  }, [searchText, statusFilter]);
+  }, [searchText, statusFilter, transactions]);
 
-  // Export handler
   const handleExportData = () => {
     message.success('Đang kết xuất dữ liệu lịch sử giao dịch dưới dạng CSV...');
   };
 
-  // View details modal
   const handleViewDetails = (transaction: Transaction) => {
     setSelectedTransaction(transaction);
   };
 
-  // Columns Configuration
   const columns = [
     {
       title: 'ORDER ID',
@@ -130,7 +119,7 @@ const TransactionsPage: React.FC = () => {
       key: 'totalAmount',
       render: (amount: number) => (
         <span style={{ fontWeight: 600, color: '#1a202c' }}>
-          ${amount.toFixed(2)}
+          {amount.toLocaleString('vi-VN')}đ
         </span>
       ),
     },
@@ -148,10 +137,13 @@ const TransactionsPage: React.FC = () => {
         let bgColor = '#f6ffed';
         let textColor = '#52c41a';
 
-        if (status === 'Cancelled') {
+        if (status === 'CANCELLED' || status === 'FAILED') {
           bgColor = '#fff1f0';
           textColor = '#f5222d';
-        } else if (status === 'Refunded') {
+        } else if (status === 'PENDING' || status === 'EXPIRED') {
+          bgColor = '#fffbe6';
+          textColor = '#faad14';
+        } else if (status === 'REFUNDED') {
           bgColor = '#fafafa';
           textColor = '#8c8c8c';
         }
@@ -189,13 +181,11 @@ const TransactionsPage: React.FC = () => {
 
   return (
     <div className="transactions-container">
-      {/* Page Header */}
       <div style={{ marginBottom: 24 }}>
         <h2 style={{ margin: 0, fontSize: '28px', fontWeight: 700, color: '#1a202c' }}>Order & Transaction History</h2>
         <p style={{ margin: 0, color: '#718096', fontSize: '14px' }}>View past orders and manage receipts.</p>
       </div>
 
-      {/* Filter Toolbar */}
       <Card 
         bordered={false}
         style={{
@@ -218,11 +208,6 @@ const TransactionsPage: React.FC = () => {
             </div>
 
             <div>
-              <span style={{ display: 'block', fontSize: '12px', color: '#718096', marginBottom: 4, fontWeight: 500 }}>Date Range</span>
-              <RangePicker style={{ height: 38, borderRadius: 6 }} />
-            </div>
-
-            <div>
               <span style={{ display: 'block', fontSize: '12px', color: '#718096', marginBottom: 4, fontWeight: 500 }}>Status</span>
               <Select
                 defaultValue="ALL"
@@ -231,9 +216,10 @@ const TransactionsPage: React.FC = () => {
                 style={{ width: 140, height: 38 }}
               >
                 <Option value="ALL">All Statuses</Option>
-                <Option value="Completed">Completed</Option>
-                <Option value="Cancelled">Cancelled</Option>
-                <Option value="Refunded">Refunded</Option>
+                <Option value="SUCCESS">Completed</Option>
+                <Option value="PENDING">Pending</Option>
+                <Option value="FAILED">Failed</Option>
+                <Option value="CANCELLED">Cancelled</Option>
               </Select>
             </div>
           </div>
@@ -254,7 +240,6 @@ const TransactionsPage: React.FC = () => {
         </div>
       </Card>
 
-      {/* Table */}
       <Card
         bordered={false}
         style={{
@@ -265,22 +250,22 @@ const TransactionsPage: React.FC = () => {
         <Table 
           columns={columns} 
           dataSource={filteredTransactions} 
+          loading={loading}
           rowKey="id"
+          locale={{ emptyText: 'Không có giao dịch nào.' }}
           pagination={{
-            pageSize: 5,
+            pageSize: 10,
             showTotal: (total, range) => `Showing ${range[0]} to ${range[1]} of ${total} entries`
           }}
         />
       </Card>
 
-      {/* Details Modal */}
       <Modal
         title={`Chi tiết giao dịch ${selectedTransaction?.id}`}
         open={selectedTransaction !== null}
         onCancel={() => setSelectedTransaction(null)}
         footer={[
           <Button key="close" onClick={() => setSelectedTransaction(null)}>Đóng</Button>,
-          <Button key="print" type="primary" onClick={() => message.success('Đang in hóa đơn hóa đơn...')}>In hóa đơn</Button>
         ]}
       >
         {selectedTransaction && (
@@ -304,7 +289,7 @@ const TransactionsPage: React.FC = () => {
             <hr style={{ border: 'none', borderTop: '1px solid #f0f0f0', margin: '12px 0' }} />
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '16px', fontWeight: 600 }}>
               <span>TỔNG THANH TOÁN:</span>
-              <span style={{ color: '#1890ff' }}>${selectedTransaction.totalAmount.toFixed(2)}</span>
+              <span style={{ color: '#1890ff' }}>{selectedTransaction.totalAmount.toLocaleString('vi-VN')}đ</span>
             </div>
           </div>
         )}

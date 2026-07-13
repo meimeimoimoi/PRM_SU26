@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base href="$FLUTTER_BASE_HREF">
+
+  <meta charset="UTF-8">
+  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <meta name="description" content="SmartDine Customer App">
+
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="SmartDine">
+  <link rel="apple-touch-icon" href="icons/Icon-192.png">
+
+  <link rel="icon" type="image/png" href="favicon.png"/>
+  <title>SmartDine</title>
+  <link rel="manifest" href="manifest.json">
+
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; overflow: hidden; }
+
+    /* Desktop: dark background + phone frame */
+    @media (min-width: 481px) {
+      html, body { background: #111827; }
+
+      #phone-frame {
+        position: fixed;
+        top: 50%; left: 50%;
+        transform: translate(-50%, -50%);
+        width: 390px; height: 844px;
+        border-radius: 44px;
+        border: 8px solid #1a1a2e;
+        box-shadow: 0 0 0 2px #333, 0 20px 60px rgba(0,0,0,0.6), 0 0 80px rgba(255,140,0,0.08);
+        overflow: hidden;
+        background: #000;
+        z-index: 999;
+      }
+
+      #phone-frame::before {
+        content: '';
+        position: absolute;
+        top: 0; left: 50%; transform: translateX(-50%);
+        width: 120px; height: 28px;
+        background: #1a1a2e;
+        border-radius: 0 0 16px 16px;
+        z-index: 1000;
+      }
+
+      #phone-frame::after {
+        content: '';
+        position: absolute;
+        bottom: 8px; left: 50%; transform: translateX(-50%);
+        width: 130px; height: 5px;
+        background: #555;
+        border-radius: 3px;
+        z-index: 1000;
+      }
+    }
+
+    /* Mobile: normal full screen */
+    @media (max-width: 480px) {
+      html, body { background: #fff; }
+      #phone-frame { display: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <div id="phone-frame"></div>
+  <script src="flutter_bootstrap.js" async></script>
+
+  <script>
+    (function() {
+      var isDesktop = window.innerWidth > 480;
+      if (!isDesktop) return;
+
+      function moveToFrame() {
+        var frame = document.getElementById('phone-frame');
+        var fv = document.querySelector('flutter-view') || document.querySelector('flt-glass-pane');
+        if (fv && frame && fv.parentElement !== frame) {
+          frame.appendChild(fv);
+          fv.style.width = '100%';
+          fv.style.height = '100%';
+        }
+      }
+
+      var tries = 0;
+      var t = setInterval(function() {
+        var fv = document.querySelector('flutter-view') || document.querySelector('flt-glass-pane');
+        if (fv) { moveToFrame(); clearInterval(t); }
+        if (++tries > 50) clearInterval(t);
+      }, 100);
+    })();
+  </script>
+</body>
+</html>

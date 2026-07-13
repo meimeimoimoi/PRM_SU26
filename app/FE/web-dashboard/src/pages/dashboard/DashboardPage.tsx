@@ -1,37 +1,115 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { 
   DollarCircleOutlined, 
   ShoppingCartOutlined, 
-  AppstoreOutlined, 
-  SendOutlined,
-  RobotOutlined,
-  ArrowUpOutlined 
+  AppstoreOutlined 
 } from '@ant-design/icons';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { Spin } from 'antd';
+import { apiClient } from '../../services/api/client';
 import '@/styles/DashboardPage.css';
 
-// ===== Mock Data =====
-const salesData = [
-  { time: '10am', food: 800, drink: 350 },
-  { time: '12pm', food: 1200, drink: 600 },
-  { time: '2pm', food: 1800, drink: 1100 },
-  { time: '4pm', food: 1100, drink: 900 },
-  { time: '6pm', food: 1500, drink: 1100 },
-  { time: '8pm', food: 600, drink: 400 },
-];
+interface DashboardStats {
+  todayRevenue: number;
+  activeOrders: number;
+  availableTables: number;
+  totalTables: number;
+}
+
+interface HourlySale {
+  time: string;
+  food: number;
+  drink: number;
+}
 
 const DashboardPage: React.FC = () => {
+  const [stats, setStats] = useState<DashboardStats>({
+    todayRevenue: 0,
+    activeOrders: 0,
+    availableTables: 0,
+    totalTables: 0,
+  });
+  const [salesData, setSalesData] = useState<HourlySale[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchDashboardData = async () => {
+      setLoading(true);
+      try {
+        const [activeOrdersRes, todayOrdersRes, tablesRes] = await Promise.allSettled([
+          apiClient.get<any>('/orders/active'),
+          apiClient.get<any>('/orders/today'),
+          apiClient.get<any>('/tables'),
+        ]);
+
+        const activeOrders = activeOrdersRes.status === 'fulfilled'
+          ? (activeOrdersRes.value.data.data || activeOrdersRes.value.data || [])
+          : [];
+        const todayOrders = todayOrdersRes.status === 'fulfilled'
+          ? (todayOrdersRes.value.data.data || todayOrdersRes.value.data || [])
+          : [];
+        const tables = tablesRes.status === 'fulfilled'
+          ? (tablesRes.value.data.data || tablesRes.value.data || [])
+          : [];
+
+        const totalRevenue = todayOrders.reduce((sum: number, o: any) => sum + (o.finalAmount || 0), 0);
+        const availableTables = Array.isArray(tables)
+          ? tables.filter((t: any) => t.status === 'AVAILABLE').length
+          : 0;
+
+        setStats({
+          todayRevenue: totalRevenue,
+          activeOrders: Array.isArray(activeOrders) ? activeOrders.length : 0,
+          availableTables,
+          totalTables: Array.isArray(tables) ? tables.length : 0,
+        });
+
+        // Build hourly sales from today's orders
+        const hourlyMap: { [key: string]: HourlySale } = {};
+        const timeSlots = ['8am', '9am', '10am', '11am', '12pm', '1pm', '2pm', '3pm', '4pm', '5pm', '6pm', '7pm', '8pm', '9pm'];
+        timeSlots.forEach(t => { hourlyMap[t] = { time: t, food: 0, drink: 0 }; });
+
+        todayOrders.forEach((order: any) => {
+          const hour = new Date(order.createdAt).getHours();
+          const slot = hour <= 12 ? `${hour}am` : `${hour - 12}pm`;
+          if (hourlyMap[slot]) {
+            (order.items || []).forEach((item: any) => {
+              hourlyMap[slot].food += item.unitPrice * item.quantity;
+            });
+          }
+        });
+
+        setSalesData(timeSlots.map(t => hourlyMap[t]).filter(s => s.food > 0));
+      } catch (err) {
+        console.error('Dashboard fetch error:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchDashboardData();
+  }, []);
+
+  if (loading) {
+    return (
+      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh' }}>
+        <Spin size="large" />
+      </div>
+    );
+  }
+
+  const occupiedPct = stats.totalTables > 0
+    ? Math.round(((stats.totalTables - stats.availableTables) / stats.totalTables) * 100)
+    : 0;
+
   return (
     <div className="dashboard-overview">
-      {/* Page Header */}
       <div className="dashboard-header">
         <h2>Overview</h2>
         <p>Here's what's happening at your restaurant today.</p>
       </div>
 
-      {/* Stat Cards Row */}
       <div className="stat-cards-row">
-        {/* Revenue Card */}
         <div className="stat-card">
           <div className="stat-card-header">
             <span className="stat-card-label">TODAY'S REVENUE</span>
@@ -39,14 +117,12 @@ const DashboardPage: React.FC = () => {
               <DollarCircleOutlined />
             </div>
           </div>
-          <div className="stat-card-value">$4,289.50</div>
+          <div className="stat-card-value">{stats.todayRevenue.toLocaleString('vi-VN')}đ</div>
           <div className="stat-card-sub">
-            <ArrowUpOutlined style={{ color: '#38a169', fontSize: 12 }} />
-            <span className="trend-up">+12.5% vs yesterday</span>
+            <span>Tổng doanh thu hôm nay</span>
           </div>
         </div>
 
-        {/* Active Orders Card */}
         <div className="stat-card">
           <div className="stat-card-header">
             <span className="stat-card-label">ACTIVE ORDERS</span>
@@ -54,13 +130,12 @@ const DashboardPage: React.FC = () => {
               <ShoppingCartOutlined />
             </div>
           </div>
-          <div className="stat-card-value">34</div>
+          <div className="stat-card-value">{stats.activeOrders}</div>
           <div className="stat-card-sub">
-            <span>⏱ Avg. wait: 18 mins</span>
+            <span>Đơn hàng đang xử lý</span>
           </div>
         </div>
 
-        {/* Available Tables Card */}
         <div className="stat-card">
           <div className="stat-card-header">
             <span className="stat-card-label">AVAILABLE TABLES</span>
@@ -69,98 +144,52 @@ const DashboardPage: React.FC = () => {
             </div>
           </div>
           <div className="tables-fraction">
-            <span className="big-num">12</span>
+            <span className="big-num">{stats.availableTables}</span>
             <span className="divider">/</span>
-            <span className="total-num">45</span>
+            <span className="total-num">{stats.totalTables}</span>
           </div>
           <div className="tables-progress-row">
             <div className="tables-progress-bar">
-              <div className="tables-progress-fill" style={{ width: '73%' }} />
+              <div className="tables-progress-fill" style={{ width: `${occupiedPct}%` }} />
             </div>
-            <span className="tables-progress-label">73% Occupied</span>
+            <span className="tables-progress-label">{occupiedPct}% Occupied</span>
           </div>
         </div>
       </div>
 
-      {/* Bottom Section: Chart + AI Chat */}
       <div className="dashboard-bottom-row">
-        {/* Sales by Category Chart */}
         <div className="chart-card">
           <div className="chart-card-header">
-            <h3>Sales by Category</h3>
-            <div className="chart-legend">
-              <div className="chart-legend-item">
-                <div className="chart-legend-dot food" />
-                <span>Food</span>
-              </div>
-              <div className="chart-legend-item">
-                <div className="chart-legend-dot drink" />
-                <span>Drink</span>
-              </div>
-            </div>
+            <h3>Revenue by Hour</h3>
           </div>
-          <ResponsiveContainer width="100%" height={280}>
-            <BarChart data={salesData} barGap={4} barCategoryGap="25%">
-              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
-              <XAxis 
-                dataKey="time" 
-                axisLine={false} 
-                tickLine={false} 
-                tick={{ fill: '#718096', fontSize: 12 }} 
-              />
-              <YAxis 
-                axisLine={false} 
-                tickLine={false} 
-                tick={{ fill: '#718096', fontSize: 12 }} 
-                tickFormatter={(value) => `$${(value / 1000).toFixed(value >= 1000 ? 0 : 1)}k`}
-                domain={[0, 2000]}
-                ticks={[0, 500, 1000, 1500, 2000]}
-              />
-              <Tooltip 
-                formatter={(value: any) => [`$${Number(value).toLocaleString()}`, '']}
-                contentStyle={{ borderRadius: 8, border: '1px solid #e8ecf1', boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }}
-              />
-              <Bar dataKey="food" fill="#1890ff" radius={[4, 4, 0, 0]} barSize={24} />
-              <Bar dataKey="drink" fill="#36cfc9" radius={[4, 4, 0, 0]} barSize={24} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-
-        {/* AI Chat Widget */}
-        <div className="ai-chat-card">
-          <div className="ai-chat-header">
-            <div className="ai-chat-avatar">
-              <RobotOutlined />
+          {salesData.length > 0 ? (
+            <ResponsiveContainer width="100%" height={280}>
+              <BarChart data={salesData} barGap={4} barCategoryGap="25%">
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
+                <XAxis 
+                  dataKey="time" 
+                  axisLine={false} 
+                  tickLine={false} 
+                  tick={{ fill: '#718096', fontSize: 12 }} 
+                />
+                <YAxis 
+                  axisLine={false} 
+                  tickLine={false} 
+                  tick={{ fill: '#718096', fontSize: 12 }}
+                  tickFormatter={(value) => `${(value / 1000).toFixed(0)}k`}
+                />
+                <Tooltip 
+                  formatter={(value: any) => [`${Number(value).toLocaleString('vi-VN')}đ`, '']}
+                  contentStyle={{ borderRadius: 8, border: '1px solid #e8ecf1', boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }}
+                />
+                <Bar dataKey="food" fill="#1890ff" radius={[4, 4, 0, 0]} barSize={24} name="Revenue" />
+              </BarChart>
+            </ResponsiveContainer>
+          ) : (
+            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 280, color: '#718096' }}>
+              Chưa có dữ liệu doanh thu hôm nay
             </div>
-            <div className="ai-chat-info">
-              <h4>SmartDine AI</h4>
-              <p>Operational Assistant</p>
-            </div>
-          </div>
-
-          <div className="ai-chat-messages">
-            {/* User message */}
-            <div className="ai-chat-bubble user">
-              What was the busiest time today?
-            </div>
-            {/* Bot response */}
-            <div className="ai-chat-bubble bot">
-              Peak hours were <strong>12:30 PM - 1:45 PM</strong>. During this time, wait times averaged 22 minutes.
-              <br /><br />
-              <em>Consider scheduling an extra runner for lunch service tomorrow based on this trend.</em>
-            </div>
-          </div>
-
-          <div className="ai-chat-input-row">
-            <input 
-              type="text" 
-              placeholder="Ask about sales, staff, or inven..." 
-              readOnly
-            />
-            <button className="ai-chat-send-btn" title="Send">
-              <SendOutlined />
-            </button>
-          </div>
+          )}
         </div>
       </div>
     </div>

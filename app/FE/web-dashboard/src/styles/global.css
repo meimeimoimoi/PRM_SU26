@@ -15,8 +15,9 @@
 
 body {
   margin: 0;
-  display: flex;
-  place-items: center;
+  display: block; /* Chuyển từ flex thành block để layout đổ từ trên xuống dưới */
   min-width: 320px;
   min-height: 100vh;
+  background-color: #f5f5f5; /* Khuyên dùng màu nền sáng cho giao diện quản trị */
+  color: #333;
 }

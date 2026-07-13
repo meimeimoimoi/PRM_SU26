@@ -5,6 +5,7 @@ namespace SmartDine.Domain.Interfaces;
 public interface IUnitOfWork : IDisposable
 {
     IOrderRepository Orders { get; }
+    IRepository<OrderDetail> OrderDetails { get; }
     IMenuItemRepository MenuItems { get; }
     IUserRepository Users { get; }
     ICustomerRepository Customers { get; }

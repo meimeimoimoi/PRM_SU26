@@ -12,6 +12,12 @@ class MenuRepository {
 
   MenuRepository(this._dio);
 
+  Future<List<MenuCategory>> getMenuCategories() async {
+    final response = await _dio.get('menu-categories');
+    final data = response.data['data'] as List;
+    return data.map((e) => MenuCategory.fromJson(e)).toList();
+  }
+
   Future<List<MenuItemSummary>> getMenuItems({int? categoryId, String? search, int page = 1, int limit = 10}) async {
     final response = await _dio.get('menu-items', queryParameters: {
       if (categoryId != null) 'category_id': categoryId,

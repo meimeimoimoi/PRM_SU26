@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.EntityFrameworkCore;
 using SmartDine.Domain.Entities;
 using SmartDine.Domain.Enums;
 using SmartDine.Domain.Interfaces;
@@ -23,6 +24,10 @@ public class DbSeeder
 
     public async Task SeedAsync()
     {
+        // 0. Ensure PostgreSQL sequences exist
+        await _context.Database.ExecuteSqlRawAsync(
+            "CREATE SEQUENCE IF NOT EXISTS payment_order_code_seq START WITH 100000 INCREMENT BY 1;");
+
         // 1. Seed Categories & Menu Items
         if (!_context.MenuCategories.Any())
         {

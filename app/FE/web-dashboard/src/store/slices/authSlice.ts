@@ -30,67 +30,7 @@ export const loginUser = createAsyncThunk(
   'auth/login',
   async (credentials: { email: string; password: string }, { rejectWithValue }) => {
     try {
-      const emailLower = credentials.email.toLowerCase();
-      
-      // MANAGER Role Mock Account
-      if ((emailLower === 'admin' || emailLower === 'admin@smartdine.com') && credentials.password === 'Admin123') {
-        const mockData: TokenResponse = {
-          accessToken: 'mock_jwt_token_admin',
-          refreshToken: 'mock_refresh_token_admin',
-          user: {
-            id: 99,
-            fullName: 'Admin Manager',
-            email: 'admin@smartdine.com',
-            role: 'MANAGER'
-          }
-        };
-        localStorage.setItem('access_token', mockData.accessToken);
-        localStorage.setItem('refresh_token', mockData.refreshToken);
-        localStorage.setItem('user_info', JSON.stringify(mockData.user));
-        return mockData;
-      }
-      
-
-      // STAFF Role Mock Account
-      if ((emailLower === 'staff' || emailLower === 'staff@smartdine.com') && credentials.password === 'Staff123') {
-        const mockData: TokenResponse = {
-          accessToken: 'mock_jwt_token_staff',
-          refreshToken: 'mock_refresh_token_staff',
-          user: {
-            id: 102,
-            fullName: 'Staff Sarah',
-            email: 'staff@smartdine.com',
-            role: 'STAFF'
-          }
-        };
-        localStorage.setItem('access_token', mockData.accessToken);
-        localStorage.setItem('refresh_token', mockData.refreshToken);
-        localStorage.setItem('user_info', JSON.stringify(mockData.user));
-        return mockData;
-      }
-
-      // CUSTOMER Role Mock Account
-      if ((emailLower === 'customer' || emailLower === 'customer@smartdine.com') && credentials.password === 'Customer123') {
-        const mockData: TokenResponse = {
-          accessToken: 'mock_jwt_token_customer',
-          refreshToken: 'mock_refresh_token_customer',
-          user: {
-            id: 103,
-            fullName: 'Customer Chris',
-            email: 'customer@smartdine.com',
-            role: 'CUSTOMER'
-          }
-        };
-        localStorage.setItem('access_token', mockData.accessToken);
-        localStorage.setItem('refresh_token', mockData.refreshToken);
-        localStorage.setItem('user_info', JSON.stringify(mockData.user));
-        return mockData;
-      }
-
-      // Typically the API endpoint returns TokenResponse wrapped in some structure, e.g. { data: TokenResponse } or direct.
-      // We will handle potential API wrappers if needed, but let's stick to the current implementation.
       const response = await apiClient.post<any>('/auth/login', credentials);
-      // Let's support both direct TokenResponse and wrapped { data: TokenResponse } structure
       const data = response.data.data || response.data;
       localStorage.setItem('access_token', data.accessToken);
       localStorage.setItem('refresh_token', data.refreshToken);
