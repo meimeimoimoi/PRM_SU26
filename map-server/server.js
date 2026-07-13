@@ -26,7 +26,13 @@ const WEBOTS_CONTROLLER_DIR = process.env.WEBOTS_CONTROLLER_DIR ||
 const WEBOTS_WORLDS_DIR = process.env.WEBOTS_WORLDS_DIR ||
   'D:/User/refactor/PRM_SU26/Robot/worlds';
 
-
+// ---------------------------------------------------------------------------
+// In-memory robot communication state (populated by sidecar HTTP calls)
+// ---------------------------------------------------------------------------
+let robotState = { x: 0, y: 0, theta: 0, v: 0, omega: 0, status: 'OFFLINE' };
+let robotPath = { path: [] };
+let commandQueue = [];   // FIFO: dashboard POST in, sidecar GET out + clear
+let activeMapId = null;  // map the robot is currently using
 
 // ---------------------------------------------------------------------------
 // Persistent storage for maps (outside the controller dir)
@@ -374,10 +380,17 @@ app.use('/api/maps/:id/files', (req, res, next) => {
 app.post('/api/robot/control', (req, res) => {
   try {
     const { command, target, direction } = req.body;
+    const cmd = `${command || 'NONE'} ${target || 'NONE'} ${direction || 'NONE'}`;
+
+    // Push into in-memory queue for sidecar to pick up
+    commandQueue.push({ command: command || 'NONE', target: target || 'NONE', direction: direction || 'NONE' });
+
+    // Also write to file for backward compatibility (local mode)
     const commandPath = path.join(WEBOTS_CONTROLLER_DIR, 'command.txt');
-    fs.writeFileSync(commandPath, `${command || 'NONE'} ${target || 'NONE'} ${direction || 'NONE'}`);
-    console.log(`>>> [SERVER] Command written: ${command || 'NONE'} ${target || 'NONE'} ${direction || 'NONE'}`);
-    res.json({ success: true });
+    fs.writeFileSync(commandPath, cmd);
+
+    console.log(`>>> [SERVER] Command queued + written: ${cmd}`);
+    res.json({ success: true, queued: commandQueue.length });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: err.message });
@@ -385,6 +398,12 @@ app.post('/api/robot/control', (req, res) => {
 });
 
 app.get('/api/robot/status', (req, res) => {
+  // Prefer in-memory state (populated by sidecar POST /api/robot/state)
+  if (robotState.status !== 'OFFLINE' || robotState.x !== 0 || robotState.y !== 0) {
+    return res.json(robotState);
+  }
+
+  // Fallback: read from file (backward compat for local mode)
   try {
     const statePath = path.join(WEBOTS_CONTROLLER_DIR, 'robot_state.txt');
     if (fs.existsSync(statePath)) {
@@ -408,6 +427,12 @@ app.get('/api/robot/status', (req, res) => {
 });
 
 app.get('/api/robot/path', (req, res) => {
+  // Prefer in-memory state (populated by sidecar POST /api/robot/path)
+  if (robotPath.path && robotPath.path.length > 0) {
+    return res.json(robotPath);
+  }
+
+  // Fallback: read from file (backward compat for local mode)
   try {
     const pathFile = path.join(WEBOTS_CONTROLLER_DIR, 'robot_path.txt');
     if (fs.existsSync(pathFile)) {
@@ -426,6 +451,105 @@ app.get('/api/robot/path', (req, res) => {
     }
   } catch (err) { /* ignore */ }
   res.json({ path: [] });
+});
+
+// ---------------------------------------------------------------------------
+// Robot-sidecar endpoints (HTTP-based IPC replacing file-based IPC)
+// ---------------------------------------------------------------------------
+
+// Sidecar pushes robot state → stored in memory, dashboard reads via GET /api/robot/status
+app.post('/api/robot/state', (req, res) => {
+  try {
+    const { x, y, theta, v, omega, status } = req.body;
+    robotState = {
+      x: parseFloat(x) || 0,
+      y: parseFloat(y) || 0,
+      theta: parseFloat(theta) || 0,
+      v: parseFloat(v) || 0,
+      omega: parseFloat(omega) || 0,
+      status: status || 'UNKNOWN',
+    };
+    res.json({ success: true });
+  } catch (err) {
+    console.error('[SIDECAR] Error receiving robot state:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Sidecar pushes robot path → stored in memory, dashboard reads via GET /api/robot/path
+app.post('/api/robot/path', (req, res) => {
+  try {
+    const { path: points } = req.body;
+    if (Array.isArray(points)) {
+      robotPath = {
+        path: points.filter(p => p && isFinite(p.x) && isFinite(p.y)),
+      };
+    } else {
+      robotPath = { path: [] };
+    }
+    res.json({ success: true, points: robotPath.path.length });
+  } catch (err) {
+    console.error('[SIDECAR] Error receiving robot path:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Sidecar polls for pending command → returns + clears from queue
+app.get('/api/robot/command', (req, res) => {
+  if (commandQueue.length > 0) {
+    const cmd = commandQueue.shift();
+    console.log(`[SIDECAR] Command dispatched: ${cmd.command} ${cmd.target} ${cmd.direction}`);
+    return res.json(cmd);
+  }
+  res.json({ command: 'NONE', target: 'NONE', direction: 'NONE' });
+});
+
+// Sidecar downloads all map files for a given mapId
+app.get('/api/robot/map-files/:id', (req, res) => {
+  const mapDir = path.join(DATA_ROOT, req.params.id);
+  if (!fs.existsSync(mapDir)) {
+    return res.status(404).json({ error: 'Map not found' });
+  }
+  try {
+    const result = { id: req.params.id };
+
+    // meta.json
+    const metaPath = path.join(mapDir, 'meta.json');
+    if (fs.existsSync(metaPath)) {
+      result.meta = JSON.parse(fs.readFileSync(metaPath, 'utf8'));
+    }
+
+    // map_graph.json (renamed to graph.json for robot)
+    const graphPath = path.join(mapDir, 'map_graph.json');
+    if (fs.existsSync(graphPath)) {
+      result.graph = JSON.parse(fs.readFileSync(graphPath, 'utf8'));
+    }
+
+    // waypoints.txt
+    const wpPath = path.join(mapDir, 'waypoints.txt');
+    if (fs.existsSync(wpPath)) {
+      result.waypoints = fs.readFileSync(wpPath, 'utf8');
+    }
+
+    // map.yaml
+    const yamlPath = path.join(mapDir, 'map.yaml');
+    if (fs.existsSync(yamlPath)) {
+      result.mapYaml = fs.readFileSync(yamlPath, 'utf8');
+    }
+
+    // map.pgm (binary → base64)
+    const pgmPath = path.join(mapDir, 'map.pgm');
+    if (fs.existsSync(pgmPath)) {
+      result.mapPgmBase64 = fs.readFileSync(pgmPath).toString('base64');
+    }
+
+    activeMapId = req.params.id;
+    console.log(`[SIDECAR] Map files served for: ${req.params.id}`);
+    res.json(result);
+  } catch (err) {
+    console.error('[SIDECAR] Error serving map files:', err.message);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // ---------------------------------------------------------------------------

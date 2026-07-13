@@ -144,6 +144,21 @@ services:
     networks:
       - smartdine-network
 
+  map-server:
+    image: smartdine-map-server:latest
+    container_name: map-server
+    build:
+      context: ../map-server
+      dockerfile: Dockerfile
+    environment:
+      - PORT=3001
+    ports:
+      - "3001:3001"
+    volumes:
+      - map-data:/app/data/maps
+    networks:
+      - smartdine-network
+
   gateway:
     image: smartdine-gateway:latest
     container_name: gateway-api
@@ -171,6 +186,7 @@ services:
 volumes:
   postgres-data:
   ollama-data:
+  map-data:
 
 networks:
   smartdine-network:

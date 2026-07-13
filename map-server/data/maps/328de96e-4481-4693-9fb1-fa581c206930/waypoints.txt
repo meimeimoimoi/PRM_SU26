@@ -1,2 +1,0 @@
-Table_103_Delivery: -4.29 7.13
-RobotStart_robotStart-1783767479016: 0.03 0.24

@@ -1,6 +1,0 @@
-RobotStart_robotStart-1783853735497: 0.03 0.24
-Table_103_Delivery: -3.40 6.20
-Table_104_Delivery: 3.05 5.85
-Table_105_Delivery: -3.40 -2.29
-Table_106_Delivery: 2.75 -1.93
-Kitchen_107: -2.00 -8.20
