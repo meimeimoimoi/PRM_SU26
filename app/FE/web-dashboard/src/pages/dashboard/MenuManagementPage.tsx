@@ -1,32 +1,40 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { 
-  Table, 
-  Tag, 
-  Button, 
-  Space, 
-  Card, 
-  Input, 
-  Select, 
-  Modal, 
-  Form, 
-  InputNumber, 
-  message, 
+import { useSelector } from 'react-redux';
+import {
+  Table,
+  Tag,
+  Button,
+  Space,
+  Card,
+  Input,
+  Select,
+  Modal,
+  Form,
+  InputNumber,
+  message,
   Tooltip,
   Switch
 } from 'antd';
-import { 
-  SearchOutlined, 
-  PlusOutlined, 
-  EditOutlined, 
-  DeleteOutlined 
+import {
+  SearchOutlined,
+  PlusOutlined,
+  EditOutlined,
+  DeleteOutlined
 } from '@ant-design/icons';
-import { MenuItemResponse } from '@/types/menu';
+import { MenuItemResponse, MenuCategoryResponse } from '@/types/menu';
 import { menuService } from '@/services/menuService';
+import { categoryService } from '@/services/categoryService';
+import { selectCurrentUser } from '@/store/slices/authSlice';
+import { getErrorMessage } from '@/utils/apiError';
 
 const { Option } = Select;
 
 const MenuManagementPage: React.FC = () => {
+  const currentUser = useSelector(selectCurrentUser);
+  const isManager = currentUser?.role === 'MANAGER';
+
   const [menuItems, setMenuItems] = useState<MenuItemResponse[]>([]);
+  const [categories, setCategories] = useState<MenuCategoryResponse[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [searchText, setSearchText] = useState<string>('');
   const [categoryFilter, setCategoryFilter] = useState<string>('ALL');
@@ -44,68 +52,32 @@ const MenuManagementPage: React.FC = () => {
     setLoading(true);
     try {
       const data = await menuService.getAllMenuItems();
-      if (!data || data.length === 0) {
-        throw new Error('Chưa có dữ liệu món ăn');
-      }
-      setMenuItems(data);
+      setMenuItems(data || []);
     } catch (error: any) {
-      console.warn('Không tải được thực đơn từ API, sử dụng dữ liệu mẫu:', error);
-      // Fallback data matching the screenshot exactly!
-      const mockMenu: MenuItemResponse[] = [
-        {
-          id: 1,
-          name: 'Phở Bò Đặc Biệt',
-          description: 'Special Beef Noodle Soup',
-          price: 75000,
-          imageUrl: 'https://images.unsplash.com/photo-1582878826629-29b7ad1cdc43?w=150',
-          categoryId: 1,
-          categoryName: 'Food',
-          isAvailable: true,
-          averageRating: 5.0
-        },
-        {
-          id: 2,
-          name: 'Bánh Mì Thịt Nướng',
-          description: 'Grilled Pork Sandwich',
-          price: 45000,
-          imageUrl: 'https://images.unsplash.com/photo-1600891964599-f61ba0e24092?w=150',
-          categoryId: 1,
-          categoryName: 'Food',
-          isAvailable: true,
-          averageRating: 4.8
-        },
-        {
-          id: 3,
-          name: 'Cà Phê Sữa Đá',
-          description: 'Vietnamese Iced Milk Coffee',
-          price: 35000,
-          imageUrl: 'https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?w=150',
-          categoryId: 2,
-          categoryName: 'Drink',
-          isAvailable: false,
-          averageRating: 4.9
-        },
-        {
-          id: 4,
-          name: 'Gỏi Cuốn Tôm Thịt',
-          description: 'Fresh Spring Rolls (3pcs)',
-          price: 55000,
-          imageUrl: 'https://images.unsplash.com/photo-1534422298391-e4f8c172dddb?w=150',
-          categoryId: 1,
-          categoryName: 'Food',
-          isAvailable: true,
-          averageRating: 4.7
-        }
-      ];
-      setMenuItems(mockMenu);
+      message.error(getErrorMessage(error, 'Không tải được thực đơn.'));
+      setMenuItems([]);
     } finally {
       setLoading(false);
     }
   };
 
+  // Danh mục thật từ BE (GET /api/v1/menu-categories) — thay cho hardcode Food/Drink.
+  const fetchCategories = async () => {
+    try {
+      const data = await categoryService.getAll();
+      setCategories(data || []);
+    } catch (error: any) {
+      message.error(getErrorMessage(error, 'Không tải được danh mục món ăn.'));
+    }
+  };
+
   useEffect(() => {
     fetchMenu();
+    fetchCategories();
   }, []);
+
+  const categoryName = (categoryId: number) =>
+    categories.find((c) => c.id === categoryId)?.name || 'Chưa phân loại';
 
   // 2. Add Item Handler
   const handleAddItem = async (values: any) => {
@@ -115,31 +87,16 @@ const MenuManagementPage: React.FC = () => {
         description: values.description,
         price: values.price,
         imageUrl: values.imageUrl || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=150',
-        categoryId: values.categoryName === 'Food' ? 1 : 2
+        categoryId: values.categoryId
       };
-      
+
       const newItem = await menuService.createMenuItem(requestData);
-      setMenuItems((prev) => [...prev, { ...newItem, categoryName: values.categoryName }]);
+      setMenuItems((prev) => [...prev, { ...newItem, categoryId: values.categoryId, categoryName: categoryName(values.categoryId) }]);
       setIsAddModalOpen(false);
       addForm.resetFields();
       message.success('Thêm món ăn mới thành công!');
     } catch (error: any) {
-      // Offline fallback
-      const mockNew: MenuItemResponse = {
-        id: Date.now(),
-        name: values.name,
-        description: values.description,
-        price: values.price,
-        imageUrl: values.imageUrl || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=150',
-        categoryId: values.categoryName === 'Food' ? 1 : 2,
-        categoryName: values.categoryName,
-        isAvailable: true,
-        averageRating: 5.0
-      };
-      setMenuItems((prev) => [...prev, mockNew]);
-      setIsAddModalOpen(false);
-      addForm.resetFields();
-      message.success('Thêm món ăn thành công (Chế độ offline)');
+      message.error(getErrorMessage(error, 'Thêm món ăn thất bại.'));
     }
   };
 
@@ -152,41 +109,39 @@ const MenuManagementPage: React.FC = () => {
         description: values.description,
         price: values.price,
         imageUrl: values.imageUrl || selectedItem.imageUrl,
-        categoryId: values.categoryName === 'Food' ? 1 : 2,
+        categoryId: values.categoryId,
         isAvailable: values.isAvailable
       };
 
-      const updated = await menuService.updateMenuItem(selectedItem.id, requestData);
-      setMenuItems((prev) => prev.map((item) => item.id === selectedItem.id ? { ...updated, categoryName: values.categoryName } : item));
-      setIsEditModalOpen(false);
-      setSelectedItem(null);
-      message.success('Cập nhật món ăn thành công!');
-    } catch (error: any) {
-      // Offline fallback
+      // PATCH chỉ trả về { id, name, isAvailable, updatedAt } — merge vào item cũ
+      // thay vì thay thế toàn bộ, để không mất price/description/imageUrl/categoryId.
+      await menuService.updateMenuItem(selectedItem.id, requestData);
       setMenuItems((prev) => prev.map((item) => item.id === selectedItem.id ? {
         ...item,
         name: values.name,
         description: values.description,
         price: values.price,
-        categoryName: values.categoryName,
+        imageUrl: requestData.imageUrl,
+        categoryId: requestData.categoryId,
+        categoryName: categoryName(requestData.categoryId),
         isAvailable: values.isAvailable
       } : item));
       setIsEditModalOpen(false);
       setSelectedItem(null);
-      message.success('Cập nhật món ăn thành công (Chế độ offline)');
+      message.success('Cập nhật món ăn thành công!');
+    } catch (error: any) {
+      message.error(getErrorMessage(error, 'Cập nhật món ăn thất bại.'));
     }
   };
 
   // 4. Toggle Availability Handler
-  const handleToggleAvailability = async (id: number) => {
+  const handleToggleAvailability = async (id: number, nextAvailable: boolean) => {
     try {
-      await menuService.toggleAvailability(id);
-      setMenuItems((prev) => prev.map((item) => item.id === id ? { ...item, isAvailable: !item.isAvailable } : item));
+      await menuService.toggleAvailability(id, nextAvailable);
+      setMenuItems((prev) => prev.map((item) => item.id === id ? { ...item, isAvailable: nextAvailable } : item));
       message.success('Đã cập nhật trạng thái khả dụng!');
     } catch (error: any) {
-      // Offline fallback
-      setMenuItems((prev) => prev.map((item) => item.id === id ? { ...item, isAvailable: !item.isAvailable } : item));
-      message.success('Đã cập nhật trạng thái (Chế độ offline)');
+      message.error(getErrorMessage(error, 'Cập nhật trạng thái thất bại.'));
     }
   };
 
@@ -197,9 +152,7 @@ const MenuManagementPage: React.FC = () => {
       setMenuItems((prev) => prev.filter((item) => item.id !== id));
       message.success('Đã xóa món ăn khỏi thực đơn!');
     } catch (error: any) {
-      // Offline fallback
-      setMenuItems((prev) => prev.filter((item) => item.id !== id));
-      message.success('Đã xóa món ăn (Chế độ offline)');
+      message.error(getErrorMessage(error, 'Xóa món ăn thất bại.'));
     }
   };
 
@@ -210,7 +163,7 @@ const MenuManagementPage: React.FC = () => {
       name: item.name,
       description: item.description,
       price: item.price,
-      categoryName: item.categoryName || 'Food',
+      categoryId: item.categoryId,
       isAvailable: item.isAvailable,
       imageUrl: item.imageUrl
     });
@@ -224,9 +177,9 @@ const MenuManagementPage: React.FC = () => {
         item.name.toLowerCase().includes(searchText.toLowerCase()) ||
         (item.description && item.description.toLowerCase().includes(searchText.toLowerCase()));
       
-      const matchesCategory = 
-        categoryFilter === 'ALL' || 
-        item.categoryName === categoryFilter;
+      const matchesCategory =
+        categoryFilter === 'ALL' ||
+        item.categoryId.toString() === categoryFilter;
 
       return matchesSearch && matchesCategory;
     });
@@ -309,36 +262,41 @@ const MenuManagementPage: React.FC = () => {
         </div>
       ),
     },
-    {
-      title: 'ACTIONS',
-      key: 'actions',
-      render: (_: any, record: MenuItemResponse) => (
-        <Space size="middle">
-          <Tooltip title="Chỉnh sửa món">
-            <Button 
-              type="text" 
-              icon={<EditOutlined style={{ color: '#1890ff' }} />} 
-              onClick={() => openEditModal(record)}
-            />
-          </Tooltip>
-          <Tooltip title="Đổi trạng thái khả dụng">
-            <Switch 
-              size="small"
-              checked={record.isAvailable}
-              onChange={() => handleToggleAvailability(record.id)}
-            />
-          </Tooltip>
-          <Tooltip title="Xóa món">
-            <Button 
-              type="text" 
-              danger
-              icon={<DeleteOutlined />} 
-              onClick={() => handleDeleteItem(record.id)}
-            />
-          </Tooltip>
-        </Space>
-      ),
-    },
+    // CRUD/toggle chỉ dành cho MANAGER — theo phân quyền: STAFF chỉ xử lý đơn, không quản lý menu.
+    ...(isManager
+      ? [
+          {
+            title: 'ACTIONS',
+            key: 'actions',
+            render: (_: any, record: MenuItemResponse) => (
+              <Space size="middle">
+                <Tooltip title="Chỉnh sửa món">
+                  <Button
+                    type="text"
+                    icon={<EditOutlined style={{ color: '#1890ff' }} />}
+                    onClick={() => openEditModal(record)}
+                  />
+                </Tooltip>
+                <Tooltip title="Đổi trạng thái khả dụng">
+                  <Switch
+                    size="small"
+                    checked={record.isAvailable}
+                    onChange={(checked) => handleToggleAvailability(record.id, checked)}
+                  />
+                </Tooltip>
+                <Tooltip title="Xóa món">
+                  <Button
+                    type="text"
+                    danger
+                    icon={<DeleteOutlined />}
+                    onClick={() => handleDeleteItem(record.id)}
+                  />
+                </Tooltip>
+              </Space>
+            ),
+          },
+        ]
+      : []),
   ];
 
   return (
@@ -349,19 +307,21 @@ const MenuManagementPage: React.FC = () => {
           <h2 style={{ margin: 0, fontSize: '28px', fontWeight: 700, color: '#1a202c' }}>Menu Management</h2>
           <p style={{ margin: 0, color: '#718096', fontSize: '14px' }}>Manage your restaurant's dishes, drinks, and availability.</p>
         </div>
-        <Button 
-          type="primary" 
-          icon={<PlusOutlined />}
-          onClick={() => setIsAddModalOpen(true)}
-          style={{ 
-            backgroundColor: '#1890ff', 
-            borderRadius: 6, 
-            height: 38,
-            fontWeight: 500
-          }}
-        >
-          Add New Item
-        </Button>
+        {isManager && (
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
+            onClick={() => setIsAddModalOpen(true)}
+            style={{
+              backgroundColor: '#1890ff',
+              borderRadius: 6,
+              height: 38,
+              fontWeight: 500
+            }}
+          >
+            Add New Item
+          </Button>
+        )}
       </div>
 
       {/* Filter toolbar */}
@@ -391,8 +351,9 @@ const MenuManagementPage: React.FC = () => {
               style={{ width: 180, height: 38 }}
             >
               <Option value="ALL">All Categories</Option>
-              <Option value="Food">Food</Option>
-              <Option value="Drink">Drink</Option>
+              {categories.map((c) => (
+                <Option key={c.id} value={c.id.toString()}>{c.name}</Option>
+              ))}
             </Select>
           </div>
         </div>
@@ -432,7 +393,7 @@ const MenuManagementPage: React.FC = () => {
           form={addForm}
           layout="vertical"
           onFinish={handleAddItem}
-          initialValues={{ price: 10000, categoryName: 'Food' }}
+          initialValues={{ price: 10000, categoryId: categories[0]?.id }}
           style={{ marginTop: 16 }}
         >
           <Form.Item
@@ -459,13 +420,14 @@ const MenuManagementPage: React.FC = () => {
           </Form.Item>
 
           <Form.Item
-            name="categoryName"
+            name="categoryId"
             label="Danh mục"
-            rules={[{ required: true }]}
+            rules={[{ required: true, message: 'Vui lòng chọn danh mục!' }]}
           >
-            <Select>
-              <Option value="Food">Food (Món ăn)</Option>
-              <Option value="Drink">Drink (Đồ uống)</Option>
+            <Select placeholder="Chọn danh mục">
+              {categories.map((c) => (
+                <Option key={c.id} value={c.id}>{c.name}</Option>
+              ))}
             </Select>
           </Form.Item>
 
@@ -524,13 +486,14 @@ const MenuManagementPage: React.FC = () => {
           </Form.Item>
 
           <Form.Item
-            name="categoryName"
+            name="categoryId"
             label="Danh mục"
-            rules={[{ required: true }]}
+            rules={[{ required: true, message: 'Vui lòng chọn danh mục!' }]}
           >
-            <Select>
-              <Option value="Food">Food</Option>
-              <Option value="Drink">Drink</Option>
+            <Select placeholder="Chọn danh mục">
+              {categories.map((c) => (
+                <Option key={c.id} value={c.id}>{c.name}</Option>
+              ))}
             </Select>
           </Form.Item>
 

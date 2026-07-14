@@ -183,26 +183,23 @@ public class OrderService
             var activeItems = order.OrderDetails.Where(d => d.Status != OrderDetailStatus.CANCELLED && d.Status != OrderDetailStatus.RETURNED).ToList();
             if (activeItems.Any())
             {
-                if (activeItems.All(d => d.Status == OrderDetailStatus.SERVED))
+                // Suy ra trạng thái đơn từ trạng thái các item, nhưng áp dụng qua cùng
+                // transition graph với UpdateStatusAsync (order.CanTransitionTo) để 2 luồng
+                // cập nhật (theo đơn / theo từng item) không bao giờ đưa Order vào trạng thái
+                // trái quy tắc state machine. Nếu bước suy ra không phải transition hợp lệ từ
+                // trạng thái hiện tại (vd item bị đánh dấu DONE trong khi đơn đang PENDING,
+                // bỏ qua COOKING), giữ nguyên order.Status thay vì ép trạng thái không hợp lệ.
+                OrderStatus? derivedStatus = activeItems.All(d => d.Status == OrderDetailStatus.SERVED)
+                    ? OrderStatus.COMPLETED
+                    : activeItems.All(d => d.Status == OrderDetailStatus.DONE || d.Status == OrderDetailStatus.SERVED)
+                        ? OrderStatus.READY
+                        : activeItems.Any(d => d.Status == OrderDetailStatus.DOING || d.Status == OrderDetailStatus.DONE || d.Status == OrderDetailStatus.SERVED)
+                            ? OrderStatus.COOKING
+                            : null;
+
+                if (derivedStatus.HasValue && order.CanTransitionTo(derivedStatus.Value))
                 {
-                    if (order.Status != OrderStatus.COMPLETED)
-                    {
-                        order.Status = OrderStatus.COMPLETED;
-                    }
-                }
-                else if (activeItems.All(d => d.Status == OrderDetailStatus.DONE || d.Status == OrderDetailStatus.SERVED))
-                {
-                    if (order.Status != OrderStatus.READY && order.Status != OrderStatus.COMPLETED)
-                    {
-                        order.Status = OrderStatus.READY;
-                    }
-                }
-                else if (activeItems.Any(d => d.Status == OrderDetailStatus.DOING || d.Status == OrderDetailStatus.DONE || d.Status == OrderDetailStatus.SERVED))
-                {
-                    if (order.Status == OrderStatus.PENDING || order.Status == OrderStatus.CONFIRMED)
-                    {
-                        order.Status = OrderStatus.COOKING;
-                    }
+                    order.UpdateStatus(derivedStatus.Value);
                 }
             }
         }
@@ -342,6 +339,7 @@ public class OrderService
             SessionId = order.SessionId,
             CustomerId = order.Session?.CustomerId,
             CustomerName = order.Session?.Customer?.FullName ?? order.Session?.GuestName,
+            TableId = order.Session?.TableId ?? 0,
             TableNumber = order.Session?.Table?.TableNumber ?? 0,
             TotalAmount = order.TotalAmount,
             DiscountAmount = order.DiscountAmount,

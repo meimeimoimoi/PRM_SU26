@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../viewmodels/auth_viewmodel.dart';
 import '../../viewmodels/order_viewmodel.dart';
 import '../../services/order_repository.dart';
+import '../../services/socket/socket_service.dart';
 import '../../models/order_models.dart';
 
 class _AppColors {
@@ -42,6 +43,54 @@ class OrderHistoryPage extends ConsumerStatefulWidget {
 class _OrderHistoryPageState extends ConsumerState<OrderHistoryPage> {
   int _selectedPaymentMethod = 0;
   bool _isProcessingPayment = false;
+  final SocketService _socketService = SocketService();
+
+  // Theo dõi hộp thoại QR/tiền mặt đang mở để tự đóng khi ReceivePaymentSuccess
+  // báo về, thay vì bắt khách phải tự bấm "Đóng".
+  bool _isPaymentDialogOpen = false;
+  String? _pendingInvoiceId;
+
+  @override
+  void initState() {
+    super.initState();
+    final tableId = ref.read(authViewModelProvider).guestSession?.tableId;
+    if (tableId != null) {
+      _socketService.connect(tableId);
+    }
+    _socketService.subscribeToEvent('ReceivePaymentSuccess', _onPaymentSuccess);
+  }
+
+  @override
+  void dispose() {
+    _socketService.unsubscribeFromEvent('ReceivePaymentSuccess');
+    _socketService.disconnect();
+    super.dispose();
+  }
+
+  void _onPaymentSuccess(dynamic data) {
+    if (!mounted || data is! Map) return;
+    final invoiceId = (data['invoiceId'] ?? data['InvoiceId'])?.toString();
+    if (invoiceId == null || invoiceId != _pendingInvoiceId) return;
+
+    _pendingInvoiceId = null;
+    if (_isPaymentDialogOpen) {
+      Navigator.of(context, rootNavigator: true).pop();
+    }
+    ref.invalidate(orderListProvider);
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Thanh toán thành công'),
+        content: const Text('Cảm ơn quý khách! Phiên ăn đã được thanh toán.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
 
   Future<void> _handlePayment(int sessionId) async {
     if (_isProcessingPayment) return;
@@ -66,6 +115,9 @@ class _OrderHistoryPageState extends ConsumerState<OrderHistoryPage> {
       final response = await repo.createPaymentIntent(sessionId, method);
 
       if (!mounted) return;
+
+      _pendingInvoiceId = response.invoiceId;
+      _isPaymentDialogOpen = true;
 
       if (method == 'CASH') {
         showDialog(
@@ -94,7 +146,10 @@ class _OrderHistoryPageState extends ConsumerState<OrderHistoryPage> {
               ),
             ],
           ),
-        );
+        ).then((_) {
+          _isPaymentDialogOpen = false;
+          _pendingInvoiceId = null;
+        });
       } else {
         showDialog(
           context: context,
@@ -175,11 +230,17 @@ class _OrderHistoryPageState extends ConsumerState<OrderHistoryPage> {
               ),
             ],
           ),
-        );
+        ).then((_) {
+          _isPaymentDialogOpen = false;
+          _pendingInvoiceId = null;
+        });
       }
     } catch (e) {
+      final msg = e.toString().contains('đang chờ') || e.toString().contains('ALREADY')
+          ? 'Bạn đã có thanh toán đang chờ xử lý.'
+          : 'Lỗi thanh toán: ${e.toString()}';
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Lỗi thanh toán: ${e.toString()}')),
+        SnackBar(content: Text(msg)),
       );
     } finally {
       if (mounted) {

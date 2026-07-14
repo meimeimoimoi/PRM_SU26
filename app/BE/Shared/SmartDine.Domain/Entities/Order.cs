@@ -36,22 +36,31 @@ public class Order : BaseEntity
         if (FinalAmount < 0) FinalAmount = 0;
     }
 
+    private static readonly Dictionary<OrderStatus, OrderStatus[]> ValidTransitions = new()
+    {
+        { OrderStatus.PENDING,   new[] { OrderStatus.CONFIRMED, OrderStatus.COOKING, OrderStatus.CANCELLED } },
+        { OrderStatus.CONFIRMED, new[] { OrderStatus.COOKING, OrderStatus.CANCELLED } },
+        { OrderStatus.COOKING,   new[] { OrderStatus.READY, OrderStatus.CANCELLED } },
+        { OrderStatus.READY,     new[] { OrderStatus.COMPLETED } },
+        { OrderStatus.COMPLETED, Array.Empty<OrderStatus>() },
+        { OrderStatus.CANCELLED, Array.Empty<OrderStatus>() }
+    };
+
+    /// <summary>
+    /// Đây có phải là bước chuyển trạng thái hợp lệ từ trạng thái hiện tại không.
+    /// Dùng để đồng bộ hóa order status suy ra từ item status (UpdateItemStatusAsync)
+    /// với cùng một quy tắc chuyển trạng thái mà UpdateStatus áp dụng, tránh 2 luồng
+    /// cập nhật đưa Order vào trạng thái không hợp lệ theo state machine.
+    /// </summary>
+    public bool CanTransitionTo(OrderStatus newStatus)
+        => ValidTransitions.TryGetValue(Status, out var allowed) && allowed.Contains(newStatus);
+
     /// <summary>
     /// Cập nhật trạng thái với business validation.
     /// </summary>
     public void UpdateStatus(OrderStatus newStatus)
     {
-        var validTransitions = new Dictionary<OrderStatus, OrderStatus[]>
-        {
-            { OrderStatus.PENDING,   new[] { OrderStatus.CONFIRMED, OrderStatus.COOKING, OrderStatus.CANCELLED } },
-            { OrderStatus.CONFIRMED, new[] { OrderStatus.COOKING, OrderStatus.CANCELLED } },
-            { OrderStatus.COOKING,   new[] { OrderStatus.READY, OrderStatus.CANCELLED } },
-            { OrderStatus.READY,     new[] { OrderStatus.COMPLETED } },
-            { OrderStatus.COMPLETED, Array.Empty<OrderStatus>() },
-            { OrderStatus.CANCELLED, Array.Empty<OrderStatus>() }
-        };
-
-        if (validTransitions.TryGetValue(Status, out var allowed) && allowed.Contains(newStatus))
+        if (CanTransitionTo(newStatus))
         {
             Status = newStatus;
             UpdatedAt = DateTime.UtcNow;

@@ -25,7 +25,7 @@ import {
 } from '@ant-design/icons';
 import { Table as TableType, TableStatus } from '@/types/table';
 import { tableService } from '@/services/tableService';
-import { useSocket } from '@/hooks/useSocket';
+import { getErrorMessage } from '@/utils/apiError';
 
 const { Option } = Select;
 
@@ -44,28 +44,12 @@ const TableManagementPage: React.FC = () => {
     setLoading(true);
     try {
       const data = await tableService.getAllTables();
-      if (!data || data.length === 0) {
-        throw new Error('Chưa có dữ liệu bàn ăn');
-      }
       // Sort tables by tableNumber ascending
-      const sorted = [...data].sort((a, b) => a.tableNumber - b.tableNumber);
+      const sorted = [...(data || [])].sort((a, b) => a.tableNumber - b.tableNumber);
       setTables(sorted);
     } catch (error: any) {
-      console.warn('Không tải được bàn ăn từ API, sử dụng dữ liệu mẫu:', error);
-      // Fallback mockup data matching the screenshot!
-      const mockTables: TableType[] = [
-        { id: 1, tableNumber: 1, capacity: 2, status: 'AVAILABLE', zone: 'Main Hall' },
-        { id: 2, tableNumber: 2, capacity: 4, status: 'OCCUPIED', zone: 'Main Hall' },
-        { id: 3, tableNumber: 3, capacity: 2, status: 'AVAILABLE', zone: 'Terrace' },
-        { id: 4, tableNumber: 4, capacity: 8, status: 'OCCUPIED', zone: 'VIP Room' },
-        { id: 5, tableNumber: 5, capacity: 4, status: 'AVAILABLE', zone: 'Main Hall' },
-        { id: 6, tableNumber: 6, capacity: 6, status: 'AVAILABLE', zone: 'Terrace' },
-        { id: 7, tableNumber: 7, capacity: 2, status: 'OCCUPIED', zone: 'Main Hall' },
-        { id: 8, tableNumber: 8, capacity: 4, status: 'AVAILABLE', zone: 'Terrace' },
-        { id: 9, tableNumber: 9, capacity: 10, status: 'AVAILABLE', zone: 'VIP Room' },
-        { id: 10, tableNumber: 10, capacity: 2, status: 'OCCUPIED', zone: 'Main Hall' },
-      ];
-      setTables(mockTables);
+      message.error(getErrorMessage(error, 'Không tải được danh sách bàn.'));
+      setTables([]);
     } finally {
       setLoading(false);
     }
@@ -74,28 +58,6 @@ const TableManagementPage: React.FC = () => {
   useEffect(() => {
     fetchTables();
   }, []);
-
-  // 2. Real-time updates via WebSockets
-  const socketEvents = useMemo(() => ({
-    table_status_updated: (data: { id: number; status: TableStatus }) => {
-      setTables((prev) => 
-        prev.map((t) => (t.id === data.id ? { ...t, status: data.status } : t))
-      );
-      message.info(`Trạng thái bàn T-${data.id.toString().padStart(2, '0')} đã được cập nhật thành ${data.status}`);
-    },
-    table_created: (newTable: TableType) => {
-      setTables((prev) => {
-        const updated = [...prev, {
-          ...newTable,
-          zone: newTable.tableNumber > 10 ? 'VIP Room' : newTable.tableNumber > 5 ? 'Terrace' : 'Main Hall'
-        }];
-        return updated.sort((a, b) => a.tableNumber - b.tableNumber);
-      });
-      message.success(`Bàn ăn mới T-${newTable.tableNumber.toString().padStart(2, '0')} đã được thêm!`);
-    }
-  }), []);
-
-  const { emit } = useSocket(socketEvents);
 
   // 3. Create Table Handler
   const handleAddTable = async (values: { tableNumber: number; capacity: number }) => {
@@ -111,9 +73,6 @@ const TableManagementPage: React.FC = () => {
       setIsAddModalOpen(false);
       form.resetFields();
       message.success('Thêm bàn mới thành công');
-      
-      // Emit socket event to update other clients
-      emit('new_table_created', newTable);
     } catch (error: any) {
       message.error(error.message || 'Thêm bàn thất bại');
     }
@@ -125,9 +84,6 @@ const TableManagementPage: React.FC = () => {
       const updated = await tableService.updateTableStatus(tableId, status);
       setTables((prev) => prev.map((t) => (t.id === tableId ? updated : t)));
       message.success(`Đã chuyển trạng thái bàn sang ${status === 'AVAILABLE' ? 'Trống (AVAILABLE)' : 'Đang có khách (OCCUPIED)'}`);
-      
-      // Emit socket event
-      emit('update_table_status', { id: tableId, status });
     } catch (error: any) {
       message.error(error.message || 'Cập nhật trạng thái thất bại');
     }

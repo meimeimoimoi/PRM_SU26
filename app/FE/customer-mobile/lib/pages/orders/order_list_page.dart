@@ -43,6 +43,11 @@ class _OrderListPageState extends ConsumerState<OrderListPage> {
   Timer? _pollingTimer;
   final SocketService _socketService = SocketService();
 
+  // Theo dõi hộp thoại QR/tiền mặt đang mở để tự đóng khi ReceivePaymentSuccess
+  // báo về, thay vì bắt khách phải tự bấm "Đóng".
+  bool _isPaymentDialogOpen = false;
+  String? _pendingInvoiceId;
+
   @override
   void initState() {
     super.initState();
@@ -62,6 +67,32 @@ class _OrderListPageState extends ConsumerState<OrderListPage> {
     _socketService.subscribeToEvent('ReceiveNewOrder', (data) {
       if (mounted) ref.invalidate(orderListProvider);
     });
+    _socketService.subscribeToEvent('ReceivePaymentSuccess', _onPaymentSuccess);
+  }
+
+  void _onPaymentSuccess(dynamic data) {
+    if (!mounted || data is! Map) return;
+    final invoiceId = (data['invoiceId'] ?? data['InvoiceId'])?.toString();
+    if (invoiceId == null || invoiceId != _pendingInvoiceId) return;
+
+    _pendingInvoiceId = null;
+    if (_isPaymentDialogOpen) {
+      Navigator.of(context, rootNavigator: true).pop();
+    }
+    ref.invalidate(orderListProvider);
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Thanh toán thành công'),
+        content: const Text('Cảm ơn quý khách! Phiên ăn đã được thanh toán.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -69,6 +100,7 @@ class _OrderListPageState extends ConsumerState<OrderListPage> {
     _pollingTimer?.cancel();
     _socketService.unsubscribeFromEvent('ReceiveOrderStatusUpdate');
     _socketService.unsubscribeFromEvent('ReceiveNewOrder');
+    _socketService.unsubscribeFromEvent('ReceivePaymentSuccess');
     _socketService.disconnect();
     super.dispose();
   }
@@ -90,6 +122,9 @@ class _OrderListPageState extends ConsumerState<OrderListPage> {
       if (!mounted) return;
 
       Navigator.of(context).pop(); // Close bottom sheet
+
+      _pendingInvoiceId = response.invoiceId;
+      _isPaymentDialogOpen = true;
 
       if (method == 'CASH') {
         showDialog(
@@ -118,7 +153,10 @@ class _OrderListPageState extends ConsumerState<OrderListPage> {
               ),
             ],
           ),
-        );
+        ).then((_) {
+          _isPaymentDialogOpen = false;
+          _pendingInvoiceId = null;
+        });
       } else {
         showDialog(
           context: context,
@@ -195,7 +233,10 @@ class _OrderListPageState extends ConsumerState<OrderListPage> {
               ),
             ],
           ),
-        );
+        ).then((_) {
+          _isPaymentDialogOpen = false;
+          _pendingInvoiceId = null;
+        });
       }
     } catch (e) {
       if (mounted) {

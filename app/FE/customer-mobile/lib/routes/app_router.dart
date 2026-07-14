@@ -1,6 +1,7 @@
 import 'package:go_router/go_router.dart';
 import '../pages/auth/login_page.dart';
 import '../pages/auth/signup_page.dart';
+import '../pages/auth/qr_scan_page.dart';
 import '../pages/home/home_page.dart';
 import '../pages/menu/menu_page.dart';
 import '../pages/cart/cart_page.dart';
@@ -22,6 +23,10 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: AppRoutes.signup,
       builder: (context, state) => const SignupPage(),
+    ),
+    GoRoute(
+      path: AppRoutes.qrScan,
+      builder: (context, state) => const QrScanPage(),
     ),
     GoRoute(
       path: AppRoutes.home,

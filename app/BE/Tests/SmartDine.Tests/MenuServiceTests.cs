@@ -19,6 +19,7 @@ public class MenuServiceTests
     private readonly Mock<IRepository<BusinessContextLog>> _contextRepoMock;
     private readonly Mock<IRepository<RecommendationLog>> _recLogRepoMock;
     private readonly Mock<ICustomerRepository> _customerRepoMock;
+    private readonly Mock<IRepository<MenuCategory>> _categoryRepoMock;
     private readonly MenuService _menuService;
 
     public MenuServiceTests()
@@ -31,6 +32,7 @@ public class MenuServiceTests
         _contextRepoMock = new Mock<IRepository<BusinessContextLog>>();
         _recLogRepoMock = new Mock<IRepository<RecommendationLog>>();
         _customerRepoMock = new Mock<ICustomerRepository>();
+        _categoryRepoMock = new Mock<IRepository<MenuCategory>>();
 
         _uowMock.Setup(u => u.MenuItems).Returns(_menuRepoMock.Object);
         _uowMock.Setup(u => u.Reviews).Returns(_reviewRepoMock.Object);
@@ -39,7 +41,10 @@ public class MenuServiceTests
         _uowMock.Setup(u => u.BusinessContextLogs).Returns(_contextRepoMock.Object);
         _uowMock.Setup(u => u.RecommendationLogs).Returns(_recLogRepoMock.Object);
         _uowMock.Setup(u => u.Customers).Returns(_customerRepoMock.Object);
+        _uowMock.Setup(u => u.MenuCategories).Returns(_categoryRepoMock.Object);
         _uowMock.Setup(u => u.SaveChangesAsync(It.IsAny<CancellationToken>())).ReturnsAsync(1);
+        _categoryRepoMock.Setup(r => r.GetByIdAsync(It.IsAny<int>()))
+            .ReturnsAsync(new MenuCategory { Id = 1, Name = "Món chính" });
 
         _menuService = new MenuService(_uowMock.Object);
     }
@@ -391,6 +396,18 @@ public class MenuServiceTests
             () => _menuService.CreateAsync(new CreateMenuItemRequest
             {
                 Name = "Test", Price = -50000, CategoryId = 1
+            }));
+    }
+
+    [Fact]
+    public async Task Create_CategoryNotFound_ThrowsEntityNotFound()
+    {
+        _categoryRepoMock.Setup(r => r.GetByIdAsync(999)).ReturnsAsync((MenuCategory?)null);
+
+        await Assert.ThrowsAsync<EntityNotFoundException>(
+            () => _menuService.CreateAsync(new CreateMenuItemRequest
+            {
+                Name = "Test", Price = 10000, CategoryId = 999
             }));
     }
 

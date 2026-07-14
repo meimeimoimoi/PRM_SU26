@@ -31,6 +31,7 @@ public class OrderResponse
     public int SessionId { get; set; }
     public int? CustomerId { get; set; }
     public string? CustomerName { get; set; }
+    public int TableId { get; set; }
     public int TableNumber { get; set; }
     public List<OrderDetailResponse> Items { get; set; } = new();
     public decimal TotalAmount { get; set; }

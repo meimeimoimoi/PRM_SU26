@@ -226,6 +226,26 @@ public class GuestLoginTests
             _authService.LoginGuestAsync(new GuestLoginRequest { TableId = 10 }));
     }
 
+    [Fact]
+    public async Task LoginGuest_MaintenanceTable_ThrowsBusinessRuleViolation()
+    {
+        var table = new Table { Id = 7, TableNumber = 7, Status = TableStatus.MAINTENANCE };
+        _tableRepoMock.Setup(r => r.GetByIdAsync(7)).ReturnsAsync(table);
+
+        await Assert.ThrowsAsync<BusinessRuleViolationException>(() =>
+            _authService.LoginGuestAsync(new GuestLoginRequest { TableId = 7, GuestName = "Khách" }));
+    }
+
+    [Fact]
+    public async Task LoginGuest_ReservedTable_ThrowsBusinessRuleViolation()
+    {
+        var table = new Table { Id = 8, TableNumber = 8, Status = TableStatus.RESERVED };
+        _tableRepoMock.Setup(r => r.GetByIdAsync(8)).ReturnsAsync(table);
+
+        await Assert.ThrowsAsync<BusinessRuleViolationException>(() =>
+            _authService.LoginGuestAsync(new GuestLoginRequest { TableId = 8, GuestName = "Khách" }));
+    }
+
     // ===== EDGE CASES - Khách ẩn danh =====
 
     [Fact]

@@ -58,18 +58,12 @@ public class PaymentService
         var session = await _uow.DiningSessions.GetByIdWithParticipantsAndOrdersAsync(request.SessionId)
             ?? throw new EntityNotFoundException("Dining Session", request.SessionId);
 
-        // 2. Guard trùng thanh toán sớm — trả lại payment đang chờ nếu có
+        // 2. Guard trùng thanh toán sớm — chặn nếu đã có payment PENDING/SUCCESS cho session
         var existing = await _uow.Payments.GetBySessionIdAsync(request.SessionId);
         if (existing != null)
         {
             if (existing.PaymentStatus == PaymentStatus.PENDING)
-                return new CreatePaymentIntentResponse
-                {
-                    InvoiceId = existing.InvoiceId,
-                    TotalPayable = existing.Amount,
-                    QrUrl = existing.QrUrl,
-                    Deeplink = existing.Deeplink
-                };
+                throw new BusinessRuleViolationException(ValidationMessages.PAYMENT_ALREADY_PENDING);
             if (existing.PaymentStatus == PaymentStatus.SUCCESS)
                 throw new BusinessRuleViolationException(ValidationMessages.PAYMENT_ALREADY_COMPLETED);
             // FAILED → cho phép tạo lại

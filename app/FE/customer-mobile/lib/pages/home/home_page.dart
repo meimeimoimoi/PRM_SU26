@@ -209,8 +209,11 @@ class _HomePageState extends ConsumerState<HomePage> {
                                 } catch (e) {
                                   if (mounted) {
                                     Navigator.of(ctx).pop();
+                                    final msg = e.toString().contains('đang chờ') || e.toString().contains('ALREADY')
+                                        ? 'Bàn này đã có thanh toán đang chờ xử lý.'
+                                        : 'Lỗi: $e';
                                     ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(content: Text('Lỗi: $e')),
+                                      SnackBar(content: Text(msg)),
                                     );
                                   }
                                 } finally {

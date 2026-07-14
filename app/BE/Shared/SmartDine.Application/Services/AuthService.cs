@@ -423,6 +423,11 @@ public class AuthService
         var table = await _uow.Tables.GetByIdAsync(request.TableId)
             ?? throw new EntityNotFoundException("Table", request.TableId);
 
+        if (table.Status == TableStatus.MAINTENANCE)
+            throw new BusinessRuleViolationException(ValidationMessages.TABLE_MAINTENANCE_CANNOT_SERVE);
+        if (table.Status == TableStatus.RESERVED)
+            throw new BusinessRuleViolationException(ValidationMessages.TABLE_RESERVED);
+
         var existingSession = await _uow.DiningSessions.GetActiveByTableIdAsync(request.TableId);
         DiningSession session;
 

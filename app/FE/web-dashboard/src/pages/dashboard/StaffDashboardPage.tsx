@@ -1,6 +1,7 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { useSelector } from 'react-redux';
 import { selectCurrentUser } from '@/store/slices/authSlice';
+import { useOrderHub } from '@/hooks/useOrderHub';
 import { 
   Button, 
   message, 
@@ -47,12 +48,12 @@ const StaffDashboardPage: React.FC = () => {
   const [searchTableText, setSearchTableText] = useState<string>('');
 
   // Load active orders and kitchen items
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     setLoading(true);
     try {
       const orders = await orderService.getActiveOrders();
       setActiveOrders(orders);
-      
+
       const items = await orderService.getKitchenItems();
       setKitchenItems(items);
     } catch (err) {
@@ -60,11 +61,29 @@ const StaffDashboardPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [loadData]);
+
+  // Nhóm nhiều sự kiện realtime đến gần nhau (vd. một đơn nhiều món) thành 1 lần reload.
+  const reloadTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scheduleReload = useCallback(() => {
+    if (reloadTimerRef.current) clearTimeout(reloadTimerRef.current);
+    reloadTimerRef.current = setTimeout(() => loadData(), 300);
+  }, [loadData]);
+
+  // Tham gia KitchenGroup qua SignalR để nhận đơn mới / cập nhật trạng thái theo
+  // thời gian thực thay vì chỉ dựa vào nút "Tải lại dữ liệu" thủ công.
+  const kitchenHubEvents = useMemo(
+    () => ({
+      ReceiveNewOrder: () => scheduleReload(),
+      ReceiveOrderStatusUpdate: () => scheduleReload(),
+    }),
+    [scheduleReload]
+  );
+  useOrderHub(kitchenHubEvents, { joinKitchenGroup: true });
 
   // Update timer elapsed seconds every second for cooking items
   useEffect(() => {

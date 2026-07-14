@@ -3,6 +3,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../viewmodels/auth_viewmodel.dart';
+import '../../routes/app_routes.dart';
 
 class _AppColors {
   static const Color primary = Color(0xFFad2c00);
@@ -43,12 +44,18 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     final name = _nameController.text.trim();
     final phone = _phoneController.text.trim();
     final tableId = int.tryParse(_tableIdController.text.trim()) ?? 1;
-    
-    // In a real scenario, tableId would be scanned from QR code or retrieved from deep link
+
     final success = await ref.read(authViewModelProvider.notifier).loginGuest(tableId, name, phone);
-    
+
     if (success && mounted) {
       context.go('/home');
+    }
+  }
+
+  Future<void> _handleScanQr() async {
+    final tableNumber = await context.push<int>(AppRoutes.qrScan);
+    if (tableNumber != null) {
+      _tableIdController.text = tableNumber.toString();
     }
   }
 
@@ -241,8 +248,13 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                   _buildTextField(
                     controller: _tableIdController,
                     icon: Icons.table_restaurant,
-                    hintText: 'Nhập số bàn',
+                    hintText: 'Nhập số bàn hoặc quét mã QR',
                     keyboardType: TextInputType.number,
+                    suffixIcon: IconButton(
+                      icon: Icon(Icons.qr_code_scanner, color: _AppColors.primary),
+                      tooltip: 'Quét mã QR trên bàn',
+                      onPressed: _handleScanQr,
+                    ),
                   ),
                   SizedBox(height: 16.h),
                   _buildLabel('Tên của bạn', true),
@@ -465,6 +477,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     required IconData icon,
     required String hintText,
     TextInputType? keyboardType,
+    Widget? suffixIcon,
   }) {
     return TextField(
       controller: controller,
@@ -483,6 +496,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
           icon,
           color: _AppColors.outline,
         ),
+        suffixIcon: suffixIcon,
         filled: true,
         fillColor: _AppColors.background,
         contentPadding: EdgeInsets.symmetric(vertical: 16.h, horizontal: 16.w),

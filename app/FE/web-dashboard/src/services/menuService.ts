@@ -1,5 +1,5 @@
 import { apiClient } from './api/client';
-import { MenuItemResponse, CreateMenuItemRequest, UpdateMenuItemRequest } from '@/types/menu';
+import { MenuItemResponse, MenuItemPatchResponse, CreateMenuItemRequest, UpdateMenuItemRequest } from '@/types/menu';
 
 export const menuService = {
   // Lấy toàn bộ món ăn
@@ -16,9 +16,9 @@ export const menuService = {
     return response.data.data || response.data;
   },
 
-  // Cập nhật món
-  updateMenuItem: async (id: number, request: UpdateMenuItemRequest): Promise<MenuItemResponse> => {
-    const response = await apiClient.put<any>(`/menu-items/${id}`, request);
+  // Cập nhật món — BE chỉ có PATCH /menu-items/{id} (partial update), không có PUT.
+  updateMenuItem: async (id: number, request: UpdateMenuItemRequest): Promise<MenuItemPatchResponse> => {
+    const response = await apiClient.patch<any>(`/menu-items/${id}`, request);
     return response.data.data || response.data;
   },
 
@@ -27,9 +27,10 @@ export const menuService = {
     await apiClient.delete(`/menu-items/${id}`);
   },
 
-  // Thay đổi trạng thái có hàng / hết hàng
-  toggleAvailability: async (id: number): Promise<MenuItemResponse> => {
-    const response = await apiClient.patch<any>(`/menu-items/${id}/availability`);
+  // Thay đổi trạng thái có hàng / hết hàng — BE không có endpoint /availability riêng,
+  // dùng chung PATCH /menu-items/{id} với body { isAvailable }.
+  toggleAvailability: async (id: number, isAvailable: boolean): Promise<MenuItemPatchResponse> => {
+    const response = await apiClient.patch<any>(`/menu-items/${id}`, { isAvailable });
     return response.data.data || response.data;
   }
 };

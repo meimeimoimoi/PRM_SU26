@@ -43,7 +43,7 @@ public class PaymentsController : ControllerBase
     /// Roles: MANAGER.
     /// </summary>
     [HttpGet]
-    [Authorize(Roles = Roles.StaffAndManager)]
+    [Authorize(Roles = Roles.Manager)]
     public async Task<IActionResult> GetHistory(
         [FromQuery] DateTime? fromDate,
         [FromQuery] DateTime? toDate,

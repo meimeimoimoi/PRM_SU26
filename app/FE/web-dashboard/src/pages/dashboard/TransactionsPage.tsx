@@ -18,8 +18,10 @@ import {
 
 import { Transaction } from '@/types/transaction';
 import { apiClient } from '../../services/api/client';
+import { getErrorMessage } from '@/utils/apiError';
 
 const { Option } = Select;
+const PAGE_SIZE = 10;
 
 const TransactionsPage: React.FC = () => {
   const [searchText, setSearchText] = useState<string>('');
@@ -27,22 +29,30 @@ const TransactionsPage: React.FC = () => {
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
 
   useEffect(() => {
     const fetchPayments = async () => {
       setLoading(true);
       try {
+        // Forward filter/pagination thật lên BE (PaymentsController.GetHistory) thay vì
+        // luôn fetch 100 bản ghi rồi lọc client-side toàn bộ.
         const response = await apiClient.get<any>('/payments', {
-          params: { pageSize: 100 }
+          params: {
+            page,
+            pageSize: PAGE_SIZE,
+            status: statusFilter === 'ALL' ? undefined : statusFilter,
+          }
         });
-        const data = response.data.data || response.data;
-        const items = Array.isArray(data) ? data : (data.items || []);
+        const items = response.data.data || [];
+        const pagination = response.data.pagination;
 
         const mapped: Transaction[] = items.map((p: any) => ({
           id: p.invoiceId ? `#INV-${p.invoiceId}` : `#PAY-${p.id}`,
-          dateTime: p.paidAt 
+          dateTime: p.paidAt
             ? new Date(p.paidAt).toLocaleString('vi-VN')
-            : p.createdAt 
+            : p.createdAt
             ? new Date(p.createdAt).toLocaleString('vi-VN')
             : 'N/A',
           tableNo: p.tableNumber ? `T-${p.tableNumber}` : 'N/A',
@@ -52,32 +62,33 @@ const TransactionsPage: React.FC = () => {
         }));
 
         setTransactions(mapped);
+        setTotal(pagination?.total ?? mapped.length);
       } catch (err) {
-        console.warn('API /payments unavailable, showing empty list.', err);
+        message.error(getErrorMessage(err, 'Không tải được lịch sử giao dịch.'));
         setTransactions([]);
+        setTotal(0);
       } finally {
         setLoading(false);
       }
     };
 
     fetchPayments();
-  }, []);
+  }, [page, statusFilter]);
 
-  // Search & Filter
+  // Đổi filter status thì quay về trang 1 (tránh xin trang không tồn tại).
+  const handleStatusFilterChange = (val: string) => {
+    setStatusFilter(val);
+    setPage(1);
+  };
+
+  // Tìm kiếm theo text chỉ áp dụng trong phạm vi trang hiện tại — BE không có full-text search.
   const filteredTransactions = useMemo(() => {
-    return transactions.filter((t) => {
-      const matchesSearch = 
-        t.id.toLowerCase().includes(searchText.toLowerCase()) ||
-        t.tableNo.toLowerCase().includes(searchText.toLowerCase()) ||
-        t.paymentMethod.toLowerCase().includes(searchText.toLowerCase());
-
-      const matchesStatus = 
-        statusFilter === 'ALL' || 
-        t.status === statusFilter;
-
-      return matchesSearch && matchesStatus;
-    });
-  }, [searchText, statusFilter, transactions]);
+    return transactions.filter((t) =>
+      t.id.toLowerCase().includes(searchText.toLowerCase()) ||
+      t.tableNo.toLowerCase().includes(searchText.toLowerCase()) ||
+      t.paymentMethod.toLowerCase().includes(searchText.toLowerCase())
+    );
+  }, [searchText, transactions]);
 
   const handleExportData = () => {
     message.success('Đang kết xuất dữ liệu lịch sử giao dịch dưới dạng CSV...');
@@ -212,14 +223,15 @@ const TransactionsPage: React.FC = () => {
               <Select
                 defaultValue="ALL"
                 value={statusFilter}
-                onChange={(val) => setStatusFilter(val)}
+                onChange={handleStatusFilterChange}
                 style={{ width: 140, height: 38 }}
               >
                 <Option value="ALL">All Statuses</Option>
                 <Option value="SUCCESS">Completed</Option>
                 <Option value="PENDING">Pending</Option>
                 <Option value="FAILED">Failed</Option>
-                <Option value="CANCELLED">Cancelled</Option>
+                <Option value="REFUNDED">Refunded</Option>
+                <Option value="EXPIRED">Expired</Option>
               </Select>
             </div>
           </div>
@@ -254,8 +266,11 @@ const TransactionsPage: React.FC = () => {
           rowKey="id"
           locale={{ emptyText: 'Không có giao dịch nào.' }}
           pagination={{
-            pageSize: 10,
-            showTotal: (total, range) => `Showing ${range[0]} to ${range[1]} of ${total} entries`
+            current: page,
+            pageSize: PAGE_SIZE,
+            total,
+            onChange: (nextPage) => setPage(nextPage),
+            showTotal: (t, range) => `Showing ${range[0]} to ${range[1]} of ${t} entries`
           }}
         />
       </Card>

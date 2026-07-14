@@ -122,6 +122,9 @@ public class MenuService
         if (request.Price <= 0)
             throw new BusinessRuleViolationException(ValidationMessages.MENU_ITEM_PRICE_INVALID);
 
+        if (await _uow.MenuCategories.GetByIdAsync(request.CategoryId) == null)
+            throw new EntityNotFoundException("Category", request.CategoryId);
+
         var item = new MenuItem
         {
             Name = request.Name,
