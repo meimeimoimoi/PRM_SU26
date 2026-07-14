@@ -26,10 +26,10 @@ static bool resolve_graph_target(const char *target, double *x, double *y, enum 
 #define TIME_STEP 64
 
 // Robot parameters
-#define MAX_SPEED 5.5
-#define MAX_ACCEL 0.5
-#define MAX_OMEGA 2.0
-#define MAX_OMEGA_ACCEL 1.0
+#define MAX_SPEED 15.5
+#define MAX_ACCEL 0.40
+#define MAX_OMEGA 1.8
+#define MAX_OMEGA_ACCEL 1.2
 #define WHEEL_RADIUS 0.0975
 #define WHEEL_BASE 0.381
 
@@ -45,6 +45,7 @@ static bool resolve_graph_target(const char *target, double *x, double *y, enum 
 #define SMOOTH_GAIN 0.15
 #define OMEGA_SMOOTH_MAX 0.1
 #define OMEGA_SMOOTH_ROTATE 0.3
+#define MAX_FWD_VEL 0.7
 #define TURN_IN_PLACE_THRESHOLD 1.7
 #define SQRT2_MINUS_1 0.41421356237
 
@@ -56,6 +57,9 @@ static bool resolve_graph_target(const char *target, double *x, double *y, enum 
 // Lidar parameters
 #define LIDAR_MAX_SAMPLES 512
 #define LIDAR_MAX_RANGE 3.0
+
+// Runtime-capped max velocity (from motor spec)
+double robot_max_vel = MAX_SPEED;
 
 // Dynamic obstacle map parameters
 #define DYNAMIC_DECAY_RATE 4
@@ -127,6 +131,12 @@ double current_v = 0.0, current_omega = 0.0;
 
 // Track current target waypoint name for dynamic stopping
 char current_target_name[64] = "";
+
+// Calibration flag — set by CALIBRATE command, consumed in main loop
+bool calibrate_requested = false;
+
+// Delivery confirmation flag — set true after arriving at delivery table
+bool waiting_for_confirmation = false;
 
 WbDeviceTag lidar;
 double lidar_ranges[LIDAR_MAX_SAMPLES];
@@ -312,12 +322,13 @@ bool load_map(const char *f) {
 
 // ------------------------------------------------------------
 // Đọc metadata robotStart từ file (lưu vào biến truyền vào)
-void load_meta(double *start_x, double *start_y) {
+void load_meta(double *start_x, double *start_y, double *start_theta) {
     FILE *fp = fopen("map_meta.json", "r");
     if (!fp) {
         printf("No map_meta.json found. Using default start (0,0).\n");
         *start_x = 0.0;
         *start_y = 0.0;
+        *start_theta = 0.0;
         return;
     }
     char buf[1024];
@@ -337,6 +348,11 @@ void load_meta(double *start_x, double *start_y) {
             yy = strchr(yy, ':');
             if (yy) sscanf(yy + 1, "%lf", start_y);
         }
+        char *tt = strstr(px, "\"theta\"");
+        if (tt) {
+            tt = strchr(tt, ':');
+            if (tt) sscanf(tt + 1, "%lf", start_theta);
+        }
     } else {
         // Fallback for old format
         px = strstr(buf, "\"robot_start_x\"");
@@ -350,12 +366,12 @@ void load_meta(double *start_x, double *start_y) {
             if (py) sscanf(py + 1, "%lf", start_y);
         }
     }
-    printf("Loaded robot start position from meta: (%.2f, %.2f)\n", *start_x, *start_y);
+    printf("Loaded robot start from meta: (%.2f, %.2f) theta=%.2f\n", *start_x, *start_y, *start_theta);
 }
 
 // Ghi planned path ra file để UI hiển thị
 void write_path_to_file(double robot_x, double robot_y) {
-    FILE *fp = fopen("robot_path.txt", "w");
+    FILE *fp = fopen("robot_path.tmp", "w");
     if (!fp) return;
     fprintf(fp, "%.4f %.4f\n", robot_x, robot_y);
     if (path_is_graph) {
@@ -373,19 +389,26 @@ void write_path_to_file(double robot_x, double robot_y) {
     }
     fprintf(fp, "%.4f %.4f\n", target_x, target_y);
     fclose(fp);
+    remove("robot_path.txt");
+    rename("robot_path.tmp", "robot_path.txt");
 }
 
 void clear_path_file(void) {
-    FILE *fp = fopen("robot_path.txt", "w");
+    FILE *fp = fopen("robot_path.tmp", "w");
     if (fp) { fprintf(fp, "NONE\n"); fclose(fp); }
+    remove("robot_path.txt");
+    rename("robot_path.tmp", "robot_path.txt");
 }
 
 // Ghi trạng thái robot ra file robot_state.txt
+// Write to temp file first, then rename so readers never see a truncated file.
 void write_robot_state(double x, double y, double theta, double v, double omega, const char *status) {
-    FILE *fp = fopen("robot_state.txt", "w");
+    FILE *fp = fopen("robot_state.tmp", "w");
     if (fp) {
         fprintf(fp, "%.4f %.4f %.4f %.4f %.4f %s\n", x, y, theta, v, omega, status);
         fclose(fp);
+        remove("robot_state.txt");
+        rename("robot_state.tmp", "robot_state.txt");
     }
 }
 
@@ -399,6 +422,7 @@ void read_robot_command(double *target_x, double *target_y, bool *target_receive
     
     if (fscanf(fp, "%31s %31s %31s", cmd, target, direction) == 3) {
         if (strcmp(cmd, "NAV_TO_TABLE") == 0) {
+            waiting_for_confirmation = false;
             if (resolve_graph_target(target, target_x, target_y, state)) {
                 *target_received = true;
                 *has_path = false;
@@ -432,6 +456,7 @@ void read_robot_command(double *target_x, double *target_y, bool *target_receive
                 *state = STATE_IDLE;
             }
         } else if (strcmp(cmd, "STOP") == 0) {
+            waiting_for_confirmation = false;
             *target_received = false;
             *has_path = false;
             *state = STATE_IDLE;
@@ -441,6 +466,24 @@ void read_robot_command(double *target_x, double *target_y, bool *target_receive
             wb_motor_set_velocity(right_motor, 0.0);
             clear_path_file();
             printf("Command: STOP\n");
+        } else if (strcmp(cmd, "CALIBRATE") == 0) {
+            calibrate_requested = true;
+            *target_received = false;
+            *has_path = false;
+            *state = STATE_IDLE;
+            *manual_v = 0.0;
+            *manual_omega = 0.0;
+            printf("Command: CALIBRATE — will reset position on next cycle\n");
+        } else if (strcmp(cmd, "CONFIRM") == 0) {
+            waiting_for_confirmation = false;
+            if (resolve_graph_target("Kitchen", target_x, target_y, state)) {
+                *target_received = true;
+                *has_path = false;
+                graph_route_len = 0;
+                graph_route_requested = true;
+                graph_path_active = false;
+                printf("Command: CONFIRM — returning to Kitchen (%.2f, %.2f)\n", *target_x, *target_y);
+            }
         }
     }
     fclose(fp);
@@ -1125,24 +1168,26 @@ double evaluate_trajectory(double v, double omega, double robot_x, double robot_
     if (collision) return 1e6;
 
     // Clearance via distance transform — single lookup per sample point
-    double clearance = LIDAR_MAX_RANGE;
+    double clearance_min = LIDAR_MAX_RANGE;
+    double clearance_sum = 0.0;
     int steps_c = (int)(PREDICT_TIME / DT);
     double cx_c = robot_x, cy_c = robot_y, th_c = robot_theta;
     for (int sc = 0; sc <= steps_c; sc++) {
         int mx, my;
         world_to_map(cx_c, cy_c, &mx, &my);
         double d = dist_to_obstacle[my][mx] * MAP_RESOLUTION;
-        if (d < clearance) clearance = d;
+        if (d < clearance_min) clearance_min = d;
+        clearance_sum += d;
         th_c += omega * DT;
         cx_c += v * cos(th_c) * DT;
         cy_c += v * sin(th_c) * DT;
     }
+    double clearance = clearance_sum / (steps_c + 1);
 
-    // Hard reject only at actual collision distance (3cm)
-    // For near-table, allow even closer approach
+    // Hard reject only when min clearance below collision distance (3cm)
     double hard_min = 0.03;
     if (near_table && dist_to_final_goal < 0.5) hard_min = 0.01;
-    if (clearance < hard_min && fabs(v) > 0.01) return 1e6;
+    if (clearance_min < hard_min && fabs(v) > 0.01) return 1e6;
 
     // Goal heading cost
     double dx_goal = goal_x - x;
@@ -1153,15 +1198,10 @@ double evaluate_trajectory(double v, double omega, double robot_x, double robot_
     heading_err = fabs(heading_err);
 
     double heading_cost = heading_err / M_PI;
-    double vel_cost = 1.0 - (v / MAX_SPEED);
+    double vel_cost = 1.0 - (v / MAX_FWD_VEL);
 
-    // Soft clearance cost — steep penalty below OBSTACLE_MARGIN, normal above
-    double clearance_cost;
-    if (clearance < OBSTACLE_MARGIN) {
-        clearance_cost = 1.0 + 3.0 * (1.0 - clearance / OBSTACLE_MARGIN);
-    } else {
-        clearance_cost = 1.0 - (clearance / LIDAR_MAX_RANGE);
-    }
+    // Smooth clearance cost — no hard threshold, continuous gradient
+    double clearance_cost = 1.0 / (1.0 + 3.0 * clearance / OBSTACLE_MARGIN);
 
     double end_dist = hypot(goal_x - x, goal_y - y);
     double dist_cost = end_dist / 3.0;
@@ -1189,6 +1229,15 @@ double evaluate_trajectory(double v, double omega, double robot_x, double robot_
         w_smooth = 0.10;
     }
 
+    // When heading is roughly aligned and far from goal, favor forward progress
+    if (!near_table && heading_err < 0.50 && dist_to_final_goal > 2.0) {
+        w_heading = 0.15;
+        w_clearance = 0.05;
+        w_vel = 0.20;
+        w_dist = 0.60;
+        w_smooth = 0.05;
+    }
+
     return w_heading * heading_cost + w_clearance * clearance_cost
          + w_vel * vel_cost + w_dist * dist_cost + w_smooth * smooth_cost;
 }
@@ -1196,9 +1245,10 @@ double evaluate_trajectory(double v, double omega, double robot_x, double robot_
 void dwa_control(double robot_x, double robot_y, double robot_theta,
                  double goal_x, double goal_y, double *lidar_ranges,
                  double *out_v, double *out_omega,
-                 double dist_to_final_goal, bool near_table) {
+                 double dist_to_final_goal, bool near_table,
+                 double speed_limit) {
     double min_v = fmax(0.0, current_v - MAX_ACCEL * TIME_STEP / 1000.0);
-    double max_v = fmin(MAX_SPEED, current_v + MAX_ACCEL * TIME_STEP / 1000.0);
+    double max_v = fmin(speed_limit, current_v + MAX_ACCEL * PREDICT_TIME);
 
     double dx = goal_x - robot_x;
     double dy = goal_y - robot_y;
@@ -1216,8 +1266,25 @@ void dwa_control(double robot_x, double robot_y, double robot_theta,
         min_v = fmax(0.0, current_v - MAX_ACCEL * TIME_STEP / 1000.0);
     }
 
+    // Speed reduction based on heading error
+    // Large error → near-zero forward speed so DWA must rotate in place
+    // Small error → full speed allowed
+    double h_abs = fabs(h_err);
+    if (h_abs > 0.5) {
+        double speed_factor = fmax(0.01, 1.0 - (h_abs - 0.5));
+        max_v = fmin(max_v, speed_limit * speed_factor);
+    }
+
     double min_omega = fmax(-MAX_OMEGA, current_omega - MAX_OMEGA_ACCEL * TIME_STEP / 1000.0);
-    double max_omega = fmin(MAX_OMEGA, current_omega + MAX_OMEGA_ACCEL * TIME_STEP / 1000.0);
+    double max_omega = fmin(MAX_OMEGA, current_omega + MAX_OMEGA_ACCEL * PREDICT_TIME);
+
+    // Deadband: khi heading error rất nhỏ (< 4°), bó hẹp omega range
+    // để DWA không over-correct do sampling quantization
+    if (h_abs < 0.07) {
+        double deadband_omega = fmax(0.015, h_abs * 0.5);
+        min_omega = fmax(min_omega, -deadband_omega);
+        max_omega = fmin(max_omega, deadband_omega);
+    }
 
     double best_cost = INFINITY;
     double best_v = 0.0, best_omega = 0.0;
@@ -1257,10 +1324,16 @@ void dwa_control(double robot_x, double robot_y, double robot_theta,
         while (err < -M_PI) err += 2 * M_PI;
 
         if (front_blocked) {
-            best_v = 0.0;
-            best_omega = (fabs(err) > 0.15) ? fmax(-0.8, fmin(0.8, err * 1.5)) : 0.0;
+            if (fabs(err) < 0.2) {
+                best_v = -0.1;
+                best_omega = 0.0;
+            } else {
+                best_v = 0.0;
+                best_omega = (fabs(err) > 0.15) ? fmax(-0.8, fmin(0.8, err * 1.5)) : 0.0;
+            }
             if (fallback_reason_logged++ == 0) {
-                printf("DWA fallback: front blocked, rotating in place. err=%.3f goal=(%.2f,%.2f) front_cell=(%d,%d)\n",
+                printf("DWA fallback: front blocked, %s. err=%.3f goal=(%.2f,%.2f) front_cell=(%d,%d)\n",
+                       fabs(err) < 0.2 ? "backing up" : "rotating in place",
                        err, goal_x, goal_y, fmx, fmy);
             }
         } else {
@@ -1278,6 +1351,11 @@ void dwa_control(double robot_x, double robot_y, double robot_theta,
         best_v = 0.0;
     }
 
+    // Forward-creep override: if stalled while roughly facing goal, nudge forward
+    if (best_v < 0.01 && fabs(h_err) < 1.0) {
+        best_v = 0.06;
+    }
+
     // Post-filter: clamp omega change to OMEGA_SMOOTH_MAX per step
     double omega_delta = best_omega - current_omega;
     if (omega_delta > OMEGA_SMOOTH_MAX) omega_delta = OMEGA_SMOOTH_MAX;
@@ -1287,12 +1365,16 @@ void dwa_control(double robot_x, double robot_y, double robot_theta,
     if ((dwa_debug_tick++ % 10) == 0) {
         int gmx, gmy;
         world_to_map(goal_x, goal_y, &gmx, &gmy);
-        printf("DWA debug: robot=(%.2f,%.2f,th=%.2f) goal=(%.2f,%.2f) map_goal=(%d,%d) v_range=[%.2f,%.2f] w_range=[%.2f,%.2f] valid=%d blocked=%d best=(%.2f,%.2f) cost=%.3f dist=%.3f near_table=%d\n",
+        int cmx, cmy;
+        world_to_map(robot_x, robot_y, &cmx, &cmy);
+        double clearance_robot = dist_to_obstacle[cmy][cmx] * MAP_RESOLUTION;
+        printf("DWA debug: robot=(%.2f,%.2f,th=%.2f) goal=(%.2f,%.2f) map_goal=(%d,%d) v_range=[%.2f,%.2f] w_range=[%.2f,%.2f] valid=%d blocked=%d best=(%.2f,%.2f) cost=%.3f dist=%.3f h_err=%.1f clear=%.2f near_table=%d\n",
                robot_x, robot_y, robot_theta,
                goal_x, goal_y, gmx, gmy,
                min_v, max_v, min_omega, max_omega,
                valid_samples, collision_samples,
                best_v, best_omega, best_cost, dist_to_final_goal,
+               h_err * 180.0 / M_PI, clearance_robot,
                near_table ? 1 : 0);
     }
 
@@ -1337,16 +1419,29 @@ int main(int argc, char **argv) {
     init_dynamic_map();
     compute_distance_transform();
 
-    WbDeviceTag left_motor = wb_robot_get_device("left wheel");
-    WbDeviceTag right_motor = wb_robot_get_device("right wheel");
-    WbDeviceTag left_enc = wb_robot_get_device("left wheel sensor");
-    WbDeviceTag right_enc = wb_robot_get_device("right wheel sensor");
-    wb_motor_set_position(left_motor, INFINITY);
-    wb_motor_set_position(right_motor, INFINITY);
-    wb_motor_set_velocity(left_motor, 0.0);
-    wb_motor_set_velocity(right_motor, 0.0);
-    wb_position_sensor_enable(left_enc, TIME_STEP);
-    wb_position_sensor_enable(right_enc, TIME_STEP);
+    WbDeviceTag left_motor = wb_robot_get_device("wheel_left_joint");
+    WbDeviceTag right_motor = wb_robot_get_device("wheel_right_joint");
+    WbDeviceTag left_enc = wb_robot_get_device("wheel_left_joint_sensor");
+    WbDeviceTag right_enc = wb_robot_get_device("wheel_right_joint_sensor");
+    printf("Devices: left_motor=%u right_motor=%u left_enc=%u right_enc=%u\n",
+           left_motor, right_motor, left_enc, right_enc);
+    if (left_motor && right_motor) {
+        wb_motor_set_position(left_motor, INFINITY);
+        wb_motor_set_position(right_motor, INFINITY);
+        wb_motor_set_velocity(left_motor, 0.0);
+        wb_motor_set_velocity(right_motor, 0.0);
+        double maxv = wb_motor_get_max_velocity(left_motor);
+        if (maxv > 0.1 && maxv < 100.0) {
+            robot_max_vel = maxv;
+        }
+        printf("Robot max velocity: %.2f rad/s (from motor spec)\n", robot_max_vel);
+    } else {
+        printf("[WARN] Motor tags invalid! Retrying after first step...\n");
+    }
+    if (left_enc && right_enc) {
+        wb_position_sensor_enable(left_enc, TIME_STEP);
+        wb_position_sensor_enable(right_enc, TIME_STEP);
+    }
 
     lidar = wb_robot_get_device("Sick LMS 291");
     if (lidar == 0) lidar = wb_robot_get_device("lidar");
@@ -1369,14 +1464,37 @@ int main(int argc, char **argv) {
     if (gps != 0) {
         wb_gps_enable(gps, TIME_STEP);
     }
-    WbDeviceTag iu = wb_robot_get_device("inertial_ unit");
+    WbDeviceTag iu = wb_robot_get_device("inertial unit");
     if (iu != 0) {
         wb_inertial_unit_enable(iu, TIME_STEP);
     }
 
     wb_robot_step(TIME_STEP);
-    last_left = wb_position_sensor_get_value(left_enc);
-    last_right = wb_position_sensor_get_value(right_enc);
+
+    if (!left_motor || !right_motor || !left_enc || !right_enc) {
+        printf("[RETRY] Re-obtaining device tags after first step...\n");
+        left_motor = wb_robot_get_device("wheel_left_joint");
+        right_motor = wb_robot_get_device("wheel_right_joint");
+        left_enc = wb_robot_get_device("wheel_left_joint_sensor");
+        right_enc = wb_robot_get_device("wheel_right_joint_sensor");
+        printf("[RETRY] left_motor=%u right_motor=%u left_enc=%u right_enc=%u\n",
+               left_motor, right_motor, left_enc, right_enc);
+        if (left_motor && right_motor) {
+            wb_motor_set_position(left_motor, INFINITY);
+            wb_motor_set_position(right_motor, INFINITY);
+            wb_motor_set_velocity(left_motor, 0.0);
+            wb_motor_set_velocity(right_motor, 0.0);
+        }
+        if (left_enc && right_enc) {
+            wb_position_sensor_enable(left_enc, TIME_STEP);
+            wb_robot_step(TIME_STEP);
+        }
+    }
+
+    if (left_enc && right_enc) {
+        last_left = wb_position_sensor_get_value(left_enc);
+        last_right = wb_position_sensor_get_value(right_enc);
+    }
 
     load_wp(waypoints, &num_waypoints);
     if (!parse_graph_json("graph.json")) {
@@ -1384,9 +1502,10 @@ int main(int argc, char **argv) {
     }
 
     // Đọc điểm xuất phát từ meta
+    double start_theta = 0.0;
     start_x = 0.0;
     start_y = 0.0;
-    load_meta(&start_x, &start_y);
+    load_meta(&start_x, &start_y, &start_theta);
 
     // === DEBUG: Kiểm tra static_map tại vùng robot start ===
     {
@@ -1429,7 +1548,7 @@ int main(int argc, char **argv) {
     {
         int rmx, rmy;
         world_to_map(start_x, start_y, &rmx, &rmy);
-        int clear_r = 12; // 12 pixel = 0.6m — đủ rộng cho thân robot
+        int clear_r = 20; // 20 pixel = 1.0m — đủ rộng cho thân robot
         int cleared = 0;
         for (int dy = -clear_r; dy <= clear_r; dy++) {
             for (int dx = -clear_r; dx <= clear_r; dx++) {
@@ -1460,35 +1579,58 @@ int main(int argc, char **argv) {
         robot_theta = 0.0;
     }
 
-    // =============================================================
-    // TỰ ĐỘNG ĐI ĐẾN ĐIỂM XUẤT PHÁT KHI RUN (nếu chưa ở đó)
-    // =============================================================
-    double dist_to_start = hypot(robot_x - start_x, robot_y - start_y);
-    if (dist_to_start < 0.1) {
-        target_x = robot_x;
-        target_y = robot_y;
-        target_received = false;
-        robot_state = STATE_IDLE;
-        printf("Robot already at start point (%.2f, %.2f). Waiting for commands.\n", start_x, start_y);
-    } else {
-        target_x = start_x;
-        target_y = start_y;
-        target_received = true;
-        has_path = false;
-        robot_state = STATE_RETURN_TO_KITCHEN;
-        printf("Auto navigating to start point (%.2f, %.2f) ...\n", start_x, start_y);
+    // Override heading from map_meta if robot is near start position
+    if (fabs(robot_theta - start_theta) > 0.01 &&
+        hypot(robot_x - start_x, robot_y - start_y) < 0.3) {
+        robot_theta = start_theta;
+        printf("Override robot theta from map_meta: %.2f rad\n", start_theta);
     }
+
+    // Robot luôn ở trạng thái chờ lệnh, không tự động di chuyển
+    target_x = robot_x;
+    target_y = robot_y;
+    target_received = false;
+    robot_state = STATE_IDLE;
+    printf("Robot at (%.2f, %.2f). Waiting for commands.\n", robot_x, robot_y);
 
     printf("=== Phase 3 DWA OK - He thong da san sang ===\n");
 
     while (wb_robot_step(TIME_STEP) != -1) {
+        // Re-obtain device tags if any became invalid
+        if (!left_motor || !right_motor || !left_enc || !right_enc) {
+            left_motor = wb_robot_get_device("wheel_left_joint");
+            right_motor = wb_robot_get_device("wheel_right_joint");
+            left_enc = wb_robot_get_device("wheel_left_joint_sensor");
+            right_enc = wb_robot_get_device("wheel_right_joint_sensor");
+            if (left_motor && right_motor) {
+                wb_motor_set_position(left_motor, INFINITY);
+                wb_motor_set_position(right_motor, INFINITY);
+            }
+            if (left_enc && right_enc) {
+                wb_position_sensor_enable(left_enc, TIME_STEP);
+                wb_position_sensor_enable(right_enc, TIME_STEP);
+            }
+        }
+
         // Update position from GPS and InertialUnit if available, otherwise fallback to Odometry
         bool pos_updated = false;
+        bool robot_moving = (fabs(current_v) > 0.01 || fabs(current_omega) > 0.05);
+        static double gps_fx = 0.0, gps_fy = 0.0;
+        static bool gps_f_init = false;
+        const double GPS_ALPHA = 0.3;
         if (gps != 0) {
             const double *gps_vals = wb_gps_get_values(gps);
             if (gps_vals && isfinite(gps_vals[0]) && isfinite(gps_vals[1])) {
-                robot_x = gps_vals[0];
-                robot_y = gps_vals[1];
+                if (!gps_f_init) {
+                    gps_fx = gps_vals[0];
+                    gps_fy = gps_vals[1];
+                    gps_f_init = true;
+                } else {
+                    gps_fx += GPS_ALPHA * (gps_vals[0] - gps_fx);
+                    gps_fy += GPS_ALPHA * (gps_vals[1] - gps_fy);
+                }
+                robot_x = gps_fx;
+                robot_y = gps_fy;
                 pos_updated = true;
             }
         }
@@ -1499,8 +1641,8 @@ int main(int argc, char **argv) {
             }
         }
 
-        if (!pos_updated) {
-            // Odometry fallback
+        if (!pos_updated && left_enc && right_enc && robot_moving) {
+            // Odometry fallback — only when robot is actually moving
             double left = wb_position_sensor_get_value(left_enc);
             double right = wb_position_sensor_get_value(right_enc);
             double dleft = left - last_left;
@@ -1518,25 +1660,52 @@ int main(int argc, char **argv) {
                 while (robot_theta > M_PI) robot_theta -= 2 * M_PI;
                 while (robot_theta < -M_PI) robot_theta += 2 * M_PI;
             }
-        } else {
+        } else if (left_enc && right_enc) {
             // Keep encoder history updated so fallback works if needed
             last_left = wb_position_sensor_get_value(left_enc);
             last_right = wb_position_sensor_get_value(right_enc);
+        }
+
+        // Log state transitions
+        static enum RobotState prev_state = STATE_IDLE;
+        if (robot_state != prev_state) {
+            printf("STATE: %s -> %s\n", get_state_string(prev_state), get_state_string(robot_state));
+            prev_state = robot_state;
         }
 
         // 1. Đọc lệnh từ UI gửi qua command.txt
         double manual_v = 0.0, manual_omega = 0.0;
         read_robot_command(&target_x, &target_y, &target_received, &has_path, &robot_state, left_motor, right_motor, &manual_v, &manual_omega);
 
+        // 1b. Calibrate: reset position to map_meta start (charging station)
+        if (calibrate_requested) {
+            robot_x = start_x;
+            robot_y = start_y;
+            robot_theta = start_theta;
+            if (left_enc && right_enc) {
+                last_left = wb_position_sensor_get_value(left_enc);
+                last_right = wb_position_sensor_get_value(right_enc);
+            }
+            target_x = robot_x;
+            target_y = robot_y;
+            target_received = false;
+            has_path = false;
+            calibrate_requested = false;
+            printf("CALIBRATE: Position reset to start (%.2f, %.2f) theta=%.2f\n",
+                   robot_x, robot_y, robot_theta);
+        }
+
         if (robot_state == STATE_MANUAL_MOVE) {
             current_v = manual_v;
             current_omega = manual_omega;
             double vl, vr;
             compute_wheel_speeds(current_v, current_omega, &vl, &vr);
-            vl = fmin(fmax(vl, -MAX_SPEED), MAX_SPEED);
-            vr = fmin(fmax(vr, -MAX_SPEED), MAX_SPEED);
-            wb_motor_set_velocity(left_motor, vl);
-            wb_motor_set_velocity(right_motor, vr);
+            vl = fmin(fmax(vl, -robot_max_vel), robot_max_vel);
+            vr = fmin(fmax(vr, -robot_max_vel), robot_max_vel);
+            if (left_motor && right_motor) {
+                wb_motor_set_velocity(left_motor, vl);
+                wb_motor_set_velocity(right_motor, vr);
+            }
 
             write_robot_state(robot_x, robot_y, robot_theta, current_v, current_omega, get_state_string(robot_state));
             continue;
@@ -1577,26 +1746,22 @@ int main(int argc, char **argv) {
             }
         }
 
-        // Keyboard input (chỉ giữ phím số để đi đến bàn, đã bỏ phím S)
+        // Keyboard input — only C for confirm
         int key = wb_keyboard_get_key();
-        if (key >= '1' && key <= '9') {
-            int idx = key - '1';
-            if (idx < num_waypoints && waypoints[idx].valid) {
-                target_x = waypoints[idx].x;
-                target_y = waypoints[idx].y;
+        if (key == 'C' || key == 'c') {
+            waiting_for_confirmation = false;
+            int k_idx = find_graph_node_index_by_name_or_id("Kitchen");
+            if (k_idx >= 0) {
+                target_x = graph_nodes[k_idx].x;
+                target_y = graph_nodes[k_idx].y;
                 target_received = true;
                 has_path = false;
                 robot_state = STATE_NAV_TO_TABLE;
-                strncpy(current_target_name, waypoints[idx].name, sizeof(current_target_name) - 1);
+                strncpy(current_target_name, graph_nodes[k_idx].name, sizeof(current_target_name) - 1);
                 current_target_name[sizeof(current_target_name) - 1] = '\0';
-                printf("Go to %s: (%.2f, %.2f)\n", waypoints[idx].name, target_x, target_y);
-            } else if (num_waypoints == 0 && (key == '1' || key == '2')) {
-                target_x = (key == '1') ? robot_x : -0.8;
-                target_y = (key == '1') ? robot_y : 1.5;
-                target_received = true;
-                has_path = false;
-                robot_state = STATE_NAV_TO_TABLE;
-                printf("Default target: (%.2f, %.2f)\n", target_x, target_y);
+                printf("Key C: Return to Kitchen (%.2f, %.2f)\n", target_x, target_y);
+            } else {
+                printf("Key C: Kitchen node not found in graph!\n");
             }
         }
 
@@ -1612,8 +1777,10 @@ int main(int argc, char **argv) {
                 printf("\n========== ARRIVED (already at goal, d=%.3f < %.3f) ==========\n",
                        dist_to_goal, stop_dist);
                 current_v = 0.0; current_omega = 0.0;
-                wb_motor_set_velocity(left_motor, 0.0);
-                wb_motor_set_velocity(right_motor, 0.0);
+                if (left_motor && right_motor) {
+                    wb_motor_set_velocity(left_motor, 0.0);
+                    wb_motor_set_velocity(right_motor, 0.0);
+                }
                 clear_path_file();
                 write_robot_state(robot_x, robot_y, robot_theta, 0.0, 0.0, get_state_string(robot_state));
                 continue;
@@ -1664,6 +1831,7 @@ int main(int argc, char **argv) {
         // ============================================================
         // Xác định local_goal và cập nhật waypoint/segment
         double local_goal_x = target_x, local_goal_y = target_y;
+        double wp_speed_limit = MAX_FWD_VEL;
         if (has_path && path_idx < path_len) {
             if (!path_is_graph) {
                 has_path = false;
@@ -1702,14 +1870,14 @@ int main(int argc, char **argv) {
             double current_wp_y = graph_nodes[current_node_idx].y;
             double next_wp_x = graph_nodes[next_node_idx].x;
             double next_wp_y = graph_nodes[next_node_idx].y;
-            double seg_x = next_wp_x - current_wp_x;
-            double seg_y = next_wp_y - current_wp_y;
-            double seg_len = hypot(seg_x, seg_y);
             double dist_to_current = hypot(current_wp_x - robot_x, current_wp_y - robot_y);
             bool is_last_wp = (path_idx >= path_len - 1);
             double wp_accept = is_last_wp ? stop_dist : WAYPOINT_ACCEPT_DIST;
             bool velocity_stopped = is_velocity_near_zero(current_v, current_omega);
             bool final_arrived = false;
+            if (dist_to_current < 1.0) {
+                wp_speed_limit = fmax(0.12, dist_to_current * 0.5);
+            }
 
             if (is_last_wp) {
                 if (dist_to_final < stop_dist) {
@@ -1721,63 +1889,76 @@ int main(int argc, char **argv) {
             }
 
             if (dist_to_current < wp_accept || final_arrived) {
-                if (is_last_wp || final_arrived) {
-                    has_path = false;
-                    target_received = false;
-                    robot_state = STATE_IDLE;
-                    path_is_graph = false;
-                    path_len = 0;
-                    path_idx = 0;
-                    graph_route_len = 0;
-                    graph_route_requested = false;
-                    graph_path_active = false;
-                    printf("\n========== ARRIVED (d=%.3f, threshold=%.3f) ==========\n", dist_to_final, stop_dist);
-                    current_v = 0.0;
-                    current_omega = 0.0;
+            if (is_last_wp || final_arrived) {
+                has_path = false;
+                target_received = false;
+                robot_state = STATE_IDLE;
+                path_is_graph = false;
+                path_len = 0;
+                path_idx = 0;
+                graph_route_len = 0;
+                graph_route_requested = false;
+                graph_path_active = false;
+                printf("\n========== ARRIVED (d=%.3f, threshold=%.3f) ==========\n", dist_to_final, stop_dist);
+                current_v = 0.0;
+                current_omega = 0.0;
+                if (left_motor && right_motor) {
                     wb_motor_set_velocity(left_motor, 0.0);
                     wb_motor_set_velocity(right_motor, 0.0);
-                    clear_path_file();
-                    write_robot_state(robot_x, robot_y, robot_theta, 0.0, 0.0, get_state_string(robot_state));
-                    continue;
                 }
-                path_idx++;
+                clear_path_file();
+                if (is_table_target()) {
+                    waiting_for_confirmation = true;
+                    write_robot_state(robot_x, robot_y, robot_theta, 0.0, 0.0, "WAITING_AT_TABLE");
+                    printf("WAITING: At delivery table. Send CONFIRM to return to Kitchen.\n");
+                } else {
+                    write_robot_state(robot_x, robot_y, robot_theta, 0.0, 0.0, get_state_string(robot_state));
+                }
                 continue;
             }
 
-            double proj_t = 0.0;
-            if (seg_len > 0.001) {
-                double rx = robot_x - current_wp_x;
-                double ry = robot_y - current_wp_y;
-                proj_t = (rx * seg_x + ry * seg_y) / (seg_len * seg_len);
-            }
-            if (proj_t > 1.0) proj_t = 1.0;
+                // === Stop-and-turn at intermediate waypoint ===
+                // Rotate in place to face the next waypoint before advancing
+                double target_th = atan2(next_wp_y - robot_y, next_wp_x - robot_x);
+                double rotate_err = target_th - robot_theta;
+                while (rotate_err > M_PI) rotate_err -= 2 * M_PI;
+                while (rotate_err < -M_PI) rotate_err += 2 * M_PI;
 
-            if (path_idx < path_len - 1) {
-                double advance_threshold = near_table ? 0.75 : 0.6;
-                if (proj_t > advance_threshold) {
+                if (fabs(rotate_err) < 0.035) {
+                    // Aligned — advance to next waypoint
+                    printf("Waypoint %d: aligned (err=%.3f), advancing to next.\n", path_idx, rotate_err);
+                    current_v = 0.0;
+                    current_omega = 0.0;
                     path_idx++;
                     continue;
                 }
+
+                // Rotate in place toward next segment
+                current_v = 0.0;
+                double rotate_speed = rotate_err * 1.2;
+                if (fabs(rotate_err) < 0.06) {
+                    // Fine alignment: very slow rotation to avoid overshoot
+                    current_omega = rotate_err * 0.6;
+                } else {
+                    current_omega = fmax(-0.35, fmin(0.35, rotate_speed));
+                }
+                if (left_motor && right_motor) {
+                    double vl, vr;
+                    compute_wheel_speeds(current_v, current_omega, &vl, &vr);
+                    vl = fmin(fmax(vl, -robot_max_vel), robot_max_vel);
+                    vr = fmin(fmax(vr, -robot_max_vel), robot_max_vel);
+                    wb_motor_set_velocity(left_motor, vl);
+                    wb_motor_set_velocity(right_motor, vr);
+                }
+                write_robot_state(robot_x, robot_y, robot_theta, current_v, current_omega,
+                                  get_state_string(robot_state));
+                printf("Waypoint %d: rotating toward next (err=%.3f)\n", path_idx, rotate_err);
+                continue;
             }
 
-            // --- FIX: Nếu robot chưa đến current_node (proj_t < 0), đi thẳng về current_node ---
-            // Không quay đầu khi robot đã đi qua current_node (proj_t >= 0) dù dist_to_current lớn.
-            double approach_threshold = 1.5 * WAYPOINT_ACCEPT_DIST;
-            if (proj_t < 0.0 && dist_to_current > approach_threshold && !is_last_wp) {
-                // Chưa đến current_node: đặt local_goal = current_node
-                local_goal_x = current_wp_x;
-                local_goal_y = current_wp_y;
-            } else if (seg_len > 0.001) {
-                // Đã gần current_node: dùng segment projection để đi mượt
-                if (proj_t < 0.0) proj_t = 0.0;
-                double progress_goal = proj_t + 0.35;
-                if (progress_goal > 1.0) progress_goal = 1.0;
-                local_goal_x = current_wp_x + seg_x * progress_goal;
-                local_goal_y = current_wp_y + seg_y * progress_goal;
-            } else {
-                local_goal_x = next_wp_x;
-                local_goal_y = next_wp_y;
-            }
+            // Navigate to the center of the current waypoint (point-to-point)
+            local_goal_x = current_wp_x;
+            local_goal_y = current_wp_y;
 
             if (near_table && dist_to_final < 0.5) {
                 local_goal_x = target_x;
@@ -1800,8 +1981,10 @@ int main(int argc, char **argv) {
         } else {
             current_v = 0.0;
             current_omega = 0.0;
-            wb_motor_set_velocity(left_motor, 0.0);
-            wb_motor_set_velocity(right_motor, 0.0);
+            if (left_motor && right_motor) {
+                wb_motor_set_velocity(left_motor, 0.0);
+                wb_motor_set_velocity(right_motor, 0.0);
+            }
             write_robot_state(robot_x, robot_y, robot_theta, 0.0, 0.0, get_state_string(robot_state));
             continue;
         }
@@ -1809,29 +1992,59 @@ int main(int argc, char **argv) {
         local_goal_x = fmin(fmax(local_goal_x, -9.9), 9.9);
         local_goal_y = fmin(fmax(local_goal_y, -9.9), 9.9);
 
-        double cmd_v, cmd_omega;
-        dwa_control(robot_x, robot_y, robot_theta, local_goal_x, local_goal_y,
-                    lidar_ranges, &cmd_v, &cmd_omega,
-                    dist_to_final, near_table);
-        current_v = cmd_v;
-        current_omega = cmd_omega;
+        // P-controller: continuously correct heading error toward current waypoint
+        double target_th = atan2(local_goal_y - robot_y, local_goal_x - robot_x);
+        double yaw_error = target_th - robot_theta;
+        while (yaw_error > M_PI) yaw_error -= 2 * M_PI;
+        while (yaw_error < -M_PI) yaw_error += 2 * M_PI;
+        double Kp = 1.5;
+        current_v = wp_speed_limit;
+        current_omega = Kp * yaw_error;
+        // Emergency stop: check front-center Lidar rays for obstacles within 0.5m
+        if (lidar_actual_count > 0) {
+            int center_start = lidar_actual_count / 3;
+            int center_end = 2 * lidar_actual_count / 3;
+            for (int i = center_start; i < center_end; i++) {
+                if (i >= 0 && i < lidar_actual_count && lidar_ranges[i] < 0.5) {
+                    current_v = 0.0;
+                    current_omega = 0.0;
+                    break;
+                }
+            }
+        }
         double vl, vr;
         compute_wheel_speeds(current_v, current_omega, &vl, &vr);
-        vl = fmin(fmax(vl, -MAX_SPEED), MAX_SPEED);
-        vr = fmin(fmax(vr, -MAX_SPEED), MAX_SPEED);
-        wb_motor_set_velocity(left_motor, vl);
-        wb_motor_set_velocity(right_motor, vr);
+        vl = fmin(fmax(vl, -robot_max_vel), robot_max_vel);
+        vr = fmin(fmax(vr, -robot_max_vel), robot_max_vel);
+        if (left_motor && right_motor) {
+            wb_motor_set_velocity(left_motor, vl);
+            wb_motor_set_velocity(right_motor, vr);
+        }
 
         write_robot_state(robot_x, robot_y, robot_theta, current_v, current_omega, get_state_string(robot_state));
 
         static int pc = 0;
         if (pc++ % 15 == 0) {
-            printf("Pos: (%.2f,%.2f) th=%.2f v=%.2f w=%.2f goal=(%.2f,%.2f) final_d=%.3f %s\n",
-                   robot_x, robot_y, robot_theta, current_v, current_omega,
+            double dx_g = local_goal_x - robot_x;
+            double dy_g = local_goal_y - robot_y;
+            double h_err_pos = atan2(dy_g, dx_g) - robot_theta;
+            while (h_err_pos > M_PI) h_err_pos -= 2 * M_PI;
+            while (h_err_pos < -M_PI) h_err_pos += 2 * M_PI;
+            char wp_info[48] = "";
+            if (has_path && path_idx < path_len && path_is_graph) {
+                int nidx = global_path[path_idx].x;
+                if (nidx >= 0 && nidx < num_graph_nodes) {
+                    double d_wp = hypot(graph_nodes[nidx].x - robot_x, graph_nodes[nidx].y - robot_y);
+                    snprintf(wp_info, sizeof(wp_info), " wp=%d/%d d_wp=%.2f", path_idx, path_len - 1, d_wp);
+                }
+            }
+            printf("Pos: (%.2f,%.2f) th=%.2f v=%.2f w=%.2f vl=%.2f vr=%.2f goal=(%.2f,%.2f) final_d=%.3f h_err=%.1f%s%s\n",
+                   robot_x, robot_y, robot_theta, current_v, current_omega, vl, vr,
                    local_goal_x, local_goal_y, dist_to_final,
-                   near_table ? "[TABLE]" : "");
+                   h_err_pos * 180.0 / M_PI, wp_info,
+                   near_table ? " [TABLE]" : "");
         }
     }
     wb_robot_cleanup();
     return 0;
-}
+} 

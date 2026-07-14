@@ -65,12 +65,8 @@
 ###
 ###-----------------------------------------------------------------------------
 
-C_SOURCES = robot_controller.c
-
+### Do not modify: this includes Webots global Makefile.include
 null :=
 space := $(null) $(null)
 WEBOTS_HOME_PATH?=$(subst $(space),\ ,$(strip $(subst \,/,$(WEBOTS_HOME))))
-CC = $(WEBOTS_HOME_PATH)/msys64/mingw64/bin/gcc
-SHELL = $(WEBOTS_HOME_PATH)/msys64/usr/bin/bash
-export PATH := $(WEBOTS_HOME_PATH)/msys64/mingw64/bin:$(WEBOTS_HOME_PATH)/msys64/mingw64/bin/cpp:$(WEBOTS_HOME_PATH)/msys64/usr/bin:$(PATH)
 include $(WEBOTS_HOME_PATH)/resources/Makefile.include

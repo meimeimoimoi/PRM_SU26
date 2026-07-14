@@ -185,8 +185,15 @@ const alignGraphStateWithObjects = (objects: MapObject[], nodes: GraphNode[], fl
   const kitchenNodes = objects
     .filter((object) => object.type === 'kitchen')
     .map((object) => {
-      const cx = object.x + object.width / 2;
-      const cy = object.y + object.height / 2;
+      let cx = object.x + object.width / 2;
+      let cy = object.y + object.height / 2;
+      const angleRad = ((object.rotation || 0) * Math.PI) / 180;
+      const offX = object.deliveryOffsetX || 0;
+      const offY = object.deliveryOffsetY || 0;
+      const rotatedOffX = offX * Math.cos(angleRad) - offY * Math.sin(angleRad);
+      const rotatedOffY = offX * Math.sin(angleRad) + offY * Math.cos(angleRad);
+      cx += rotatedOffX;
+      cy += rotatedOffY;
       const worldPos = pixelToWorld(cx, cy, floorSize, resolution);
       return {
         id: `kitchen-${object.id}`,
@@ -195,6 +202,8 @@ const alignGraphStateWithObjects = (objects: MapObject[], nodes: GraphNode[], fl
         x: worldPos.x,
         y: worldPos.y,
         theta: 0,
+        deliveryOffsetX: object.deliveryOffsetX,
+        deliveryOffsetY: object.deliveryOffsetY,
       };
     });
 
@@ -374,12 +383,23 @@ export const useMapStore = create<MapState>((set, get) => ({
 
   removeGraphNode: (id) =>
     set((state) => {
+      const node = state.graphNodes.find((n) => n.id === id);
       const nodes = state.graphNodes.filter((node) => node.id !== id);
       const edges = state.graphEdges.filter((edge) => edge.from !== id && edge.to !== id);
+      let objects = state.objects;
+      if (node && (node.type === 'delivery' || node.type === 'kitchen')) {
+        const objId = node.type === 'delivery' ? id.replace('delivery-', '') : id.replace('kitchen-', '');
+        objects = objects.filter((obj) => obj.id !== objId);
+        saveObjectsToStorage(objects);
+      }
       saveGraphToStorage(nodes, edges);
       return {
+        objects,
         graphNodes: nodes,
         graphEdges: edges,
+        selectedObjectId: node && (node.type === 'delivery' || node.type === 'kitchen')
+          ? (state.selectedObjectId === id.replace('delivery-', '').replace('kitchen-', '') ? null : state.selectedObjectId)
+          : state.selectedObjectId,
         selectedGraphNodeId: state.selectedGraphNodeId === id ? null : state.selectedGraphNodeId,
         selectedGraphEdgeId: null,
         edgeDraftFromNodeId: state.edgeDraftFromNodeId === id ? null : state.edgeDraftFromNodeId,

@@ -1,9 +1,0 @@
-{
-  "resolution": 0.05,
-  "floorSize": 20,
-  "robotStart": {
-    "x": 0.5,
-    "y": -0.04296875
-  },
-  "createdAt": "2026-07-08T16:24:01.948Z"
-}

@@ -17,6 +17,8 @@ export type MapTool =
   | 'wall'
   | 'table'
   | 'robotStart'
+  | 'chargingStation'
+  | 'kitchen'
   | 'waypoint'
   | 'edge';
 

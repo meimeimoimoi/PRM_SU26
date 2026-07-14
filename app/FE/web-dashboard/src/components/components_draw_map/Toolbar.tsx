@@ -1,6 +1,6 @@
 // src/components/components_draw_map/Toolbar.tsx
 import { useMemo } from 'react';
-import { Alert, Button, Popconfirm } from 'antd';
+import { Alert, Button, Popconfirm, message } from 'antd';
 import { useMapStore } from '../../store/mapStore';
 import { exportPGM } from '../../utils/exportPGM';
 import { exportWaypoints } from '../../utils/exportWaypoints';
@@ -57,7 +57,7 @@ export const Toolbar = () => {
     const startObj = objects.find((obj) => obj.type === 'robotStart');
     const tables = objects.filter((obj) => obj.type === 'table');
     if (!startObj) {
-      window.alert('Chưa đặt vị trí xuất phát (robotStart)');
+      message.warning('Chưa đặt vị trí xuất phát (robotStart)');
       return;
     }
     const startWorld = pixelToWorld(
@@ -82,13 +82,13 @@ export const Toolbar = () => {
 
       const result = validateRoute(startWorld, goalWorld, objects, floorSize, resolution);
       if (!result.valid) {
-        window.alert(`Không tìm được đường đến bàn ${table.name || table.id}`);
+        message.error(`Không tìm được đường đến bàn ${table.name || table.id}`);
         allValid = false;
         break;
       }
     }
     if (allValid) {
-      window.alert('✅ Tất cả các bàn đều có đường đi!');
+      message.success('Tất cả các bàn đều có đường đi!');
     }
   };
 
@@ -99,11 +99,13 @@ export const Toolbar = () => {
     const startObj = objects.find((obj) => obj.type === 'robotStart');
     let robot_start_world_x = 0;
     let robot_start_world_y = 0;
+    let robot_start_world_theta = 0;
 
     if (startNode) {
       // GraphNode already stores world coordinates directly.
       robot_start_world_x = startNode.x;
       robot_start_world_y = startNode.y;
+      robot_start_world_theta = startNode.theta ?? 0;
     } else if (startObj) {
       const startPx = startObj.x + startObj.width / 2;
       const startPy = startObj.y + startObj.height / 2;
@@ -119,6 +121,7 @@ export const Toolbar = () => {
       resolution,
       robot_start_world_x,
       robot_start_world_y,
+      robot_start_world_theta,
       objects,
       graph: graphText,
       waypoints: waypointsText, // <--- Đính kèm chuỗi text vào payload
@@ -147,13 +150,12 @@ export const Toolbar = () => {
       }
       result = await response.json();
       if (result.id) {
-        alert('✅ Dữ liệu đã gửi thành công!');
+        message.success('Dữ liệu đã gửi đến robot thành công!');
       } else {
-        alert('❌ Lỗi: ' + (result.error || 'Unknown error'));
+        message.error('Lỗi: ' + (result.error || 'Unknown error'));
       }
     } catch (error) {
-      console.error(error);
-      alert('❌ Không thể kết nối đến server');
+      message.error('Không thể kết nối đến server');
     }
   };
 

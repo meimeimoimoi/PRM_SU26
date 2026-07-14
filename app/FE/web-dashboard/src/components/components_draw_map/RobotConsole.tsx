@@ -6,8 +6,10 @@ import {
   ArrowRight,
   ArrowUp,
   Circle,
+  Crosshair,
   Home,
   Navigation,
+  Utensils,
 } from 'lucide-react';
 import { useMapStore } from '../../store/mapStore';
 
@@ -24,6 +26,8 @@ export const RobotConsole: React.FC = () => {
   const graphNodes = useMapStore((state) => state.graphNodes);
   // Lấy delivery nodes từ graph thay vì objects — để target gửi cho robot khớp với graph.json
   const deliveryNodes = graphNodes.filter((node) => node.type === 'delivery');
+  const kitchenNodes = graphNodes.filter((node) => node.type === 'kitchen');
+  const kitchenNode = kitchenNodes[0];
 
   const [selectedTable, setSelectedTable] = useState<string | undefined>(undefined);
   const [telemetry, setTelemetry] = useState<Telemetry>({
@@ -41,7 +45,11 @@ export const RobotConsole: React.FC = () => {
       try {
         const res = await fetch('http://localhost:3001/api/robot/status');
         const data = await res.json();
-        setTelemetry(data);
+        if (data && data.status !== 'OFFLINE') {
+          setTelemetry(data);
+        } else {
+          setTelemetry((prev) => ({ ...prev, status: 'OFFLINE' }));
+        }
       } catch (err) {
         setTelemetry((prev) => ({ ...prev, status: 'OFFLINE' }));
       }
@@ -59,8 +67,7 @@ export const RobotConsole: React.FC = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ command, target, direction }),
       });
-    } catch (error) {
-      console.error('Lỗi gửi lệnh điều khiển:', error);
+    } catch (_error) {
     }
   };
 
@@ -72,6 +79,12 @@ export const RobotConsole: React.FC = () => {
 
   const handleReturnHome = () => {
     sendControlCommand('NAV_TO_TABLE', 'robotStart');
+  };
+
+  const handleReturnToKitchen = () => {
+    if (kitchenNode) {
+      sendControlCommand('NAV_TO_TABLE', kitchenNode.id);
+    }
   };
 
   const getStatusColor = (status: string) => {
@@ -156,7 +169,7 @@ export const RobotConsole: React.FC = () => {
             }))}
           />
           <Row gutter={8}>
-            <Col span={12}>
+            <Col span={8}>
               <Button
                 type="primary"
                 icon={<Navigation size={14} />}
@@ -167,14 +180,36 @@ export const RobotConsole: React.FC = () => {
                 Giao Hàng
               </Button>
             </Col>
-            <Col span={12}>
+            <Col span={8}>
               <Button
                 icon={<Home size={14} />}
                 onClick={handleReturnHome}
                 disabled={telemetry.status === 'OFFLINE'}
                 block
               >
-                Về Điểm Xuất Phát
+                Về XP
+              </Button>
+            </Col>
+            <Col span={8}>
+              <Button
+                icon={<Utensils size={14} />}
+                onClick={handleReturnToKitchen}
+                disabled={telemetry.status === 'OFFLINE' || !kitchenNode}
+                block
+              >
+                Về Bếp
+              </Button>
+            </Col>
+          </Row>
+          <Row gutter={8} style={{ marginTop: '8px' }}>
+            <Col span={24}>
+              <Button
+                icon={<Crosshair size={14} />}
+                onClick={() => sendControlCommand('CALIBRATE')}
+                disabled={telemetry.status === 'OFFLINE'}
+                block
+              >
+                Hiệu Chuẩn (Calibrate)
               </Button>
             </Col>
           </Row>
