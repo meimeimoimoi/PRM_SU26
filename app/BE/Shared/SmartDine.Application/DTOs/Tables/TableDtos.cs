@@ -17,17 +17,21 @@ public class TableResponse
     public int Capacity { get; set; }
     public string Status { get; set; } = nameof(TableStatus.AVAILABLE);
     public string? QrCode { get; set; }
+    public int? LocationId { get; set; }
+    public string? LocationName { get; set; }
 }
 
 /// <summary>
 /// Request tạo bàn mới (Manager only).
 /// TableNumber phải là duy nhất trong hệ thống.
 /// Capacity mặc định 4 nếu client không gửi.
+/// LocationId tùy chọn — không truyền thì bàn chưa gán khu vực.
 /// </summary>
 public class CreateTableRequest
 {
     public int TableNumber { get; set; }
     public int Capacity { get; set; } = 4;
+    public int? LocationId { get; set; }
 }
 
 /// <summary>
@@ -37,6 +41,35 @@ public class CreateTableRequest
 public class UpdateTableStatusRequest
 {
     public string Status { get; set; } = nameof(TableStatus.AVAILABLE);
+}
+
+/// <summary>
+/// Request cập nhật thông tin cơ bản của bàn (Manager only) — partial update.
+/// Không cho sửa TableNumber vì mã QR đã in mã hóa theo số bàn cũ, đổi số sẽ làm QR sai.
+/// Muốn đổi số bàn thì xóa bàn và tạo bàn mới để có QR đúng.
+/// </summary>
+public class UpdateTableRequest
+{
+    public int? Capacity { get; set; }
+    public int? LocationId { get; set; }
+}
+
+// ─────────────────────────────────────────────────────────────
+// Location DTOs
+// ─────────────────────────────────────────────────────────────
+
+public class LocationResponse
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Request tạo khu vực/vị trí bàn mới (Manager only).
+/// </summary>
+public class CreateLocationRequest
+{
+    public string Name { get; set; } = string.Empty;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -72,17 +105,6 @@ public class ScanTableResponse
 // ─────────────────────────────────────────────────────────────
 // Update Status Response
 // ─────────────────────────────────────────────────────────────
-
-/// <summary>
-/// Response sau khi cập nhật trạng thái bàn.
-/// Trả về TableId, Status mới, và thời điểm cập nhật.
-/// </summary>
-public class UpdateTableStatusResponse
-{
-    public int TableId { get; set; }
-    public string Status { get; set; } = string.Empty;
-    public DateTime UpdatedAt { get; set; }
-}
 
 // ─────────────────────────────────────────────────────────────
 // Reservation DTOs

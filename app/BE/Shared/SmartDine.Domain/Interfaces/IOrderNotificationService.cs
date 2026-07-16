@@ -12,10 +12,11 @@ public interface IOrderNotificationService
     Task NotifyOrderStatusChangedAsync(int orderId, int tableId, string status);
 
     /// <summary>
-    /// Thông báo thanh toán thành công đến bàn ăn — client tự refresh UI, không cần F5.
-    /// Group nhận: "table_{tableId}" (cùng pattern với JoinTableGroup trên OrderHub).
+    /// Thông báo thanh toán thành công — gửi tới 2 nhóm:
+    ///   "table_{tableId}": khách hàng tại bàn tự refresh UI, không cần F5.
+    ///   "KitchenGroup": staff/manager dùng cho chuông thông báo trên web-dashboard.
     /// Event name: "ReceivePaymentSuccess".
-    /// Ai dùng: PaymentService.HandleWebhookAsync sau khi xác nhận SUCCESS từ PayOS.
+    /// Ai dùng: PaymentService.HandleWebhookAsync/CompletePaymentAsync sau khi xác nhận SUCCESS.
     /// </summary>
-    Task NotifyPaymentSuccessAsync(int tableId, string invoiceId, decimal amount);
+    Task NotifyPaymentSuccessAsync(int tableId, int tableNumber, string invoiceId, decimal amount);
 }

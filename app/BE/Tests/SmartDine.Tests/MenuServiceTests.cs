@@ -61,7 +61,7 @@ public class MenuServiceTests
             CreateMenuItem(1, "Phở Bò", 60000),
             CreateMenuItem(2, "Bún Chả", 55000)
         };
-        _menuRepoMock.Setup(r => r.GetPagedFilteredAsync(null, null, 1, 10))
+        _menuRepoMock.Setup(r => r.GetPagedFilteredAsync(null, null, 1, 10, false))
             .ReturnsAsync((items as IReadOnlyList<MenuItem>, 2));
 
         var (result, totalCount, totalPages) = await _menuService.GetPagedAsync(null, null, 1, 10, null);
@@ -74,29 +74,29 @@ public class MenuServiceTests
     [Fact]
     public async Task GetPaged_FilterByCategoryId_PassesToRepo()
     {
-        _menuRepoMock.Setup(r => r.GetPagedFilteredAsync(2, null, 1, 10))
+        _menuRepoMock.Setup(r => r.GetPagedFilteredAsync(2, null, 1, 10, false))
             .ReturnsAsync((new List<MenuItem>() as IReadOnlyList<MenuItem>, 0));
 
         await _menuService.GetPagedAsync(2, null, 1, 10, null);
 
-        _menuRepoMock.Verify(r => r.GetPagedFilteredAsync(2, null, 1, 10), Times.Once);
+        _menuRepoMock.Verify(r => r.GetPagedFilteredAsync(2, null, 1, 10, false), Times.Once);
     }
 
     [Fact]
     public async Task GetPaged_FilterBySearch_PassesToRepo()
     {
-        _menuRepoMock.Setup(r => r.GetPagedFilteredAsync(null, "lẩu", 1, 10))
+        _menuRepoMock.Setup(r => r.GetPagedFilteredAsync(null, "lẩu", 1, 10, false))
             .ReturnsAsync((new List<MenuItem>() as IReadOnlyList<MenuItem>, 0));
 
         await _menuService.GetPagedAsync(null, "lẩu", 1, 10, null);
 
-        _menuRepoMock.Verify(r => r.GetPagedFilteredAsync(null, "lẩu", 1, 10), Times.Once);
+        _menuRepoMock.Verify(r => r.GetPagedFilteredAsync(null, "lẩu", 1, 10, false), Times.Once);
     }
 
     [Fact]
     public async Task GetPaged_CalculatesTotalPagesCorrectly()
     {
-        _menuRepoMock.Setup(r => r.GetPagedFilteredAsync(null, null, 1, 5))
+        _menuRepoMock.Setup(r => r.GetPagedFilteredAsync(null, null, 1, 5, false))
             .ReturnsAsync((new List<MenuItem>() as IReadOnlyList<MenuItem>, 12));
 
         var (_, totalCount, totalPages) = await _menuService.GetPagedAsync(null, null, 1, 5, null);
@@ -108,7 +108,7 @@ public class MenuServiceTests
     [Fact]
     public async Task GetPaged_EmptyResult_ReturnsEmptyListWithZeroPages()
     {
-        _menuRepoMock.Setup(r => r.GetPagedFilteredAsync(It.IsAny<int?>(), It.IsAny<string?>(), 1, 10))
+        _menuRepoMock.Setup(r => r.GetPagedFilteredAsync(It.IsAny<int?>(), It.IsAny<string?>(), 1, 10, false))
             .ReturnsAsync((new List<MenuItem>() as IReadOnlyList<MenuItem>, 0));
 
         var (result, totalCount, totalPages) = await _menuService.GetPagedAsync(99, null, 1, 10, null);
@@ -128,7 +128,7 @@ public class MenuServiceTests
             new() { Id = 1, Name = "Cơm Sườn", Price = 50000, CategoryId = 2, Category = cat2, IsAvailable = true },
             new() { Id = 2, Name = "Trà Đá", Price = 10000, CategoryId = 1, Category = cat1, IsAvailable = true }
         };
-        _menuRepoMock.Setup(r => r.GetPagedFilteredAsync(null, null, 1, 10))
+        _menuRepoMock.Setup(r => r.GetPagedFilteredAsync(null, null, 1, 10, false))
             .ReturnsAsync((items as IReadOnlyList<MenuItem>, 2));
 
         // Giả lập khách hay xem category 1 (Nước)
@@ -155,7 +155,7 @@ public class MenuServiceTests
             CreateMenuItem(1, "Phở", 60000),
             CreateMenuItem(2, "Bún", 55000)
         };
-        _menuRepoMock.Setup(r => r.GetPagedFilteredAsync(null, null, 1, 10))
+        _menuRepoMock.Setup(r => r.GetPagedFilteredAsync(null, null, 1, 10, false))
             .ReturnsAsync((items as IReadOnlyList<MenuItem>, 2));
         _activityRepoMock.Setup(r => r.GetAllAsync()).ReturnsAsync(new List<CustomerActivity>());
 
@@ -169,7 +169,7 @@ public class MenuServiceTests
     public async Task GetPaged_SingleItem_NoPersonalizationNeeded()
     {
         var items = new List<MenuItem> { CreateMenuItem(1, "Phở", 60000) };
-        _menuRepoMock.Setup(r => r.GetPagedFilteredAsync(null, null, 1, 10))
+        _menuRepoMock.Setup(r => r.GetPagedFilteredAsync(null, null, 1, 10, false))
             .ReturnsAsync((items as IReadOnlyList<MenuItem>, 1));
 
         var (result, _, _) = await _menuService.GetPagedAsync(null, null, 1, 10, 5);

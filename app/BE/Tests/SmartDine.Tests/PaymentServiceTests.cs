@@ -49,7 +49,7 @@ public class PaymentServiceTests
 
         // Notification mock: không throw, chỉ cần verify được gọi hay không
         _notificationMock.Setup(n => n.NotifyPaymentSuccessAsync(
-            It.IsAny<int>(), It.IsAny<string>(), It.IsAny<decimal>()))
+            It.IsAny<int>(), It.IsAny<int>(), It.IsAny<string>(), It.IsAny<decimal>()))
             .Returns(Task.CompletedTask);
 
         _service = new PaymentService(_uowMock.Object, _gatewayMock.Object, _notificationMock.Object);
@@ -338,8 +338,8 @@ public class PaymentServiceTests
         _loyaltyRepoMock.Verify(r => r.AddAsync(It.Is<LoyaltyTransaction>(
             lt => lt.Points == 200 && lt.TransactionType == LoyaltyTransactionType.EARN)), Times.Once);
 
-        // WebSocket thông báo về bàn 5
-        _notificationMock.Verify(n => n.NotifyPaymentSuccessAsync(5, "INV-2026-123456", 200_000m), Times.Once);
+        // WebSocket thông báo về bàn 5 (TableNumber=0 vì test double không set field này)
+        _notificationMock.Verify(n => n.NotifyPaymentSuccessAsync(5, 0, "INV-2026-123456", 200_000m), Times.Once);
     }
 
     [Fact]
@@ -375,7 +375,7 @@ public class PaymentServiceTests
         _loyaltyRepoMock.Verify(r => r.AddAsync(It.IsAny<LoyaltyTransaction>()), Times.Never);
         _customerRepoMock.Verify(r => r.GetByIdAsync(It.IsAny<int>()), Times.Never);
         // Vẫn bắn WebSocket thông báo về bàn (GUEST không có điểm nhưng bàn vẫn nhận event)
-        _notificationMock.Verify(n => n.NotifyPaymentSuccessAsync(7, It.IsAny<string>(), 150_000m), Times.Once);
+        _notificationMock.Verify(n => n.NotifyPaymentSuccessAsync(7, 0, It.IsAny<string>(), 150_000m), Times.Once);
     }
 
     [Fact]

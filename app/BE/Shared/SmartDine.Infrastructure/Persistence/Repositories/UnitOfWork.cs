@@ -28,6 +28,7 @@ public class UnitOfWork : IUnitOfWork
     public ICouponRepository Coupons { get; }
     public IRepository<LoyaltyTransaction> LoyaltyTransactions { get; }
     public IRepository<MenuCategory> MenuCategories { get; }
+    public IRepository<Location> Locations { get; }
     public ISettingsRepository Settings { get; }
 
     public UnitOfWork(SmartDineDbContext context)
@@ -53,6 +54,7 @@ public class UnitOfWork : IUnitOfWork
         Coupons = new CouponRepository(context);
         LoyaltyTransactions = new GenericRepository<LoyaltyTransaction>(context);
         MenuCategories = new GenericRepository<MenuCategory>(context);
+        Locations = new GenericRepository<Location>(context);
         Settings = new SettingsRepository(context);
     }
 

@@ -62,6 +62,39 @@ public class PaymentsController : ControllerBase
     }
 
     // ═══════════════════════════════════════════════════════════════
+    // GET /api/v1/payments/revenue-summary
+    // ═══════════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// Doanh thu hôm nay + tháng này cho dashboard tổng quan — chỉ tính payment đã thanh toán
+    /// thành công (SUCCESS), không tính đơn PENDING/CANCELLED.
+    /// Roles: MANAGER.
+    /// </summary>
+    [HttpGet("revenue-summary")]
+    [Authorize(Roles = Roles.Manager)]
+    public async Task<IActionResult> GetRevenueSummary()
+    {
+        var result = await _paymentService.GetRevenueSummaryAsync();
+        return Ok(ApiResponse<RevenueSummaryResponse>.Ok(result));
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // GET /api/v1/payments/chart
+    // ═══════════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// Doanh thu thực nhận (chỉ payment SUCCESS) theo giờ/tuần/tháng cho Dashboard Manager.
+    /// Roles: MANAGER.
+    /// </summary>
+    [HttpGet("chart")]
+    [Authorize(Roles = Roles.Manager)]
+    public async Task<IActionResult> GetRevenueChart([FromQuery] string period = "day")
+    {
+        var result = await _paymentService.GetRevenueChartAsync(period);
+        return Ok(ApiResponse<List<ChartPointResponse>>.Ok(result));
+    }
+
+    // ═══════════════════════════════════════════════════════════════
     // POST /api/v1/payments/create-intent
     // ═══════════════════════════════════════════════════════════════
 

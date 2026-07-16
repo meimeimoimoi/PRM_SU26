@@ -69,6 +69,18 @@ public class OrdersController : ControllerBase
         return Ok(ApiResponse<List<OrderResponse>>.Ok(result));
     }
 
+    /// <summary>
+    /// GET /api/v1/orders/chart?period=day|week|month — Doanh số theo đơn hàng cho Dashboard Manager.
+    /// Không lọc theo thanh toán (khác /payments/chart) — dùng để xem mức độ hoạt động/đơn đặt.
+    /// </summary>
+    [HttpGet("chart")]
+    [Authorize(Roles = Roles.Manager)]
+    public async Task<IActionResult> GetOrderChart([FromQuery] string period = "day")
+    {
+        var result = await _orderService.GetOrderChartAsync(period);
+        return Ok(ApiResponse<List<ChartPointResponse>>.Ok(result));
+    }
+
     /// <summary>PATCH /api/v1/orders/{id}/status — Cập nhật trạng thái đơn hàng</summary>
     [HttpPatch("{id:int}/status")]
     [Authorize(Roles = Roles.KitchenStaff)]

@@ -43,6 +43,8 @@ public class MenuItemSummaryResponse
     public string Name { get; set; } = string.Empty;
     public decimal Price { get; set; }
     public string? ImageUrl { get; set; }
+    public int CategoryId { get; set; }
+    public string? CategoryName { get; set; }
     public bool IsAvailable { get; set; }
 }
 
@@ -96,6 +98,15 @@ public class MenuItemUpdatedResponse
     public string Name { get; set; } = string.Empty;
     public bool IsAvailable { get; set; }
     public DateTime UpdatedAt { get; set; }
+}
+
+/// <summary>
+/// Response sau khi upload ảnh món ăn — URL để gán trực tiếp vào field ImageUrl khi
+/// tạo/sửa món (không cần dán link thủ công).
+/// </summary>
+public class UploadImageResponse
+{
+    public string ImageUrl { get; set; } = string.Empty;
 }
 
 public class AiRecommendedItemResponse

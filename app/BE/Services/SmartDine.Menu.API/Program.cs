@@ -123,6 +123,9 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
+// Phục vụ ảnh món ăn upload tại wwwroot/uploads/ qua route /uploads/{filename} (public, không cần auth).
+app.UseStaticFiles();
+
 app.UseAuthentication();
 app.UseAuthorization();
 

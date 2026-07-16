@@ -1,4 +1,5 @@
 using SmartDine.Domain.Entities;
+using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
@@ -12,4 +13,7 @@ public interface IOrderRepository : IRepository<Order>
     Task<IReadOnlyList<Order>> GetTodayOrdersAsync();
     Task<IReadOnlyList<Order>> GetByDiningSessionIdAsync(int sessionId);
     Task<IReadOnlyList<Order>> GetByGuestSessionIdAsync(string guestSessionId, int page, int pageSize);
+
+    /// <summary>Lấy đơn hàng theo khoảng CreatedAt — dùng để dựng chart doanh số theo giờ/tuần/tháng.</summary>
+    Task<IReadOnlyList<Order>> GetByDateRangeAsync(DateTime start, DateTime end);
 }

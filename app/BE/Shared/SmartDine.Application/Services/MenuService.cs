@@ -52,9 +52,9 @@ public class MenuService
     ///   - page/limit không hợp lệ → clamp về giá trị mặc định.
     /// </summary>
     public async Task<(List<MenuItemSummaryResponse> Items, int TotalCount, int TotalPages)> GetPagedAsync(
-        int? categoryId, string? search, int page, int pageSize, int? customerId)
+        int? categoryId, string? search, int page, int pageSize, int? customerId, bool includeUnavailable = false)
     {
-        var (items, totalCount) = await _uow.MenuItems.GetPagedFilteredAsync(categoryId, search, page, pageSize);
+        var (items, totalCount) = await _uow.MenuItems.GetPagedFilteredAsync(categoryId, search, page, pageSize, includeUnavailable);
         var totalPages = (int)Math.Ceiling(totalCount / (double)pageSize);
 
         var result = items.Select(MapToSummary).ToList();
@@ -608,6 +608,8 @@ public class MenuService
         Name = item.Name,
         Price = item.Price,
         ImageUrl = item.ImageUrl,
+        CategoryId = item.CategoryId,
+        CategoryName = item.Category?.Name,
         IsAvailable = item.IsAvailable
     };
 

@@ -72,14 +72,23 @@
 
   <script>
     (function() {
-      var isDesktop = window.innerWidth > 480;
-      if (!isDesktop) return;
+      // Desktop (>480px): bọc <flutter-view> vào khung điện thoại trang trí #phone-frame.
+      // Mobile (<=480px): giữ <flutter-view> trực tiếp trong <body> (full-screen thật).
+      // Phải re-check mỗi lần resize — nếu không, thu nhỏ cửa sổ từ desktop xuống mobile sẽ
+      // ẩn luôn cả app vì nó đang nằm bên trong #phone-frame lúc đó bị display:none.
+      function getFlutterView() {
+        return document.querySelector('flutter-view') || document.querySelector('flt-glass-pane');
+      }
 
-      function moveToFrame() {
+      function applyLayout() {
+        var fv = getFlutterView();
         var frame = document.getElementById('phone-frame');
-        var fv = document.querySelector('flutter-view') || document.querySelector('flt-glass-pane');
-        if (fv && frame && fv.parentElement !== frame) {
-          frame.appendChild(fv);
+        if (!fv || !frame) return;
+
+        var isDesktop = window.innerWidth > 480;
+        var target = isDesktop ? frame : document.body;
+        if (fv.parentElement !== target) {
+          target.appendChild(fv);
           fv.style.width = '100%';
           fv.style.height = '100%';
         }
@@ -87,10 +96,15 @@
 
       var tries = 0;
       var t = setInterval(function() {
-        var fv = document.querySelector('flutter-view') || document.querySelector('flt-glass-pane');
-        if (fv) { moveToFrame(); clearInterval(t); }
+        if (getFlutterView()) { applyLayout(); clearInterval(t); }
         if (++tries > 50) clearInterval(t);
       }, 100);
+
+      var resizeTimer;
+      window.addEventListener('resize', function() {
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(applyLayout, 150);
+      });
     })();
   </script>
 </body>

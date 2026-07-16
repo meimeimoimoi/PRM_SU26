@@ -1,62 +1,60 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Card, 
-  Tabs, 
-  Form, 
-  Input, 
-  Select, 
-  Button, 
-  message, 
-  Row, 
+import {
+  Card,
+  Tabs,
+  Form,
+  Input,
+  InputNumber,
+  Button,
+  message,
+  Row,
   Col,
-  Typography
+  Typography,
+  Spin,
+  Empty
 } from 'antd';
+import { settingsService } from '@/services/settingsService';
+import { getErrorMessage } from '@/utils/apiError';
 
-const { Option } = Select;
 const { Title } = Typography;
+
+const TIME_PATTERN = /^([01]\d|2[0-3]):([0-5]\d)$/;
 
 const SettingsPage: React.FC = () => {
   const [form] = Form.useForm();
   const [activeTab, setActiveTab] = useState<string>('general');
+  const [loading, setLoading] = useState<boolean>(true);
+  const [saving, setSaving] = useState<boolean>(false);
 
-  // Load settings from localStorage or fallback to defaults matching mockup!
-  useEffect(() => {
-    const savedName = localStorage.getItem('smartdine_restaurant_name') || 'SmartDine Elite';
-    const savedContact = localStorage.getItem('smartdine_restaurant_contact') || '+1 (555) 123-4567';
-    const savedAddress = localStorage.getItem('smartdine_restaurant_address') || '123 Tech Boulevard, Innovation District';
-    const savedCurrency = localStorage.getItem('smartdine_restaurant_currency') || 'USD';
-    const savedTimezone = localStorage.getItem('smartdine_restaurant_timezone') || 'PT';
-
-    form.setFieldsValue({
-      restaurantName: savedName,
-      contactNumber: savedContact,
-      primaryAddress: savedAddress,
-      primaryCurrency: savedCurrency,
-      timezone: savedTimezone
-    });
-  }, [form]);
-
-  // Save changes handler
-  const handleSaveChanges = (values: any) => {
-    localStorage.setItem('smartdine_restaurant_name', values.restaurantName);
-    localStorage.setItem('smartdine_restaurant_contact', values.contactNumber);
-    localStorage.setItem('smartdine_restaurant_address', values.primaryAddress);
-    localStorage.setItem('smartdine_restaurant_currency', values.primaryCurrency);
-    localStorage.setItem('smartdine_restaurant_timezone', values.timezone);
-
-    message.success('Đã lưu các thay đổi cấu hình hệ thống!');
+  const fetchSettings = async () => {
+    setLoading(true);
+    try {
+      const settings = await settingsService.getSettings();
+      form.setFieldsValue(settings);
+    } catch (error: any) {
+      message.error(getErrorMessage(error, 'Không tải được cấu hình nhà hàng.'));
+    } finally {
+      setLoading(false);
+    }
   };
 
-  // Reset form to defaults
-  const handleReset = () => {
-    form.setFieldsValue({
-      restaurantName: 'SmartDine Elite',
-      contactNumber: '+1 (555) 123-4567',
-      primaryAddress: '123 Tech Boulevard, Innovation District',
-      primaryCurrency: 'USD',
-      timezone: 'PT'
-    });
-    message.info('Đã khôi phục về cấu hình mặc định.');
+  useEffect(() => {
+    fetchSettings();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Save changes handler — PATCH /api/v1/settings, chỉ gửi field trong form (partial update).
+  const handleSaveChanges = async (values: any) => {
+    setSaving(true);
+    try {
+      const updated = await settingsService.updateSettings(values);
+      form.setFieldsValue(updated);
+      message.success('Đã lưu cấu hình nhà hàng thành công!');
+    } catch (error: any) {
+      message.error(getErrorMessage(error, 'Lưu cấu hình thất bại.'));
+    } finally {
+      setSaving(false);
+    }
   };
 
   const tabItems = [
@@ -64,102 +62,111 @@ const SettingsPage: React.FC = () => {
       key: 'general',
       label: 'General Info',
       children: (
-        <Card 
+        <Card
           title={<span style={{ fontSize: '18px', fontWeight: 600 }}>Restaurant Details</span>}
           bordered={false}
           style={{ borderRadius: 8 }}
         >
-          <Form
-            form={form}
-            layout="vertical"
-            onFinish={handleSaveChanges}
-            requiredMark={false}
-          >
-            <Row gutter={24}>
-              <Col xs={24} sm={12}>
-                <Form.Item
-                  name="restaurantName"
-                  label={<span style={{ fontWeight: 500, color: '#4a5568' }}>Restaurant Name</span>}
-                  rules={[{ required: true, message: 'Please enter restaurant name' }]}
-                >
-                  <Input style={{ height: 38, borderRadius: 6 }} />
-                </Form.Item>
-              </Col>
-              <Col xs={24} sm={12}>
-                <Form.Item
-                  name="contactNumber"
-                  label={<span style={{ fontWeight: 500, color: '#4a5568' }}>Contact Number</span>}
-                  rules={[{ required: true, message: 'Please enter contact number' }]}
-                >
-                  <Input style={{ height: 38, borderRadius: 6 }} />
-                </Form.Item>
-              </Col>
-            </Row>
-
-            <Form.Item
-              name="primaryAddress"
-              label={<span style={{ fontWeight: 500, color: '#4a5568' }}>Primary Address</span>}
-              rules={[{ required: true, message: 'Please enter primary address' }]}
-            >
-              <Input style={{ height: 38, borderRadius: 6 }} />
-            </Form.Item>
-
-            <Row gutter={24}>
-              <Col xs={24} sm={12}>
-                <Form.Item
-                  name="primaryCurrency"
-                  label={<span style={{ fontWeight: 500, color: '#4a5568' }}>Primary Currency</span>}
-                  rules={[{ required: true }]}
-                >
-                  <Select style={{ height: 38 }}>
-                    <Option value="USD">USD - US Dollar</Option>
-                    <Option value="VND">VND - Vietnamese Dong</Option>
-                    <Option value="EUR">EUR - Euro</Option>
-                  </Select>
-                </Form.Item>
-              </Col>
-              <Col xs={24} sm={12}>
-                <Form.Item
-                  name="timezone"
-                  label={<span style={{ fontWeight: 500, color: '#4a5568' }}>Timezone</span>}
-                  rules={[{ required: true }]}
-                >
-                  <Select style={{ height: 38 }}>
-                    <Option value="PT">Pacific Time (PT)</Option>
-                    <Option value="ICT">Indochina Time (ICT - Hanoi/Bangkok)</Option>
-                    <Option value="EST">Eastern Standard Time (EST)</Option>
-                  </Select>
-                </Form.Item>
-              </Col>
-            </Row>
-
-            <div style={{ marginTop: 24, display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
-              <Button 
-                onClick={handleReset}
-                style={{ 
-                  borderRadius: 6, 
-                  height: 38, 
-                  padding: '0 20px',
-                  fontWeight: 500
-                }}
-              >
-                Reset
-              </Button>
-              <Button 
-                type="primary" 
-                htmlType="submit"
-                style={{ 
-                  borderRadius: 6, 
-                  height: 38, 
-                  padding: '0 20px',
-                  fontWeight: 500,
-                  backgroundColor: '#1890ff'
-                }}
-              >
-                Save Changes
-              </Button>
+          {loading ? (
+            <div style={{ display: 'flex', justifyContent: 'center', padding: 40 }}>
+              <Spin />
             </div>
-          </Form>
+          ) : (
+            <Form form={form} layout="vertical" onFinish={handleSaveChanges} requiredMark={false}>
+              <Row gutter={24}>
+                <Col xs={24} sm={12}>
+                  <Form.Item
+                    name="restaurantName"
+                    label={<span style={{ fontWeight: 500, color: '#4a5568' }}>Tên nhà hàng</span>}
+                    rules={[{ required: true, message: 'Vui lòng nhập tên nhà hàng' }]}
+                  >
+                    <Input style={{ height: 38, borderRadius: 6 }} />
+                  </Form.Item>
+                </Col>
+                <Col xs={24} sm={12}>
+                  <Form.Item
+                    name="phone"
+                    label={<span style={{ fontWeight: 500, color: '#4a5568' }}>Số điện thoại liên hệ</span>}
+                  >
+                    <Input style={{ height: 38, borderRadius: 6 }} />
+                  </Form.Item>
+                </Col>
+              </Row>
+
+              <Form.Item
+                name="address"
+                label={<span style={{ fontWeight: 500, color: '#4a5568' }}>Địa chỉ</span>}
+              >
+                <Input style={{ height: 38, borderRadius: 6 }} />
+              </Form.Item>
+
+              <Row gutter={24}>
+                <Col xs={24} sm={12}>
+                  <Form.Item
+                    name="openingTime"
+                    label={<span style={{ fontWeight: 500, color: '#4a5568' }}>Giờ mở cửa</span>}
+                    rules={[{ pattern: TIME_PATTERN, message: 'Định dạng HH:mm, ví dụ 08:00' }]}
+                  >
+                    <Input placeholder="08:00" style={{ height: 38, borderRadius: 6 }} />
+                  </Form.Item>
+                </Col>
+                <Col xs={24} sm={12}>
+                  <Form.Item
+                    name="closingTime"
+                    label={<span style={{ fontWeight: 500, color: '#4a5568' }}>Giờ đóng cửa</span>}
+                    rules={[{ pattern: TIME_PATTERN, message: 'Định dạng HH:mm, ví dụ 22:00' }]}
+                  >
+                    <Input placeholder="22:00" style={{ height: 38, borderRadius: 6 }} />
+                  </Form.Item>
+                </Col>
+              </Row>
+
+              <Row gutter={24}>
+                <Col xs={24} sm={12}>
+                  <Form.Item
+                    name="taxRate"
+                    label={<span style={{ fontWeight: 500, color: '#4a5568' }}>Thuế VAT (%)</span>}
+                    rules={[{ type: 'number', min: 0, max: 100, message: 'Giá trị hợp lệ từ 0 đến 100' }]}
+                  >
+                    <InputNumber style={{ width: '100%', height: 38 }} min={0} max={100} step={1} addonAfter="%" />
+                  </Form.Item>
+                </Col>
+                <Col xs={24} sm={12}>
+                  <Form.Item
+                    name="serviceChargeRate"
+                    label={<span style={{ fontWeight: 500, color: '#4a5568' }}>Phí dịch vụ (%)</span>}
+                    rules={[{ type: 'number', min: 0, max: 100, message: 'Giá trị hợp lệ từ 0 đến 100' }]}
+                  >
+                    <InputNumber style={{ width: '100%', height: 38 }} min={0} max={100} step={1} addonAfter="%" />
+                  </Form.Item>
+                </Col>
+              </Row>
+
+              <div style={{ marginTop: 24, display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
+                <Button
+                  onClick={fetchSettings}
+                  disabled={saving}
+                  style={{ borderRadius: 6, height: 38, padding: '0 20px', fontWeight: 500 }}
+                >
+                  Hủy thay đổi
+                </Button>
+                <Button
+                  type="primary"
+                  htmlType="submit"
+                  loading={saving}
+                  style={{
+                    borderRadius: 6,
+                    height: 38,
+                    padding: '0 20px',
+                    fontWeight: 500,
+                    backgroundColor: '#1890ff'
+                  }}
+                >
+                  Lưu thay đổi
+                </Button>
+              </div>
+            </Form>
+          )}
         </Card>
       )
     },
@@ -169,7 +176,10 @@ const SettingsPage: React.FC = () => {
       children: (
         <Card bordered={false} style={{ borderRadius: 8 }}>
           <Title level={4}>Cấu hình thiết bị & hệ thống</Title>
-          <p style={{ color: '#718096' }}>Quản lý máy in hóa đơn, tích hợp POS và phân giải mã QR quét bàn tại đây.</p>
+          <Empty
+            description="Quản lý máy in hóa đơn, tích hợp POS và phân giải mã QR quét bàn — tính năng chưa được phát triển."
+            style={{ padding: '24px 0' }}
+          />
         </Card>
       )
     },
@@ -179,7 +189,10 @@ const SettingsPage: React.FC = () => {
       children: (
         <Card bordered={false} style={{ borderRadius: 8 }}>
           <Title level={4}>Tài khoản cá nhân</Title>
-          <p style={{ color: '#718096' }}>Thay đổi mật khẩu đăng nhập, khóa bảo mật 2 lớp và cập nhật thông tin cá nhân của bạn.</p>
+          <Empty
+            description="Đổi mật khẩu và bảo mật 2 lớp — tính năng chưa được phát triển."
+            style={{ padding: '24px 0' }}
+          />
         </Card>
       )
     }
@@ -193,8 +206,8 @@ const SettingsPage: React.FC = () => {
       </div>
 
       {/* Tabs */}
-      <Tabs 
-        activeKey={activeTab} 
+      <Tabs
+        activeKey={activeTab}
         onChange={(key) => setActiveTab(key)}
         items={tabItems}
         style={{ marginBottom: 24 }}

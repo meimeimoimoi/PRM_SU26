@@ -75,6 +75,22 @@ public class TablesController : ControllerBase
     }
 
     /// <summary>
+    /// API 8 — Cập nhật thông tin cơ bản của bàn (Capacity, Location).
+    ///
+    /// PATCH /api/v1/tables/{id}
+    /// Role: MANAGER.
+    ///
+    /// Không cho sửa TableNumber — mã QR đã in mã hóa theo số bàn, đổi số sẽ làm QR sai.
+    /// </summary>
+    [HttpPatch("{id:int}")]
+    [Authorize(Roles = Roles.Manager)]
+    public async Task<IActionResult> Update(int id, [FromBody] UpdateTableRequest request)
+    {
+        var result = await _tableService.UpdateAsync(id, request);
+        return Ok(ApiResponse<TableResponse>.Ok(result, ValidationMessages.TABLE_UPDATED_SUCCESS));
+    }
+
+    /// <summary>
     /// API 2 — Khách quét mã QR tại bàn.
     ///
     /// POST /api/v1/tables/{id}/scan
@@ -111,7 +127,7 @@ public class TablesController : ControllerBase
     public async Task<IActionResult> UpdateStatus(int id, [FromBody] UpdateTableStatusRequest request)
     {
         var result = await _tableService.UpdateStatusAsync(id, request.Status);
-        return Ok(ApiResponse<UpdateTableStatusResponse>.Ok(result, ValidationMessages.TABLE_STATUS_UPDATED_SUCCESS));
+        return Ok(ApiResponse<TableResponse>.Ok(result, ValidationMessages.TABLE_STATUS_UPDATED_SUCCESS));
     }
 
     /// <summary>

@@ -1,85 +1,78 @@
 import React, { useEffect, useState } from 'react';
-import { 
-  DollarCircleOutlined, 
-  ShoppingCartOutlined, 
-  AppstoreOutlined 
+import {
+  DollarCircleOutlined,
+  ShoppingCartOutlined,
+  AppstoreOutlined
 } from '@ant-design/icons';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { Spin } from 'antd';
+import { Spin, Segmented } from 'antd';
 import { apiClient } from '../../services/api/client';
+import { orderService, ChartPoint, ChartPeriod } from '@/services/orderService';
 import '@/styles/DashboardPage.css';
 
 interface DashboardStats {
   todayRevenue: number;
+  monthRevenue: number;
   activeOrders: number;
   availableTables: number;
   totalTables: number;
 }
 
-interface HourlySale {
-  time: string;
-  food: number;
-  drink: number;
-}
+const PERIOD_OPTIONS: { label: string; value: ChartPeriod }[] = [
+  { label: 'Hôm nay', value: 'day' },
+  { label: '7 ngày', value: 'week' },
+  { label: 'Tháng này', value: 'month' }
+];
 
 const DashboardPage: React.FC = () => {
   const [stats, setStats] = useState<DashboardStats>({
     todayRevenue: 0,
+    monthRevenue: 0,
     activeOrders: 0,
     availableTables: 0,
     totalTables: 0,
   });
-  const [salesData, setSalesData] = useState<HourlySale[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const [period, setPeriod] = useState<ChartPeriod>('day');
+  const [orderChartData, setOrderChartData] = useState<ChartPoint[]>([]);
+  const [revenueChartData, setRevenueChartData] = useState<ChartPoint[]>([]);
+  const [chartLoading, setChartLoading] = useState(true);
+
+  // Stat cards — chỉ cần tải 1 lần, không phụ thuộc period của 2 chart bên dưới.
   useEffect(() => {
-    const fetchDashboardData = async () => {
+    const fetchStats = async () => {
       setLoading(true);
       try {
-        const [activeOrdersRes, todayOrdersRes, tablesRes] = await Promise.allSettled([
+        const [activeOrdersRes, tablesRes, revenueRes] = await Promise.allSettled([
           apiClient.get<any>('/orders/active'),
-          apiClient.get<any>('/orders/today'),
           apiClient.get<any>('/tables'),
+          // Doanh thu thực thu — chỉ tính payment SUCCESS (xem PaymentService.GetRevenueSummaryAsync),
+          // không lấy từ finalAmount của order vì order có thể chưa thanh toán/bị hủy.
+          apiClient.get<any>('/payments/revenue-summary'),
         ]);
 
         const activeOrders = activeOrdersRes.status === 'fulfilled'
           ? (activeOrdersRes.value.data.data || activeOrdersRes.value.data || [])
           : [];
-        const todayOrders = todayOrdersRes.status === 'fulfilled'
-          ? (todayOrdersRes.value.data.data || todayOrdersRes.value.data || [])
-          : [];
         const tables = tablesRes.status === 'fulfilled'
           ? (tablesRes.value.data.data || tablesRes.value.data || [])
           : [];
+        const revenue = revenueRes.status === 'fulfilled'
+          ? (revenueRes.value.data.data || revenueRes.value.data || {})
+          : {};
 
-        const totalRevenue = todayOrders.reduce((sum: number, o: any) => sum + (o.finalAmount || 0), 0);
         const availableTables = Array.isArray(tables)
           ? tables.filter((t: any) => t.status === 'AVAILABLE').length
           : 0;
 
         setStats({
-          todayRevenue: totalRevenue,
+          todayRevenue: revenue.todayRevenue || 0,
+          monthRevenue: revenue.monthRevenue || 0,
           activeOrders: Array.isArray(activeOrders) ? activeOrders.length : 0,
           availableTables,
           totalTables: Array.isArray(tables) ? tables.length : 0,
         });
-
-        // Build hourly sales from today's orders
-        const hourlyMap: { [key: string]: HourlySale } = {};
-        const timeSlots = ['8am', '9am', '10am', '11am', '12pm', '1pm', '2pm', '3pm', '4pm', '5pm', '6pm', '7pm', '8pm', '9pm'];
-        timeSlots.forEach(t => { hourlyMap[t] = { time: t, food: 0, drink: 0 }; });
-
-        todayOrders.forEach((order: any) => {
-          const hour = new Date(order.createdAt).getHours();
-          const slot = hour <= 12 ? `${hour}am` : `${hour - 12}pm`;
-          if (hourlyMap[slot]) {
-            (order.items || []).forEach((item: any) => {
-              hourlyMap[slot].food += item.unitPrice * item.quantity;
-            });
-          }
-        });
-
-        setSalesData(timeSlots.map(t => hourlyMap[t]).filter(s => s.food > 0));
       } catch (err) {
         console.error('Dashboard fetch error:', err);
       } finally {
@@ -87,8 +80,31 @@ const DashboardPage: React.FC = () => {
       }
     };
 
-    fetchDashboardData();
+    fetchStats();
   }, []);
+
+  // 2 chart theo giờ/tuần/tháng — tải lại mỗi khi đổi period.
+  useEffect(() => {
+    const fetchCharts = async () => {
+      setChartLoading(true);
+      try {
+        const [orderChart, revenueChart] = await Promise.all([
+          orderService.getOrderChart(period),
+          orderService.getRevenueChart(period)
+        ]);
+        setOrderChartData(orderChart);
+        setRevenueChartData(revenueChart);
+      } catch (err) {
+        console.error('Chart fetch error:', err);
+        setOrderChartData([]);
+        setRevenueChartData([]);
+      } finally {
+        setChartLoading(false);
+      }
+    };
+
+    fetchCharts();
+  }, [period]);
 
   if (loading) {
     return (
@@ -101,6 +117,48 @@ const DashboardPage: React.FC = () => {
   const occupiedPct = stats.totalTables > 0
     ? Math.round(((stats.totalTables - stats.availableTables) / stats.totalTables) * 100)
     : 0;
+
+  const renderChart = (data: ChartPoint[], color: string, emptyText: string) => {
+    if (chartLoading) {
+      return (
+        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 280 }}>
+          <Spin />
+        </div>
+      );
+    }
+    const hasData = data.some((d) => d.value > 0);
+    if (!hasData) {
+      return (
+        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 280, color: '#718096' }}>
+          {emptyText}
+        </div>
+      );
+    }
+    return (
+      <ResponsiveContainer width="100%" height={280}>
+        <BarChart data={data} barGap={4} barCategoryGap="25%">
+          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
+          <XAxis
+            dataKey="label"
+            axisLine={false}
+            tickLine={false}
+            tick={{ fill: '#718096', fontSize: 12 }}
+          />
+          <YAxis
+            axisLine={false}
+            tickLine={false}
+            tick={{ fill: '#718096', fontSize: 12 }}
+            tickFormatter={(value) => `${(value / 1000).toFixed(0)}k`}
+          />
+          <Tooltip
+            formatter={(value: any) => [`${Number(value).toLocaleString('vi-VN')}đ`, '']}
+            contentStyle={{ borderRadius: 8, border: '1px solid #e8ecf1', boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }}
+          />
+          <Bar dataKey="value" fill={color} radius={[4, 4, 0, 0]} barSize={period === 'day' ? 12 : 24} name="Doanh thu" />
+        </BarChart>
+      </ResponsiveContainer>
+    );
+  };
 
   return (
     <div className="dashboard-overview">
@@ -120,6 +178,19 @@ const DashboardPage: React.FC = () => {
           <div className="stat-card-value">{stats.todayRevenue.toLocaleString('vi-VN')}đ</div>
           <div className="stat-card-sub">
             <span>Tổng doanh thu hôm nay</span>
+          </div>
+        </div>
+
+        <div className="stat-card">
+          <div className="stat-card-header">
+            <span className="stat-card-label">MONTH'S REVENUE</span>
+            <div className="stat-card-icon revenue">
+              <DollarCircleOutlined />
+            </div>
+          </div>
+          <div className="stat-card-value">{stats.monthRevenue.toLocaleString('vi-VN')}đ</div>
+          <div className="stat-card-sub">
+            <span>Tổng doanh thu tháng này</span>
           </div>
         </div>
 
@@ -157,39 +228,23 @@ const DashboardPage: React.FC = () => {
         </div>
       </div>
 
-      <div className="dashboard-bottom-row">
+      <div style={{ display: 'flex', justifyContent: 'flex-end', margin: '20px 0 4px' }}>
+        <Segmented options={PERIOD_OPTIONS} value={period} onChange={(val) => setPeriod(val as ChartPeriod)} />
+      </div>
+
+      <div className="dashboard-charts-row">
         <div className="chart-card">
           <div className="chart-card-header">
-            <h3>Revenue by Hour</h3>
+            <h3>Doanh số đơn hàng</h3>
           </div>
-          {salesData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={280}>
-              <BarChart data={salesData} barGap={4} barCategoryGap="25%">
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
-                <XAxis 
-                  dataKey="time" 
-                  axisLine={false} 
-                  tickLine={false} 
-                  tick={{ fill: '#718096', fontSize: 12 }} 
-                />
-                <YAxis 
-                  axisLine={false} 
-                  tickLine={false} 
-                  tick={{ fill: '#718096', fontSize: 12 }}
-                  tickFormatter={(value) => `${(value / 1000).toFixed(0)}k`}
-                />
-                <Tooltip 
-                  formatter={(value: any) => [`${Number(value).toLocaleString('vi-VN')}đ`, '']}
-                  contentStyle={{ borderRadius: 8, border: '1px solid #e8ecf1', boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }}
-                />
-                <Bar dataKey="food" fill="#1890ff" radius={[4, 4, 0, 0]} barSize={24} name="Revenue" />
-              </BarChart>
-            </ResponsiveContainer>
-          ) : (
-            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 280, color: '#718096' }}>
-              Chưa có dữ liệu doanh thu hôm nay
-            </div>
-          )}
+          {renderChart(orderChartData, '#1890ff', 'Chưa có đơn hàng nào trong khoảng thời gian này')}
+        </div>
+
+        <div className="chart-card">
+          <div className="chart-card-header">
+            <h3>Doanh thu thực nhận</h3>
+          </div>
+          {renderChart(revenueChartData, '#52c41a', 'Chưa có thanh toán thành công nào trong khoảng thời gian này')}
         </div>
       </div>
     </div>

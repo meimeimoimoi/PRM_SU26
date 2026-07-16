@@ -36,6 +36,10 @@ const { TabPane } = Tabs;
 
 const StaffDashboardPage: React.FC = () => {
   const user = useSelector(selectCurrentUser);
+  // Manager chỉ được xem Kitchen & Billing ở mức tối thiểu, không thao tác — tránh
+  // manager vô tình can thiệp vào ca làm việc thực tế của staff/bếp.
+  const isManagerViewOnly = user?.role === 'MANAGER';
+
   // Kitchen Queue State
   const [kitchenItems, setKitchenItems] = useState<KitchenItem[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
@@ -267,6 +271,12 @@ const StaffDashboardPage: React.FC = () => {
         </Button>
       </div>
 
+      {isManagerViewOnly && (
+        <div className="staff-manager-readonly-banner">
+          Chế độ chỉ xem — Quản lý. Các thao tác nhận nấu/hoàn thành/thanh toán chỉ dành cho nhân viên phụ trách ca.
+        </div>
+      )}
+
       {/* Statistics Row */}
       <div className="staff-stats-row">
         <div className="staff-stat-card">
@@ -356,14 +366,16 @@ const StaffDashboardPage: React.FC = () => {
                             >
                               In phiếu bếp
                             </Button>
-                            <Button 
-                              type="primary" 
-                              icon={<PlayCircleOutlined />} 
-                              onClick={() => handleStatusChange(item.id, 'DOING')}
-                              className="staff-btn-action-pending"
-                            >
-                              Nhận nấu
-                            </Button>
+                            {!isManagerViewOnly && (
+                              <Button
+                                type="primary"
+                                icon={<PlayCircleOutlined />}
+                                onClick={() => handleStatusChange(item.id, 'DOING')}
+                                className="staff-btn-action-pending"
+                              >
+                                Nhận nấu
+                              </Button>
+                            )}
                           </div>
                         </div>
                       ))
@@ -411,14 +423,16 @@ const StaffDashboardPage: React.FC = () => {
                             >
                               In phiếu bếp
                             </Button>
-                            <Button 
-                              type="primary" 
-                              icon={<CheckCircleOutlined />} 
-                              onClick={() => handleStatusChange(item.id, 'DONE')}
-                              className="staff-btn-action-preparing"
-                            >
-                              Hoàn thành
-                            </Button>
+                            {!isManagerViewOnly && (
+                              <Button
+                                type="primary"
+                                icon={<CheckCircleOutlined />}
+                                onClick={() => handleStatusChange(item.id, 'DONE')}
+                                className="staff-btn-action-preparing"
+                              >
+                                Hoàn thành
+                              </Button>
+                            )}
                           </div>
                         </div>
                       ))
@@ -466,14 +480,16 @@ const StaffDashboardPage: React.FC = () => {
                             >
                               In lại phiếu
                             </Button>
-                            <Button 
-                              type="primary" 
-                              icon={<DoubleRightOutlined />} 
-                              onClick={() => handleStatusChange(item.id, 'SERVED')}
-                              className="staff-btn-action-ready"
-                            >
-                              Đã giao bàn
-                            </Button>
+                            {!isManagerViewOnly && (
+                              <Button
+                                type="primary"
+                                icon={<DoubleRightOutlined />}
+                                onClick={() => handleStatusChange(item.id, 'SERVED')}
+                                className="staff-btn-action-ready"
+                              >
+                                Đã giao bàn
+                              </Button>
+                            )}
                           </div>
                         </div>
                       ))
@@ -594,22 +610,24 @@ const StaffDashboardPage: React.FC = () => {
           }}>
             Đóng
           </Button>,
-          <Button 
-            key="print" 
-            icon={<PrinterOutlined />} 
+          <Button
+            key="print"
+            icon={<PrinterOutlined />}
             onClick={() => selectedTable && handlePrintCheckoutBill(selectedTable)}
           >
             In hóa đơn
           </Button>,
-          <Button 
-            key="checkout" 
-            type="primary" 
-            icon={<CheckOutlined />} 
-            onClick={() => selectedTable && handleCheckoutTable(selectedTable)}
-            danger
-          >
-            Thành toán & Trả bàn
-          </Button>
+          ...(isManagerViewOnly ? [] : [
+            <Button
+              key="checkout"
+              type="primary"
+              icon={<CheckOutlined />}
+              onClick={() => selectedTable && handleCheckoutTable(selectedTable)}
+              danger
+            >
+              Thành toán & Trả bàn
+            </Button>
+          ])
         ]}
       >
         {selectedTableBillDetails ? (

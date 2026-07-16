@@ -1,5 +1,7 @@
 using SmartDine.Application.Constants;
+using SmartDine.Application.DTOs.Common;
 using SmartDine.Application.DTOs.Payments;
+using SmartDine.Application.Helper;
 using SmartDine.Domain.Entities;
 using SmartDine.Domain.Enums;
 using SmartDine.Domain.Exceptions;
@@ -204,7 +206,7 @@ public class PaymentService
 
             // Thông báo realtime về bàn ăn — client ẩn QR, hiện màn hình "Cảm ơn"
             await _notificationService.NotifyPaymentSuccessAsync(
-                session.TableId, payment.InvoiceId, payment.Amount);
+                session.TableId, table?.TableNumber ?? 0, payment.InvoiceId, payment.Amount);
         }
         else
         {
@@ -338,6 +340,42 @@ public class PaymentService
         CreatedAt = payment.CreatedAt
     };
 
+    // ═══════════════════════════════════════════════════════════════
+    // GET /api/v1/payments/revenue-summary (Manager) — Doanh thu tổng quan cho dashboard
+    // ═══════════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// Doanh thu hôm nay + tháng này — chỉ tính payment đã PaymentStatus = SUCCESS
+    /// (GetByDateRangeAsync lọc theo PaidAt, field chỉ được set khi thanh toán thành công,
+    /// nên PENDING/FAILED/EXPIRED tự động bị loại, không cần filter status thủ công).
+    /// </summary>
+    public async Task<RevenueSummaryResponse> GetRevenueSummaryAsync()
+    {
+        var now = DateTime.UtcNow;
+        var todayStart = now.Date;
+        var monthStart = new DateTime(now.Year, now.Month, 1, 0, 0, 0, DateTimeKind.Utc);
+
+        var monthPayments = await _uow.Payments.GetByDateRangeAsync(monthStart, now);
+
+        return new RevenueSummaryResponse
+        {
+            TodayRevenue = monthPayments.Where(p => p.PaidAt >= todayStart).Sum(p => p.Amount),
+            MonthRevenue = monthPayments.Sum(p => p.Amount)
+        };
+    }
+
+    /// <summary>
+    /// Chart doanh thu thực nhận (chỉ payment SUCCESS) cho Dashboard Manager — "Actual Revenue".
+    /// period: day (theo giờ hôm nay) | week (7 ngày) | month (từ đầu tháng).
+    /// GetByDateRangeAsync lọc theo PaidAt (chỉ set khi SUCCESS) nên không cần lọc status thủ công.
+    /// </summary>
+    public async Task<List<ChartPointResponse>> GetRevenueChartAsync(string? period)
+    {
+        var (start, end) = ChartPeriodHelper.ResolveRange(period);
+        var payments = await _uow.Payments.GetByDateRangeAsync(start, end);
+        return ChartPeriodHelper.Bucket(payments.Select(p => (p.PaidAt!.Value, p.Amount)), period);
+    }
+
     public async Task<bool> CompletePaymentAsync(int paymentId)
     {
         var payment = await _uow.Payments.GetByIdAsync(paymentId)
@@ -368,7 +406,7 @@ public class PaymentService
         await AwardLoyaltyPointsAsync(session, payment.Amount);
 
         await _notificationService.NotifyPaymentSuccessAsync(
-            session.TableId, payment.InvoiceId, payment.Amount);
+            session.TableId, table?.TableNumber ?? 0, payment.InvoiceId, payment.Amount);
 
         await _uow.SaveChangesAsync();
         return true;

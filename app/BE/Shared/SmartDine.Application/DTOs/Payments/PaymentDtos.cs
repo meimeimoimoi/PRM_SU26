@@ -24,6 +24,13 @@ public class PaymentWebhookResponse
 /// <summary>
 /// Response cho lịch sử giao dịch (manager dashboard).
 /// </summary>
+/// <summary>Doanh thu thực thu (chỉ tính payment PaymentStatus = SUCCESS) cho dashboard tổng quan.</summary>
+public class RevenueSummaryResponse
+{
+    public decimal TodayRevenue { get; set; }
+    public decimal MonthRevenue { get; set; }
+}
+
 public class PaymentHistoryResponse
 {
     public int Id { get; set; }

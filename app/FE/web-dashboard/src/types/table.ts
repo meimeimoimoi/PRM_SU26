@@ -6,6 +6,6 @@ export interface Table {
   capacity: number;
   status: TableStatus;
   qrCode?: string;
-  // Simulated properties for UI alignment with screenshot
-  zone?: string; 
+  locationId?: number;
+  locationName?: string;
 }

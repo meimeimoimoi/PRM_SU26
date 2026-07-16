@@ -1,5 +1,6 @@
 // Khớp với BE: SmartDine.Application.DTOs.Staff.StaffDtos (StaffController chỉ MANAGER truy cập).
-export type StaffRole = 'STAFF' | 'CHEF' | 'MANAGER';
+// Dashboard chỉ tạo/gán được 2 role: STAFF (order + bếp + thanh toán) và MANAGER.
+export type StaffRole = 'STAFF' | 'MANAGER';
 
 export interface StaffMember {
   id: number;

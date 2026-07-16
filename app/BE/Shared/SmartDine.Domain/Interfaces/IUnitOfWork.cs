@@ -25,6 +25,7 @@ public interface IUnitOfWork : IDisposable
     ICouponRepository Coupons { get; }
     IRepository<LoyaltyTransaction> LoyaltyTransactions { get; }
     IRepository<MenuCategory> MenuCategories { get; }
+    IRepository<Location> Locations { get; }
     ISettingsRepository Settings { get; }
 
     Task<int> SaveChangesAsync(CancellationToken ct = default);

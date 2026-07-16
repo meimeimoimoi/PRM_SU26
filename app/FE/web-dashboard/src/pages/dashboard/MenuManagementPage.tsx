@@ -13,13 +13,16 @@ import {
   InputNumber,
   message,
   Tooltip,
-  Switch
+  Switch,
+  Upload
 } from 'antd';
+import type { FormInstance } from 'antd';
 import {
   SearchOutlined,
   PlusOutlined,
   EditOutlined,
-  DeleteOutlined
+  DeleteOutlined,
+  UploadOutlined
 } from '@ant-design/icons';
 import { MenuItemResponse, MenuCategoryResponse } from '@/types/menu';
 import { menuService } from '@/services/menuService';
@@ -28,6 +31,49 @@ import { selectCurrentUser } from '@/store/slices/authSlice';
 import { getErrorMessage } from '@/utils/apiError';
 
 const { Option } = Select;
+
+// Dùng chung cho modal Add/Edit: dán link ảnh trực tiếp HOẶC tải file lên (kết quả upload
+// tự động điền vào cùng field imageUrl — luồng save phía sau không đổi gì).
+const MenuImageField: React.FC<{ form: FormInstance }> = ({ form }) => {
+  const [uploading, setUploading] = useState(false);
+  const imageUrl = Form.useWatch('imageUrl', form);
+
+  const handleBeforeUpload = async (file: File) => {
+    setUploading(true);
+    try {
+      const url = await menuService.uploadImage(file);
+      form.setFieldsValue({ imageUrl: url });
+      message.success('Tải ảnh lên thành công!');
+    } catch (error: any) {
+      message.error(getErrorMessage(error, 'Tải ảnh lên thất bại.'));
+    } finally {
+      setUploading(false);
+    }
+    return false; // chặn Upload tự gửi request riêng — đã tự gọi menuService.uploadImage ở trên
+  };
+
+  return (
+    <>
+      <Form.Item name="imageUrl" label="Ảnh món ăn (dán link hoặc tải ảnh lên)">
+        <Input placeholder="Dán liên kết ảnh trực tuyến hoặc tải ảnh lên bên dưới" />
+      </Form.Item>
+      <Form.Item label=" " colon={false} style={{ marginTop: -12 }}>
+        <Space align="center">
+          <Upload showUploadList={false} beforeUpload={handleBeforeUpload} accept="image/*">
+            <Button icon={<UploadOutlined />} loading={uploading}>Tải ảnh lên</Button>
+          </Upload>
+          {imageUrl && (
+            <img
+              src={imageUrl}
+              alt="preview"
+              style={{ width: 48, height: 48, borderRadius: 8, objectFit: 'cover', border: '1px solid #e5e7eb' }}
+            />
+          )}
+        </Space>
+      </Form.Item>
+    </>
+  );
+};
 
 const MenuManagementPage: React.FC = () => {
   const currentUser = useSelector(selectCurrentUser);
@@ -90,8 +136,21 @@ const MenuManagementPage: React.FC = () => {
         categoryId: values.categoryId
       };
 
+      // BE Create chỉ trả về { id, name, createdAt } (MenuItemCreatedResponse), không phải
+      // MenuItemResponse đầy đủ — tự dựng lại item hiển thị từ chính requestData đã gửi lên,
+      // không lấy price/imageUrl/isAvailable từ response (sẽ luôn undefined → NaN/ảnh sai).
       const newItem = await menuService.createMenuItem(requestData);
-      setMenuItems((prev) => [...prev, { ...newItem, categoryId: values.categoryId, categoryName: categoryName(values.categoryId) }]);
+      setMenuItems((prev) => [...prev, {
+        id: newItem.id,
+        name: requestData.name,
+        description: requestData.description,
+        price: requestData.price,
+        imageUrl: requestData.imageUrl,
+        categoryId: requestData.categoryId,
+        categoryName: categoryName(requestData.categoryId),
+        isAvailable: true,
+        averageRating: 0
+      }]);
       setIsAddModalOpen(false);
       addForm.resetFields();
       message.success('Thêm món ăn mới thành công!');
@@ -179,7 +238,7 @@ const MenuManagementPage: React.FC = () => {
       
       const matchesCategory =
         categoryFilter === 'ALL' ||
-        item.categoryId.toString() === categoryFilter;
+        item.categoryId?.toString() === categoryFilter;
 
       return matchesSearch && matchesCategory;
     });
@@ -431,12 +490,7 @@ const MenuManagementPage: React.FC = () => {
             </Select>
           </Form.Item>
 
-          <Form.Item
-            name="imageUrl"
-            label="Đường dẫn ảnh (URL)"
-          >
-            <Input placeholder="Nhập liên kết hình ảnh trực tuyến hoặc để trống" />
-          </Form.Item>
+          <MenuImageField form={addForm} />
 
           <Form.Item style={{ marginBottom: 0, marginTop: 24, textAlign: 'right' }}>
             <Space>
@@ -497,12 +551,7 @@ const MenuManagementPage: React.FC = () => {
             </Select>
           </Form.Item>
 
-          <Form.Item
-            name="imageUrl"
-            label="Đường dẫn ảnh (URL)"
-          >
-            <Input placeholder="Nhập liên kết hình ảnh trực tuyến" />
-          </Form.Item>
+          <MenuImageField form={editForm} />
 
           <Form.Item
             name="isAvailable"

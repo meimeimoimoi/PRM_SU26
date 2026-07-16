@@ -84,13 +84,17 @@ public class DbSeeder
         // 2. Seed Tables
         if (!_context.Tables.Any())
         {
+            // QrCode dùng URL trang web đặt món (không phải custom URI scheme) — khớp quy ước
+            // TableService.CreateAsync. DbSeeder không có IConfiguration nên dùng domain mặc định;
+            // nếu chạy local và cần QR trỏ đúng localhost, xóa 5 bàn này rồi tạo lại qua UI Manager.
+            const string webBaseUrl = "https://smartdine.app";
             var tables = new List<Table>
             {
-                new() { TableNumber = 1, Capacity = 2, Status = TableStatus.AVAILABLE, QrCode = "smartdine://table/1" },
-                new() { TableNumber = 2, Capacity = 4, Status = TableStatus.AVAILABLE, QrCode = "smartdine://table/2" },
-                new() { TableNumber = 3, Capacity = 4, Status = TableStatus.AVAILABLE, QrCode = "smartdine://table/3" },
-                new() { TableNumber = 4, Capacity = 6, Status = TableStatus.AVAILABLE, QrCode = "smartdine://table/4" },
-                new() { TableNumber = 5, Capacity = 8, Status = TableStatus.AVAILABLE, QrCode = "smartdine://table/5" }
+                new() { TableNumber = 1, Capacity = 2, Status = TableStatus.AVAILABLE, QrCode = $"{webBaseUrl}/?table=1" },
+                new() { TableNumber = 2, Capacity = 4, Status = TableStatus.AVAILABLE, QrCode = $"{webBaseUrl}/?table=2" },
+                new() { TableNumber = 3, Capacity = 4, Status = TableStatus.AVAILABLE, QrCode = $"{webBaseUrl}/?table=3" },
+                new() { TableNumber = 4, Capacity = 6, Status = TableStatus.AVAILABLE, QrCode = $"{webBaseUrl}/?table=4" },
+                new() { TableNumber = 5, Capacity = 8, Status = TableStatus.AVAILABLE, QrCode = $"{webBaseUrl}/?table=5" }
             };
 
             await _context.Tables.AddRangeAsync(tables);

@@ -30,10 +30,16 @@ class _QrScanPageState extends State<QrScanPage> {
   }
 
   int? _parseTableNumber(String raw) {
-    // Chấp nhận cả URI đầy đủ "smartdine://table/12" lẫn số bàn thuần "12"
-    // (phòng trường hợp QR được in thủ công chỉ ghi số bàn).
-    final uriMatch = RegExp(r'smartdine://table/(\d+)').firstMatch(raw);
-    if (uriMatch != null) return int.tryParse(uriMatch.group(1)!);
+    // QR thật do BE sinh (TableService.CreateAsync) là URL web dạng
+    // "https://.../?table=12" — khách quét bằng camera điện thoại thường sẽ mở thẳng
+    // trang web, không cần qua màn hình này. Màn này chỉ dùng khi khách đã có app và
+    // quét bằng camera trong app, nên vẫn cần đọc được ?table= từ URL đó.
+    final queryMatch = RegExp(r'[?&]table=(\d+)').firstMatch(raw);
+    if (queryMatch != null) return int.tryParse(queryMatch.group(1)!);
+    // Tương thích ngược với QR cũ dạng "smartdine://table/12" nếu còn sót trên bàn nào.
+    final legacyMatch = RegExp(r'smartdine://table/(\d+)').firstMatch(raw);
+    if (legacyMatch != null) return int.tryParse(legacyMatch.group(1)!);
+    // QR in thủ công chỉ ghi số bàn thuần.
     return int.tryParse(raw.trim());
   }
 

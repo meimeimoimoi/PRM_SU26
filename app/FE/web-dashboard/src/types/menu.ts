@@ -17,6 +17,14 @@ export interface UpdateMenuItemRequest {
   isAvailable?: boolean;
 }
 
+// Response thật của POST /menu-items (MenuItemCreatedResponse ở BE) chỉ trả về id/name/createdAt,
+// không phải MenuItemResponse đầy đủ — không lấy price/imageUrl/isAvailable từ đây.
+export interface MenuItemCreatedResponse {
+  id: number;
+  name: string;
+  createdAt: string;
+}
+
 // Response thật của PATCH /menu-items/{id} (MenuItemUpdatedResponse ở BE) chỉ trả về
 // một tập con field, không phải toàn bộ MenuItemResponse.
 export interface MenuItemPatchResponse {

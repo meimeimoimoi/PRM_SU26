@@ -28,14 +28,12 @@ const { Option } = Select;
 
 const ROLE_LABEL: Record<StaffRole, string> = {
   MANAGER: 'Quản lý',
-  STAFF: 'Nhân viên',
-  CHEF: 'Đầu bếp'
+  STAFF: 'Nhân viên'
 };
 
 const ROLE_COLOR: Record<StaffRole, { bg: string; text: string }> = {
   MANAGER: { bg: '#f0f5ff', text: '#2f54eb' },
-  STAFF: { bg: '#e6f7ff', text: '#1890ff' },
-  CHEF: { bg: '#fff7e6', text: '#d46b08' }
+  STAFF: { bg: '#e6f7ff', text: '#1890ff' }
 };
 
 const StaffManagementPage: React.FC = () => {
@@ -307,7 +305,6 @@ const StaffManagementPage: React.FC = () => {
               <Option value="ALL">All Roles</Option>
               <Option value="MANAGER">Quản lý</Option>
               <Option value="STAFF">Nhân viên</Option>
-              <Option value="CHEF">Đầu bếp</Option>
             </Select>
           </div>
         </div>
@@ -387,7 +384,6 @@ const StaffManagementPage: React.FC = () => {
             <Select>
               <Option value="MANAGER">Quản lý</Option>
               <Option value="STAFF">Nhân viên</Option>
-              <Option value="CHEF">Đầu bếp</Option>
             </Select>
           </Form.Item>
 
@@ -441,7 +437,6 @@ const StaffManagementPage: React.FC = () => {
             <Select>
               <Option value="MANAGER">Quản lý</Option>
               <Option value="STAFF">Nhân viên</Option>
-              <Option value="CHEF">Đầu bếp</Option>
             </Select>
           </Form.Item>
 

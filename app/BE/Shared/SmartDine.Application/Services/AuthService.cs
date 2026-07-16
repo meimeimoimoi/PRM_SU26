@@ -424,9 +424,11 @@ public class AuthService
             ?? throw new EntityNotFoundException("Table", request.TableId);
 
         if (table.Status == TableStatus.MAINTENANCE)
-            throw new BusinessRuleViolationException(ValidationMessages.TABLE_MAINTENANCE_CANNOT_SERVE);
+            throw new BusinessRuleViolationException(
+                string.Format(ValidationMessages.TABLE_MAINTENANCE_CANNOT_SERVE, table.TableNumber));
         if (table.Status == TableStatus.RESERVED)
-            throw new BusinessRuleViolationException(ValidationMessages.TABLE_RESERVED);
+            throw new BusinessRuleViolationException(
+                string.Format(ValidationMessages.TABLE_RESERVED, table.TableNumber));
 
         var existingSession = await _uow.DiningSessions.GetActiveByTableIdAsync(request.TableId);
         DiningSession session;

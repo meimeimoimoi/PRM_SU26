@@ -7,6 +7,7 @@ using SmartDine.Application.DTOs.Menu;
 using SmartDine.Application.Services;
 using SmartDine.Domain.Constants;
 using SmartDine.Domain.Enums;
+using SmartDine.Domain.Exceptions;
 
 namespace SmartDine.Menu.API.Controllers;
 
@@ -33,10 +34,14 @@ namespace SmartDine.Menu.API.Controllers;
 public class MenuItemsController : ControllerBase
 {
     private readonly MenuService _menuService;
+    private readonly IWebHostEnvironment _env;
+    private readonly IConfiguration _configuration;
 
-    public MenuItemsController(MenuService menuService)
+    public MenuItemsController(MenuService menuService, IWebHostEnvironment env, IConfiguration configuration)
     {
         _menuService = menuService;
+        _env = env;
+        _configuration = configuration;
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -58,7 +63,8 @@ public class MenuItemsController : ControllerBase
         [FromQuery(Name = "category_id")] int? categoryId,
         [FromQuery] string? search,
         [FromQuery] int page = 1,
-        [FromQuery] int limit = 10)
+        [FromQuery] int limit = 10,
+        [FromQuery] bool includeUnavailable = false)
     {
         if (page < 1) page = 1;
         if (limit < 1) limit = 10;
@@ -66,8 +72,13 @@ public class MenuItemsController : ControllerBase
 
         var customerId = GetCustomerIdFromToken();
 
+        // Chỉ nội bộ (STAFF/CHEF/MANAGER) mới được xem món đã tắt is_available — khách hàng
+        // gửi cờ này lên cũng bị bỏ qua, tránh lộ danh sách món hết hàng ra ngoài.
+        var isInternalCaller = User.Identity?.IsAuthenticated == true &&
+            (User.IsInRole(nameof(UserRole.MANAGER)) || User.IsInRole(nameof(UserRole.STAFF)) || User.IsInRole(nameof(UserRole.CHEF)));
+
         var (items, totalCount, totalPages) = await _menuService.GetPagedAsync(
-            categoryId, search, page, limit, customerId);
+            categoryId, search, page, limit, customerId, includeUnavailable && isInternalCaller);
 
         return Ok(PaginatedApiResponse<MenuItemSummaryResponse>.Ok(items, totalCount, page, totalPages));
     }
@@ -189,6 +200,50 @@ public class MenuItemsController : ControllerBase
     {
         await _menuService.DeleteAsync(id);
         return Ok(ApiResponse<object>.Ok(null!, ValidationMessages.MENU_ITEM_DELETED_SUCCESS));
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // POST /api/v1/menu-items/upload-image
+    // ═══════════════════════════════════════════════════════════════
+    /// <summary>
+    /// Upload ảnh món ăn — lựa chọn thay thế cho việc dán link ảnh trực tiếp.
+    /// Lưu vào wwwroot/uploads/ với tên file GUID, trả về URL để gán vào field ImageUrl
+    /// khi tạo/sửa món (Create/Patch vẫn nhận ImageUrl dạng string như cũ, không đổi gì ở đó).
+    ///
+    /// Xử lý file trực tiếp ở Controller (không qua MenuService) vì đây là thao tác I/O gắn với
+    /// hosting environment (wwwroot), không phải nghiệp vụ domain — MenuService là class library
+    /// thuần không nên phụ thuộc ASP.NET Core hosting.
+    /// </summary>
+    [HttpPost("upload-image")]
+    [Authorize(Roles = Roles.Manager)]
+    [RequestSizeLimit(5 * 1024 * 1024)]
+    public async Task<IActionResult> UploadImage([FromForm] IFormFile? file)
+    {
+        if (file == null || file.Length == 0)
+            throw new BusinessRuleViolationException(ValidationMessages.MENU_ITEM_IMAGE_REQUIRED);
+
+        if (string.IsNullOrEmpty(file.ContentType) || !file.ContentType.StartsWith("image/"))
+            throw new BusinessRuleViolationException(ValidationMessages.MENU_ITEM_IMAGE_INVALID_TYPE);
+
+        if (file.Length > 5 * 1024 * 1024)
+            throw new BusinessRuleViolationException(ValidationMessages.MENU_ITEM_IMAGE_TOO_LARGE);
+
+        var webRoot = _env.WebRootPath ?? Path.Combine(_env.ContentRootPath, "wwwroot");
+        var uploadsDir = Path.Combine(webRoot, "uploads");
+        Directory.CreateDirectory(uploadsDir);
+
+        var extension = Path.GetExtension(file.FileName);
+        var fileName = $"{Guid.NewGuid():N}{extension}";
+        var filePath = Path.Combine(uploadsDir, fileName);
+
+        using (var stream = new FileStream(filePath, FileMode.Create))
+        {
+            await file.CopyToAsync(stream);
+        }
+
+        var baseUrl = (_configuration["Uploads:PublicBaseUrl"] ?? "https://smartdine.app").TrimEnd('/');
+        var result = new UploadImageResponse { ImageUrl = $"{baseUrl}/uploads/{fileName}" };
+        return Ok(ApiResponse<UploadImageResponse>.Ok(result));
     }
 
     // ═══════════════════════════════════════════════════════════════

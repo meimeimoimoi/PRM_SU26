@@ -42,6 +42,8 @@ public static class ValidationMessages
     public const string TABLE_CAPACITY_INVALID = "Sức chứa bàn phải lớn hơn 0.";
     public const string TABLE_NUMBER_ALREADY_EXISTS = "Số bàn {0} đã tồn tại trong hệ thống.";
     public const string TABLE_CANNOT_DELETE_OCCUPIED = "Bàn số {0} đang có khách, không thể xóa.";
+    public const string LOCATION_NOT_FOUND = "LOCATION_NOT_FOUND";
+    public const string LOCATION_NAME_REQUIRED = "Tên khu vực không được để trống.";
 
     // ===== Reservation =====
     public const string RESERVATION_NOT_FOUND = "RESERVATION_NOT_FOUND";
@@ -75,6 +77,9 @@ public static class ValidationMessages
     public const string MENU_CATEGORY_NOT_FOUND = "MENU_CATEGORY_NOT_FOUND";
     public const string MENU_ITEM_DUPLICATE_NAME = "Tên món ăn '{0}' đã tồn tại trong danh mục này.";
     public const string MENU_ITEM_PATCH_EMPTY = "Phải cung cấp ít nhất một trường để cập nhật.";
+    public const string MENU_ITEM_IMAGE_REQUIRED = "Vui lòng chọn 1 file ảnh để tải lên.";
+    public const string MENU_ITEM_IMAGE_INVALID_TYPE = "File tải lên phải là ảnh (JPG, PNG, WEBP...).";
+    public const string MENU_ITEM_IMAGE_TOO_LARGE = "Ảnh không được vượt quá 5MB.";
     public const string AI_RECOMMENDATION_NO_CONTEXT = "Không có dữ liệu ngữ cảnh kinh doanh để đề xuất.";
 
     // ===== DiningSession =====
@@ -137,7 +142,9 @@ public static class ValidationMessages
     public const string RESERVATION_CREATED_SUCCESS = "Đặt bàn thành công";
     public const string RESERVATION_STATUS_UPDATED_SUCCESS = "Cập nhật trạng thái đặt bàn thành công";
     public const string TABLE_CREATED_SUCCESS = "Tạo bàn mới thành công";
+    public const string TABLE_UPDATED_SUCCESS = "Cập nhật thông tin bàn thành công";
     public const string TABLE_DELETED_SUCCESS = "Xóa bàn thành công";
+    public const string LOCATION_CREATED_SUCCESS = "Tạo khu vực mới thành công";
 
     // ===== Staff =====
     public const string STAFF_NOT_FOUND = "STAFF_NOT_FOUND";

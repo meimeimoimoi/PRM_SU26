@@ -1,5 +1,7 @@
 using SmartDine.Application.Constants;
+using SmartDine.Application.DTOs.Common;
 using SmartDine.Application.DTOs.Orders;
+using SmartDine.Application.Helper;
 using SmartDine.Domain.Entities;
 using SmartDine.Domain.Enums;
 using SmartDine.Domain.Exceptions;
@@ -266,6 +268,17 @@ public class OrderService
         return orders.Select(o => MapToResponse(o,
             o.OrderDetails.Select(i => i.MenuItem).Where(m => m != null).ToList()!))
             .ToList();
+    }
+
+    /// <summary>
+    /// Chart doanh số theo đơn hàng (không lọc thanh toán) cho Dashboard Manager — "Order Sales".
+    /// period: day (theo giờ hôm nay) | week (7 ngày) | month (từ đầu tháng).
+    /// </summary>
+    public async Task<List<ChartPointResponse>> GetOrderChartAsync(string? period)
+    {
+        var (start, end) = ChartPeriodHelper.ResolveRange(period);
+        var orders = await _uow.Orders.GetByDateRangeAsync(start, end);
+        return ChartPeriodHelper.Bucket(orders.Select(o => (o.CreatedAt, o.FinalAmount)), period);
     }
 
     public async Task<List<OrderResponse>> GetByCustomerIdAsync(int customerId, int page = 1, int pageSize = 20)

@@ -1,45 +1,59 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { 
-  Table, 
-  Tag, 
-  Button, 
-  Space, 
-  Card, 
-  Input, 
-  Select, 
-  Modal, 
-  Form, 
-  InputNumber, 
-  message, 
+import {
+  Table,
+  Tag,
+  Button,
+  Space,
+  Card,
+  Input,
+  Select,
+  Modal,
+  Form,
+  InputNumber,
+  message,
   Tooltip,
   Dropdown,
-  MenuProps
+  MenuProps,
+  QRCode,
+  Typography
 } from 'antd';
-import { 
-  SearchOutlined, 
-  PlusOutlined, 
-  EditOutlined, 
-  DeleteOutlined, 
-  CheckCircleOutlined, 
-  ExclamationCircleOutlined 
+import {
+  SearchOutlined,
+  PlusOutlined,
+  EditOutlined,
+  DeleteOutlined,
+  CheckCircleOutlined,
+  ExclamationCircleOutlined,
+  QrcodeOutlined,
+  CopyOutlined,
+  SwapOutlined
 } from '@ant-design/icons';
 import { Table as TableType, TableStatus } from '@/types/table';
+import { Location } from '@/types/location';
 import { tableService } from '@/services/tableService';
+import { locationService } from '@/services/locationService';
 import { getErrorMessage } from '@/utils/apiError';
 
 const { Option } = Select;
+const CREATE_LOCATION_VALUE = '__create_new__';
 
 const TableManagementPage: React.FC = () => {
   const [tables, setTables] = useState<TableType[]>([]);
+  const [locations, setLocations] = useState<Location[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [searchText, setSearchText] = useState<string>('');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
 
   // Modal state
   const [isAddModalOpen, setIsAddModalOpen] = useState<boolean>(false);
+  const [isAddLocationModalOpen, setIsAddLocationModalOpen] = useState<boolean>(false);
+  const [qrModalTable, setQrModalTable] = useState<TableType | null>(null);
+  const [editModalTable, setEditModalTable] = useState<TableType | null>(null);
   const [form] = Form.useForm();
+  const [locationForm] = Form.useForm();
+  const [editForm] = Form.useForm();
 
-  // 1. Fetch tables from API
+  // 1. Fetch tables + locations from API
   const fetchTables = async () => {
     setLoading(true);
     try {
@@ -55,12 +69,22 @@ const TableManagementPage: React.FC = () => {
     }
   };
 
+  const fetchLocations = async () => {
+    try {
+      const data = await locationService.getAll();
+      setLocations(data || []);
+    } catch (error: any) {
+      message.error(getErrorMessage(error, 'Không tải được danh sách khu vực.'));
+    }
+  };
+
   useEffect(() => {
     fetchTables();
+    fetchLocations();
   }, []);
 
-  // 3. Create Table Handler
-  const handleAddTable = async (values: { tableNumber: number; capacity: number }) => {
+  // 2. Create Table Handler
+  const handleAddTable = async (values: { tableNumber: number; capacity: number; locationId?: number }) => {
     try {
       // Check if tableNumber already exists
       if (tables.some(t => t.tableNumber === values.tableNumber)) {
@@ -68,40 +92,91 @@ const TableManagementPage: React.FC = () => {
         return;
       }
 
-      const newTable = await tableService.createTable(values.tableNumber, values.capacity);
+      const newTable = await tableService.createTable(values.tableNumber, values.capacity, values.locationId);
       setTables((prev) => [...prev, newTable].sort((a, b) => a.tableNumber - b.tableNumber));
       setIsAddModalOpen(false);
       form.resetFields();
       message.success('Thêm bàn mới thành công');
     } catch (error: any) {
-      message.error(error.message || 'Thêm bàn thất bại');
+      message.error(getErrorMessage(error, 'Thêm bàn thất bại'));
     }
   };
 
-  // 4. Update Status Handler
+  // Tạo location mới từ popup con trong modal Add Table — chọn luôn location vừa tạo.
+  const handleCreateLocation = async (values: { name: string }) => {
+    try {
+      const newLocation = await locationService.create(values.name);
+      setLocations((prev) => [...prev, newLocation]);
+      form.setFieldsValue({ locationId: newLocation.id });
+      setIsAddLocationModalOpen(false);
+      locationForm.resetFields();
+      message.success('Tạo khu vực mới thành công');
+    } catch (error: any) {
+      message.error(getErrorMessage(error, 'Tạo khu vực thất bại'));
+    }
+  };
+
+  // 3. Update Status Handler
   const handleStatusChange = async (tableId: number, status: TableStatus) => {
     try {
       const updated = await tableService.updateTableStatus(tableId, status);
       setTables((prev) => prev.map((t) => (t.id === tableId ? updated : t)));
       message.success(`Đã chuyển trạng thái bàn sang ${status === 'AVAILABLE' ? 'Trống (AVAILABLE)' : 'Đang có khách (OCCUPIED)'}`);
     } catch (error: any) {
-      message.error(error.message || 'Cập nhật trạng thái thất bại');
+      message.error(getErrorMessage(error, 'Cập nhật trạng thái thất bại'));
     }
   };
 
+  // 4. Edit basic info (Capacity + Location) — không cho sửa Số bàn vì QR đã in mã hóa theo số bàn.
+  const openEditModal = (table: TableType) => {
+    setEditModalTable(table);
+    editForm.setFieldsValue({ capacity: table.capacity, locationId: table.locationId });
+  };
 
-  // 5. Filter & Search logic
+  const handleEditTable = async (values: { capacity: number; locationId?: number }) => {
+    if (!editModalTable) return;
+    try {
+      const updated = await tableService.updateTable(editModalTable.id, values);
+      setTables((prev) => prev.map((t) => (t.id === editModalTable.id ? updated : t)));
+      setEditModalTable(null);
+      message.success('Cập nhật thông tin bàn thành công');
+    } catch (error: any) {
+      message.error(getErrorMessage(error, 'Cập nhật thông tin bàn thất bại'));
+    }
+  };
+
+  // 5. Delete table — BE từ chối (422) nếu bàn đang OCCUPIED.
+  const handleDeleteTable = (table: TableType) => {
+    Modal.confirm({
+      title: 'Xóa bàn ăn',
+      content: `Bạn chắc chắn muốn xóa bàn T-${table.tableNumber.toString().padStart(2, '0')}? Mã QR đã in cho bàn này sẽ không còn dùng được nữa.`,
+      okText: 'Xóa',
+      okType: 'danger',
+      cancelText: 'Hủy',
+      onOk: async () => {
+        try {
+          await tableService.deleteTable(table.id);
+          setTables((prev) => prev.filter((t) => t.id !== table.id));
+          message.success('Đã xóa bàn thành công');
+        } catch (error: any) {
+          message.error(getErrorMessage(error, 'Xóa bàn thất bại'));
+        }
+      }
+    });
+  };
+
+  // 6. Filter & Search logic
   const filteredTables = useMemo(() => {
     return tables.filter((table) => {
       const formattedId = `T-${table.tableNumber.toString().padStart(2, '0')}`;
-      const zone = table.zone || 'Main Hall';
-      
-      const matchesSearch = 
-        formattedId.toLowerCase().includes(searchText.toLowerCase()) ||
-        zone.toLowerCase().includes(searchText.toLowerCase());
+      const locationName = table.locationName || '';
 
-      const matchesStatus = 
-        statusFilter === 'ALL' || 
+      const matchesSearch =
+        formattedId.toLowerCase().includes(searchText.toLowerCase()) ||
+        locationName.toLowerCase().includes(searchText.toLowerCase());
+
+      const matchesStatus =
+        statusFilter === 'ALL' ||
         (statusFilter === 'AVAILABLE' && table.status === 'AVAILABLE') ||
         (statusFilter === 'OCCUPIED' && table.status === 'OCCUPIED');
 
@@ -109,7 +184,7 @@ const TableManagementPage: React.FC = () => {
     });
   }, [tables, searchText, statusFilter]);
 
-  // 6. Table columns configuration
+  // 7. Table columns configuration
   const columns = [
     {
       title: 'TABLE ID',
@@ -130,11 +205,11 @@ const TableManagementPage: React.FC = () => {
       ),
     },
     {
-      title: 'LOCATION/ZONE',
-      dataIndex: 'zone',
-      key: 'zone',
-      render: (zone: string) => (
-        <span style={{ color: '#4a5568' }}>{zone || 'Main Hall'}</span>
+      title: 'LOCATION',
+      dataIndex: 'locationName',
+      key: 'locationName',
+      render: (locationName: string) => (
+        <span style={{ color: '#4a5568' }}>{locationName || 'Chưa gán khu vực'}</span>
       ),
     },
     {
@@ -144,7 +219,7 @@ const TableManagementPage: React.FC = () => {
       render: (status: TableStatus) => {
         const isAvailable = status === 'AVAILABLE';
         return (
-          <Tag 
+          <Tag
             color={isAvailable ? 'success' : 'error'}
             style={{
               borderRadius: 12,
@@ -182,22 +257,38 @@ const TableManagementPage: React.FC = () => {
 
         return (
           <Space size="middle">
+            <Tooltip title="Xem mã QR để dán lên bàn">
+              <Button
+                type="text"
+                icon={<QrcodeOutlined style={{ color: '#1890ff' }} />}
+                style={{ padding: 4 }}
+                onClick={() => setQrModalTable(record)}
+              />
+            </Tooltip>
+            <Tooltip title="Sửa thông tin (Sức chứa, Khu vực)">
+              <Button
+                type="text"
+                icon={<EditOutlined style={{ color: '#718096' }} />}
+                style={{ padding: 4 }}
+                onClick={() => openEditModal(record)}
+              />
+            </Tooltip>
             <Tooltip title="Đổi trạng thái">
               <Dropdown menu={{ items }} trigger={['click']}>
-                <Button 
-                  type="text" 
-                  icon={<EditOutlined style={{ color: '#718096' }} />} 
+                <Button
+                  type="text"
+                  icon={<SwapOutlined style={{ color: '#718096' }} />}
                   style={{ padding: 4 }}
                 />
               </Dropdown>
             </Tooltip>
-            <Tooltip title="Xóa bàn (Chỉ Manager)">
-              <Button 
-                type="text" 
-                danger 
-                icon={<DeleteOutlined style={{ color: '#a0aec0' }} />} 
+            <Tooltip title="Xóa bàn">
+              <Button
+                type="text"
+                danger
+                icon={<DeleteOutlined style={{ color: '#a0aec0' }} />}
                 style={{ padding: 4 }}
-                onClick={() => message.warning('Chức năng xóa bàn yêu cầu quyền Quản trị tối cao')}
+                onClick={() => handleDeleteTable(record)}
               />
             </Tooltip>
           </Space>
@@ -208,7 +299,7 @@ const TableManagementPage: React.FC = () => {
 
   return (
     <div style={{ padding: '0 0px 24px 0px' }}>
-      <Card 
+      <Card
         bordered={false}
         style={{
           borderRadius: 8,
@@ -217,17 +308,17 @@ const TableManagementPage: React.FC = () => {
         }}
       >
         {/* Filter Toolbar */}
-        <div style={{ 
-          display: 'flex', 
-          justifyContent: 'space-between', 
-          alignItems: 'center', 
-          marginBottom: 24, 
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginBottom: 24,
           flexWrap: 'wrap',
           gap: 16
         }}>
           <div style={{ display: 'flex', gap: 16, flex: 1, minWidth: 280, maxWidth: 600 }}>
             <Input
-              placeholder="Search tables by ID or zone..."
+              placeholder="Search tables by ID or location..."
               prefix={<SearchOutlined style={{ color: '#bfbfbf' }} />}
               value={searchText}
               onChange={(e) => setSearchText(e.target.value)}
@@ -245,14 +336,14 @@ const TableManagementPage: React.FC = () => {
               <Option value="OCCUPIED">Occupied</Option>
             </Select>
           </div>
-          
-          <Button 
-            type="primary" 
+
+          <Button
+            type="primary"
             icon={<PlusOutlined />}
             onClick={() => setIsAddModalOpen(true)}
-            style={{ 
-              backgroundColor: '#1890ff', 
-              borderRadius: 6, 
+            style={{
+              backgroundColor: '#1890ff',
+              borderRadius: 6,
               height: 38,
               fontWeight: 500,
               display: 'flex',
@@ -264,9 +355,9 @@ const TableManagementPage: React.FC = () => {
         </div>
 
         {/* Tables list */}
-        <Table 
-          columns={columns} 
-          dataSource={filteredTables} 
+        <Table
+          columns={columns}
+          dataSource={filteredTables}
           rowKey="id"
           loading={loading}
           pagination={{
@@ -324,6 +415,26 @@ const TableManagementPage: React.FC = () => {
             <InputNumber style={{ width: '100%' }} placeholder="Ví dụ: 4" />
           </Form.Item>
 
+          <Form.Item name="locationId" label="Khu vực">
+            <Select
+              placeholder="Chọn khu vực (tùy chọn)"
+              allowClear
+              onChange={(val) => {
+                if (val === CREATE_LOCATION_VALUE) {
+                  form.setFieldsValue({ locationId: undefined });
+                  setIsAddLocationModalOpen(true);
+                }
+              }}
+            >
+              {locations.map((l) => (
+                <Option key={l.id} value={l.id}>{l.name}</Option>
+              ))}
+              <Option key={CREATE_LOCATION_VALUE} value={CREATE_LOCATION_VALUE}>
+                + Tạo khu vực mới...
+              </Option>
+            </Select>
+          </Form.Item>
+
           <Form.Item style={{ marginBottom: 0, marginTop: 24, textAlign: 'right' }}>
             <Space>
               <Button onClick={() => setIsAddModalOpen(false)}>Hủy</Button>
@@ -333,7 +444,108 @@ const TableManagementPage: React.FC = () => {
         </Form>
       </Modal>
 
+      {/* Modal con: Tạo khu vực mới (mở từ trong modal Add Table khi chưa có lựa chọn phù hợp) */}
+      <Modal
+        title="Tạo Khu Vực Mới"
+        open={isAddLocationModalOpen}
+        onCancel={() => setIsAddLocationModalOpen(false)}
+        footer={null}
+        destroyOnClose
+      >
+        <Form form={locationForm} layout="vertical" onFinish={handleCreateLocation} style={{ marginTop: 16 }}>
+          <Form.Item
+            name="name"
+            label="Tên khu vực"
+            rules={[{ required: true, message: 'Vui lòng nhập tên khu vực!' }]}
+          >
+            <Input placeholder="Ví dụ: Tầng 2, Sân vườn, Phòng VIP" />
+          </Form.Item>
+          <Form.Item style={{ marginBottom: 0, marginTop: 24, textAlign: 'right' }}>
+            <Space>
+              <Button onClick={() => setIsAddLocationModalOpen(false)}>Hủy</Button>
+              <Button type="primary" htmlType="submit">Tạo</Button>
+            </Space>
+          </Form.Item>
+        </Form>
+      </Modal>
 
+      {/* Modal: Sửa thông tin bàn — chỉ Sức chứa + Khu vực, khóa Số bàn */}
+      <Modal
+        title={editModalTable ? `Sửa Thông Tin - Bàn T-${editModalTable.tableNumber.toString().padStart(2, '0')}` : 'Sửa Thông Tin Bàn'}
+        open={editModalTable !== null}
+        onCancel={() => setEditModalTable(null)}
+        footer={null}
+        destroyOnClose
+        style={{ borderRadius: 12 }}
+      >
+        <Form form={editForm} layout="vertical" onFinish={handleEditTable} style={{ marginTop: 16 }}>
+          <Form.Item label="Số bàn">
+            <InputNumber style={{ width: '100%' }} value={editModalTable?.tableNumber} disabled />
+            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+              Không thể đổi số bàn vì mã QR đã in mã hóa theo số này. Muốn đổi số bàn, hãy xóa và tạo bàn mới.
+            </Typography.Text>
+          </Form.Item>
+
+          <Form.Item
+            name="capacity"
+            label="Sức chứa tối đa (PAX)"
+            rules={[
+              { required: true, message: 'Vui lòng nhập sức chứa!' },
+              { type: 'integer', min: 1, max: 20, message: 'Sức chứa hợp lệ từ 1 đến 20 khách!' }
+            ]}
+          >
+            <InputNumber style={{ width: '100%' }} />
+          </Form.Item>
+
+          <Form.Item name="locationId" label="Khu vực">
+            <Select placeholder="Chọn khu vực" allowClear>
+              {locations.map((l) => (
+                <Option key={l.id} value={l.id}>{l.name}</Option>
+              ))}
+            </Select>
+          </Form.Item>
+
+          <Form.Item style={{ marginBottom: 0, marginTop: 24, textAlign: 'right' }}>
+            <Space>
+              <Button onClick={() => setEditModalTable(null)}>Hủy</Button>
+              <Button type="primary" htmlType="submit">Cập nhật</Button>
+            </Space>
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      {/* Modal: QR bàn — link dán trên bàn để khách quét bằng camera điện thoại (không cần cài app) */}
+      <Modal
+        title={qrModalTable ? `Mã QR - Bàn T-${qrModalTable.tableNumber.toString().padStart(2, '0')}` : 'Mã QR'}
+        open={qrModalTable !== null}
+        onCancel={() => setQrModalTable(null)}
+        footer={[
+          <Button key="close" onClick={() => setQrModalTable(null)}>Đóng</Button>,
+        ]}
+      >
+        {qrModalTable?.qrCode ? (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16, padding: '8px 0' }}>
+            <QRCode value={qrModalTable.qrCode} size={220} />
+            <Space.Compact style={{ width: '100%' }}>
+              <Input value={qrModalTable.qrCode} readOnly />
+              <Button
+                icon={<CopyOutlined />}
+                onClick={() => {
+                  navigator.clipboard.writeText(qrModalTable.qrCode!);
+                  message.success('Đã copy link!');
+                }}
+              />
+            </Space.Compact>
+            <Typography.Text type="secondary" style={{ fontSize: 12, textAlign: 'center' }}>
+              In mã này và dán lên bàn. Khách quét bằng camera điện thoại thường sẽ mở thẳng trang đặt món, không cần cài app.
+            </Typography.Text>
+          </div>
+        ) : (
+          <Typography.Text type="warning">
+            Bàn này chưa có mã QR (có thể được tạo trước khi tính năng này ra mắt). Vui lòng liên hệ dev để tạo lại.
+          </Typography.Text>
+        )}
+      </Modal>
     </div>
   );
 };

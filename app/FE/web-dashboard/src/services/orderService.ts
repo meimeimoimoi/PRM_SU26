@@ -24,7 +24,26 @@ export interface OrderResponse {
   items: OrderDetailItem[];
 }
 
+export interface ChartPoint {
+  label: string;
+  value: number;
+}
+
+export type ChartPeriod = 'day' | 'week' | 'month';
+
 export const orderService = {
+  // Doanh số theo đơn hàng (không lọc thanh toán) — cho chart "Doanh số đơn hàng" ở Dashboard.
+  getOrderChart: async (period: ChartPeriod): Promise<ChartPoint[]> => {
+    const response = await apiClient.get<any>('/orders/chart', { params: { period } });
+    return response.data.data || response.data || [];
+  },
+
+  // Doanh thu thực nhận (chỉ payment SUCCESS) — cho chart "Doanh thu thực nhận" ở Dashboard.
+  getRevenueChart: async (period: ChartPeriod): Promise<ChartPoint[]> => {
+    const response = await apiClient.get<any>('/payments/chart', { params: { period } });
+    return response.data.data || response.data || [];
+  },
+
   getActiveOrders: async (): Promise<OrderResponse[]> => {
     const response = await apiClient.get<any>('/orders/active');
     const data = response.data.data || response.data;

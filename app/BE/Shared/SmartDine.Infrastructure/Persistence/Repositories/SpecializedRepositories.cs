@@ -40,11 +40,14 @@ public class MenuItemRepository : GenericRepository<MenuItem>, IMenuItemReposito
         await _dbSet.Where(m => ids.Contains(m.Id)).ToListAsync();
 
     public async Task<(IReadOnlyList<MenuItem> Items, int TotalCount)> GetPagedFilteredAsync(
-        int? categoryId, string? search, int page, int pageSize)
+        int? categoryId, string? search, int page, int pageSize, bool includeUnavailable = false)
     {
         var query = _dbSet.Include(m => m.Category)
                           .Include(m => m.Statistics)
-                          .Where(m => m.IsAvailable);
+                          .AsQueryable();
+
+        if (!includeUnavailable)
+            query = query.Where(m => m.IsAvailable);
 
         if (categoryId.HasValue)
             query = query.Where(m => m.CategoryId == categoryId.Value);
@@ -129,6 +132,12 @@ public class TableRepository : GenericRepository<Table>, ITableRepository
     public TableRepository(SmartDineDbContext context) : base(context) { }
 
     /// <summary>
+    /// Include Location để Service có tên khu vực mà không cần query thêm.
+    /// </summary>
+    public override async Task<Table?> GetByIdAsync(int id) =>
+        await _dbSet.Include(t => t.Location).FirstOrDefaultAsync(t => t.Id == id);
+
+    /// <summary>
     /// Lọc bàn theo đúng 1 trạng thái, sắp xếp theo số bàn tăng dần.
     /// SQL: SELECT * FROM dining_tables WHERE status = @status AND is_deleted = false ORDER BY table_number.
     /// </summary>
@@ -155,7 +164,7 @@ public class TableRepository : GenericRepository<Table>, ITableRepository
     /// </summary>
     public async Task<IReadOnlyList<Table>> GetFilteredAsync(string? status, int? capacity)
     {
-        var query = _dbSet.AsQueryable();
+        var query = _dbSet.Include(t => t.Location).AsQueryable();
         if (!string.IsNullOrEmpty(status))
         {
             var parsed = Enum.Parse<TableStatus>(status, true);

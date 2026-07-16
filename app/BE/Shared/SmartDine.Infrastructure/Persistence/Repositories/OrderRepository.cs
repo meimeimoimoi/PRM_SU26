@@ -66,6 +66,11 @@ public class OrderRepository : GenericRepository<Order>, IOrderRepository
                     .Skip((page - 1) * pageSize).Take(pageSize)
                     .ToListAsync();
 
+    public async Task<IReadOnlyList<Order>> GetByDateRangeAsync(DateTime start, DateTime end) =>
+        await _dbSet.Where(o => o.CreatedAt >= start && o.CreatedAt <= end)
+                    .OrderBy(o => o.CreatedAt)
+                    .ToListAsync();
+
     public override async Task<Order?> GetByIdAsync(int id) =>
         await _dbSet.Include(o => o.OrderDetails).ThenInclude(d => d.MenuItem)
                     .Include(o => o.Session).ThenInclude(s => s.Table)

@@ -41,17 +41,23 @@ public class OrderNotificationService : IOrderNotificationService
     }
 
     /// <summary>
-    /// Thông báo thanh toán thành công về bàn ăn.
-    /// Client lắng nghe event "ReceivePaymentSuccess" để tự ẩn QR và hiển thị màn hình "Cảm ơn".
+    /// Thông báo thanh toán thành công.
+    /// Client tại bàn lắng nghe event "ReceivePaymentSuccess" để tự ẩn QR và hiển thị màn hình
+    /// "Cảm ơn". Đồng thời gửi tới "KitchenGroup" để chuông thông báo trên web-dashboard
+    /// (STAFF/MANAGER) nhận được ngay, không cần F5.
     /// </summary>
-    public async Task NotifyPaymentSuccessAsync(int tableId, string invoiceId, decimal amount)
+    public async Task NotifyPaymentSuccessAsync(int tableId, int tableNumber, string invoiceId, decimal amount)
     {
-        await _hubContext.Clients.Group($"table_{tableId}").SendAsync("ReceivePaymentSuccess", new
+        var payload = new
         {
             TableId = tableId,
+            TableNumber = tableNumber,
             InvoiceId = invoiceId,
             Amount = amount,
             Timestamp = DateTime.UtcNow
-        });
+        };
+
+        await _hubContext.Clients.Group($"table_{tableId}").SendAsync("ReceivePaymentSuccess", payload);
+        await _hubContext.Clients.Group("KitchenGroup").SendAsync("ReceivePaymentSuccess", payload);
     }
 }
