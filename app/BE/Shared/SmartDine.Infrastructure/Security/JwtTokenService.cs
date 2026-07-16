@@ -84,31 +84,45 @@ public class JwtTokenService : IJwtTokenService
 
     public ClaimsPrincipal? GetPrincipalFromExpiredToken(string token)
     {
-        var rsa = RSA.Create();
-        rsa.ImportParameters(_keyProvider.PublicKeyParameters);
-
-        var tokenValidationParameters = new TokenValidationParameters
-        {
-            ValidateIssuer = true,
-            ValidateAudience = true,
-            ValidateLifetime = false,
-            ValidateIssuerSigningKey = true,
-            ValidIssuer = _configuration["Jwt:Issuer"],
-            ValidAudience = _configuration["Jwt:Audience"],
-            IssuerSigningKey = new RsaSecurityKey(rsa)
-        };
-
-        var tokenHandler = new JwtSecurityTokenHandler();
-        var principal = tokenHandler.ValidateToken(token, tokenValidationParameters, out var securityToken);
-
-        if (securityToken is not JwtSecurityToken jwtToken ||
-            !jwtToken.Header.Alg.Equals(SecurityAlgorithms.RsaSha256,
-                StringComparison.InvariantCultureIgnoreCase))
+        if (string.IsNullOrEmpty(token))
         {
             return null;
         }
 
-        return principal;
+        try
+        {
+            var rsa = RSA.Create();
+            rsa.ImportParameters(_keyProvider.PublicKeyParameters);
+
+            var tokenValidationParameters = new TokenValidationParameters
+            {
+                ValidateIssuer = true,
+                ValidateAudience = true,
+                ValidateLifetime = false,
+                ValidateIssuerSigningKey = true,
+                ValidIssuer = _configuration["Jwt:Issuer"],
+                ValidAudience = _configuration["Jwt:Audience"],
+                IssuerSigningKey = new RsaSecurityKey(rsa)
+            };
+
+            var tokenHandler = new JwtSecurityTokenHandler();
+            var principal = tokenHandler.ValidateToken(token, tokenValidationParameters, out var securityToken);
+
+            if (securityToken is not JwtSecurityToken jwtToken ||
+                !jwtToken.Header.Alg.Equals(SecurityAlgorithms.RsaSha256,
+                    StringComparison.InvariantCultureIgnoreCase))
+            {
+                return null;
+            }
+
+            return principal;
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+
+
     }
 
     public string GeneratePasswordResetToken(int id, string email, string role)
