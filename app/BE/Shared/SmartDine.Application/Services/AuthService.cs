@@ -1,5 +1,6 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
+using Microsoft.IdentityModel.Tokens;
 using SmartDine.Application.Constants;
 using SmartDine.Application.DTOs.Auth;
 using SmartDine.Domain.Entities;
@@ -155,8 +156,16 @@ public class AuthService
     public async Task<TokenResponse> RefreshTokenAsync(RefreshTokenRequest request)
     {
         // Bước 1-2: Parse expired token, lấy jti
-        var principal = _jwtService.GetPrincipalFromExpiredToken(request.AccessToken)
-            ?? throw new BusinessRuleViolationException(ValidationMessages.ACCESS_TOKEN_INVALID);
+        ClaimsPrincipal principal;
+        try
+        {
+            principal = _jwtService.GetPrincipalFromExpiredToken(request.AccessToken)
+                ?? throw new BusinessRuleViolationException(ValidationMessages.ACCESS_TOKEN_INVALID);
+        }
+        catch (SecurityTokenException)
+        {
+            throw new BusinessRuleViolationException(ValidationMessages.ACCESS_TOKEN_INVALID);
+        }
 
         var jwtId = principal.FindFirst(JwtRegisteredClaimNames.Jti)?.Value
             ?? throw new BusinessRuleViolationException(ValidationMessages.ACCESS_TOKEN_INVALID);

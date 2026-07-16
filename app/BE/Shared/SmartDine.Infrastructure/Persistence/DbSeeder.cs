@@ -24,9 +24,12 @@ public class DbSeeder
 
     public async Task SeedAsync()
     {
-        // 0. Ensure PostgreSQL sequences exist
-        await _context.Database.ExecuteSqlRawAsync(
-            "CREATE SEQUENCE IF NOT EXISTS payment_order_code_seq START WITH 100000 INCREMENT BY 1;");
+        // 0. Ensure PostgreSQL sequences exist (bỏ qua khi InMemory / non-relational — integration tests)
+        if (_context.Database.IsRelational())
+        {
+            await _context.Database.ExecuteSqlRawAsync(
+                "CREATE SEQUENCE IF NOT EXISTS payment_order_code_seq START WITH 100000 INCREMENT BY 1;");
+        }
 
         // 1. Seed Categories & Menu Items
         if (!_context.MenuCategories.Any())

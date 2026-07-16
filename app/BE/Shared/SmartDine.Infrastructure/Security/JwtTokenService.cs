@@ -84,45 +84,60 @@ public class JwtTokenService : IJwtTokenService
 
     public ClaimsPrincipal? GetPrincipalFromExpiredToken(string token)
     {
-        if (string.IsNullOrEmpty(token))
+        if (string.IsNullOrWhiteSpace(token))
         {
             return null;
         }
 
+        var tokenHandler = new JwtSecurityTokenHandler();
+
+        // Kiểm tra cấu trúc chuỗi trước. Nếu không phải định dạng JWT, trả về null.
+        if (!tokenHandler.CanReadToken(token))
+        {
+            return null;
+        }
+
+        // CanReadToken có thể true với chuỗi 3 đoạn không Base64url được — đọc thử để trả null (chuỗi rác).
         try
         {
-            var rsa = RSA.Create();
-            rsa.ImportParameters(_keyProvider.PublicKeyParameters);
-
-            var tokenValidationParameters = new TokenValidationParameters
-            {
-                ValidateIssuer = true,
-                ValidateAudience = true,
-                ValidateLifetime = false,
-                ValidateIssuerSigningKey = true,
-                ValidIssuer = _configuration["Jwt:Issuer"],
-                ValidAudience = _configuration["Jwt:Audience"],
-                IssuerSigningKey = new RsaSecurityKey(rsa)
-            };
-
-            var tokenHandler = new JwtSecurityTokenHandler();
-            var principal = tokenHandler.ValidateToken(token, tokenValidationParameters, out var securityToken);
-
-            if (securityToken is not JwtSecurityToken jwtToken ||
-                !jwtToken.Header.Alg.Equals(SecurityAlgorithms.RsaSha256,
-                    StringComparison.InvariantCultureIgnoreCase))
-            {
-                return null;
-            }
-
-            return principal;
+            _ = tokenHandler.ReadJwtToken(token);
         }
-        catch (Exception)
+        catch (ArgumentException)
+        {
+            return null;
+        }
+        catch (SecurityTokenException)
         {
             return null;
         }
 
+        using var rsa = RSA.Create();
+        rsa.ImportParameters(_keyProvider.PublicKeyParameters);
+        // Copy parameters so RsaSecurityKey không phụ thuộc RSA bị dispose sau using.
+        var signingKey = new RsaSecurityKey(rsa.ExportParameters(false));
 
+        var tokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidateAudience = true,
+            ValidateLifetime = false,
+            ValidateIssuerSigningKey = true,
+            ValidIssuer = _configuration["Jwt:Issuer"],
+            ValidAudience = _configuration["Jwt:Audience"],
+            IssuerSigningKey = signingKey
+        };
+
+        // ValidateToken sẽ ném SecurityTokenException nếu chữ ký sai hoặc sai thuật toán
+        var principal = tokenHandler.ValidateToken(token, tokenValidationParameters, out var securityToken);
+
+        if (securityToken is not JwtSecurityToken jwtToken ||
+            !jwtToken.Header.Alg.Equals(SecurityAlgorithms.RsaSha256,
+                StringComparison.InvariantCultureIgnoreCase))
+        {
+            throw new SecurityTokenException("Invalid token algorithm");
+        }
+
+        return principal;
     }
 
     public string GeneratePasswordResetToken(int id, string email, string role)
