@@ -69,4 +69,10 @@ class OrderRepository {
     });
     return PaymentIntentResponse.fromJson(response.data['data']);
   }
+
+  Future<void> cancelPaymentIntent(int sessionId) async {
+    await _dio.post('payments/cancel-intent', data: {
+      'sessionId': sessionId,
+    });
+  }
 }

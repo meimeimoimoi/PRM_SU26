@@ -131,11 +131,17 @@ public class UserInfoResponse
 
 /// <summary>
 /// Request body cho POST /api/v1/auth/login-guest.
-/// Khách vãng lai không cần tài khoản — chỉ cần biết bàn nào (TableId).
+/// Khách vãng lai không cần tài khoản — chỉ cần biết bàn nào.
 /// GuestName/GuestPhone optional, dùng để ghi nhận thông tin trong DiningSession.
 /// </summary>
 public class GuestLoginRequest
 {
+    /// <summary>
+    /// Tên field giữ nguyên "TableId" để không phá vỡ contract JSON hiện có (FE gửi
+    /// "tableId"), nhưng giá trị thực chất là Số Bàn (TableNumber) — QR code, form nhập
+    /// tay, và quét QR trong app đều lấy số in trên bàn, không phải khóa chính DB.
+    /// Xem AuthService.LoginGuestAsync — tra bằng GetByTableNumberAsync, không phải GetByIdAsync.
+    /// </summary>
     public int TableId { get; set; }
     public string? GuestName { get; set; }
     public string? GuestPhone { get; set; }

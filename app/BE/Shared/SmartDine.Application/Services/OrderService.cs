@@ -358,6 +358,7 @@ public class OrderService
             DiscountAmount = order.DiscountAmount,
             FinalAmount = order.FinalAmount,
             Status = order.Status.ToString(),
+            SessionStatus = order.Session?.Status.ToString() ?? nameof(DiningSessionStatus.ACTIVE),
             CreatedAt = order.CreatedAt,
             Items = order.OrderDetails.Select(i =>
             {

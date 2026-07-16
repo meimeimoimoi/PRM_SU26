@@ -7,6 +7,11 @@ public class CreatePaymentIntentRequest
     public int SplitCount { get; set; } = 1;
 }
 
+public class CancelPaymentIntentRequest
+{
+    public int SessionId { get; set; }
+}
+
 public class CreatePaymentIntentResponse
 {
     public string InvoiceId { get; set; } = string.Empty;
@@ -44,5 +49,17 @@ public class PaymentHistoryResponse
     public string PaymentStatus { get; set; } = string.Empty;
     public string? ExternalRef { get; set; }
     public DateTime? PaidAt { get; set; }
+    public DateTime CreatedAt { get; set; }
+}
+
+/// <summary>Bàn đang chờ staff thu tiền mặt (PENDING + CASH + session CHECKOUT/ACTIVE).</summary>
+public class PendingCashPaymentResponse
+{
+    public int PaymentId { get; set; }
+    public string InvoiceId { get; set; } = string.Empty;
+    public int SessionId { get; set; }
+    public int TableId { get; set; }
+    public int TableNumber { get; set; }
+    public decimal Amount { get; set; }
     public DateTime CreatedAt { get; set; }
 }

@@ -420,7 +420,11 @@ public class AuthService
     /// </summary>
     public async Task<GuestLoginResponse> LoginGuestAsync(GuestLoginRequest request)
     {
-        var table = await _uow.Tables.GetByIdAsync(request.TableId)
+        // request.TableId thực chất là Số Bàn (TableNumber) — QR code + form "Số Bàn" +
+        // qr_scan_page.dart đều gửi số bàn in trên bàn, không phải khóa chính Id trong DB.
+        // Số bàn ổn định (khách/nhân viên nhìn thấy), còn Id sẽ đổi bất cứ khi nào bàn bị
+        // xóa rồi tạo lại — tra theo Id sẽ gãy đăng nhập cho những bàn đó dù số bàn không đổi.
+        var table = await _uow.Tables.GetByTableNumberAsync(request.TableId)
             ?? throw new EntityNotFoundException("Table", request.TableId);
 
         if (table.Status == TableStatus.MAINTENANCE)
@@ -430,7 +434,7 @@ public class AuthService
             throw new BusinessRuleViolationException(
                 string.Format(ValidationMessages.TABLE_RESERVED, table.TableNumber));
 
-        var existingSession = await _uow.DiningSessions.GetActiveByTableIdAsync(request.TableId);
+        var existingSession = await _uow.DiningSessions.GetActiveByTableIdAsync(table.Id);
         DiningSession session;
 
         var guestName = request.GuestName ?? "Guest";

@@ -11,3 +11,13 @@ export interface KitchenItem {
   orderedAt: string; // Matches CreatedAt timestamp
   elapsedSeconds: number; // for UI cooking timer
 }
+
+/** Một lượt order (nhiều món) — staff xác nhận 1 lần cho cả đơn. */
+export interface KitchenOrderGroup {
+  orderId: number;
+  tableNumber: number;
+  status: KitchenItemStatus;
+  orderedAt: string;
+  elapsedSeconds: number;
+  items: KitchenItem[];
+}

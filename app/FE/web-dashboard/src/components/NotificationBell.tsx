@@ -40,7 +40,18 @@ const NotificationBell: React.FC = () => {
           {
             id: `${data.invoiceId || data.InvoiceId}-${Date.now()}`,
             type: 'payment' as const,
-            message: `Bàn T-${(data.tableNumber ?? data.tableId ?? data.TableId ?? '').toString().padStart(2, '0')} đã thanh toán ${formatVnd(data.amount ?? data.Amount ?? 0)}`,
+            message: `Bàn T-${(data.tableNumber ?? data.TableNumber ?? data.tableId ?? data.TableId ?? '').toString().padStart(2, '0')} đã thanh toán ${formatVnd(data.amount ?? data.Amount ?? 0)}`,
+            time: new Date(data.timestamp || data.Timestamp || Date.now()).toLocaleTimeString('vi-VN')
+          },
+          ...prev
+        ].slice(0, 20));
+      },
+      ReceiveCashPaymentPending: (data: any) => {
+        setPaymentNotifications((prev) => [
+          {
+            id: `cash-${data.invoiceId || data.InvoiceId}-${Date.now()}`,
+            type: 'payment' as const,
+            message: `Bàn T-${(data.tableNumber ?? data.TableNumber ?? '').toString().padStart(2, '0')} yêu cầu thu tiền mặt ${formatVnd(data.amount ?? data.Amount ?? 0)}`,
             time: new Date(data.timestamp || data.Timestamp || Date.now()).toLocaleTimeString('vi-VN')
           },
           ...prev

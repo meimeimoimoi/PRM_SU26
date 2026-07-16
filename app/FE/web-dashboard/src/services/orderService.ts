@@ -20,6 +20,8 @@ export interface OrderResponse {
   discountAmount: number;
   finalAmount: number;
   status: string;
+  /** ACTIVE | CHECKOUT | CLOSED — CHECKOUT = đang chờ thanh toán (tiền mặt). */
+  sessionStatus?: string;
   createdAt: string;
   items: OrderDetailItem[];
 }
@@ -88,14 +90,48 @@ export const orderService = {
     return true;
   },
 
+  /** Cập nhật trạng thái tất cả món trong cùng một lượt order (1 lần bấm). */
+  updateOrderItemsStatus: async (itemIds: number[], newStatus: KitchenItemStatus): Promise<boolean> => {
+    await Promise.all(itemIds.map((id) => apiClient.patch(`/orders/items/${id}/status`, { status: newStatus })));
+    return true;
+  },
+
   printKitchenTicket: (item: { orderId: number; tableNumber: number; name: string; quantity: number; notes?: string; orderedAt: string }) => {
+    orderService.printKitchenOrderTicket({
+      orderId: item.orderId,
+      tableNumber: item.tableNumber,
+      orderedAt: item.orderedAt,
+      items: [{ name: item.name, quantity: item.quantity, notes: item.notes }],
+    });
+  },
+
+  /** In 1 phiếu cho cả lượt order (nhiều món trên cùng phiếu). Chỉ mở 1 cửa sổ in. */
+  printKitchenOrderTicket: (order: {
+    orderId: number;
+    tableNumber: number;
+    orderedAt: string;
+    items: { name: string; quantity: number; notes?: string }[];
+  }) => {
     const printWindow = window.open('', '_blank');
     if (!printWindow) return;
+
+    const dishesHtml = order.items
+      .map(
+        (item) => `
+          <div class="dish-card">
+            <div class="info-row">
+              <span class="dish-name bold">${item.name}</span>
+              <span class="bold" style="font-size: 20px;">SL: ${item.quantity}</span>
+            </div>
+            ${item.notes ? `<div class="notes bold">📝 Chú thích: ${item.notes}</div>` : ''}
+          </div>`
+      )
+      .join('');
 
     printWindow.document.write(`
       <html>
         <head>
-          <title>Phiếu Chế Biến - Bàn ${item.tableNumber}</title>
+          <title>Phiếu Chế Biến - Bàn ${order.tableNumber} · Đơn #${order.orderId}</title>
           <style>
             @page { size: 80mm auto; margin: 0; }
             body {
@@ -118,7 +154,7 @@ export const orderService = {
               margin: 3mm 0;
               border-radius: 4px;
             }
-            .dish-name { font-size: 18px; text-transform: uppercase; }
+            .dish-name { font-size: 16px; text-transform: uppercase; }
             .notes {
               background: #f2f2f2;
               border-left: 3px solid #000;
@@ -132,24 +168,18 @@ export const orderService = {
         <body>
           <div class="header center">
             <div class="title bold">PHIẾU CHẾ BIẾN BẾP</div>
-            <div style="font-size: 11px; margin-top: 1mm;">Mã Order: #${item.orderId}</div>
+            <div style="font-size: 11px; margin-top: 1mm;">Mã Order: #${order.orderId} · ${order.items.length} món</div>
           </div>
           
           <div class="info-row">
-            <span class="bold" style="font-size: 16px;">BÀN: ${item.tableNumber}</span>
-            <span>Giờ: ${new Date(item.orderedAt).toLocaleTimeString('vi-VN')}</span>
+            <span class="bold" style="font-size: 16px;">BÀN: ${order.tableNumber}</span>
+            <span>Giờ: ${new Date(order.orderedAt).toLocaleTimeString('vi-VN')}</span>
           </div>
           <div class="info-row" style="font-size: 11px; color: #555; margin-bottom: 3mm;">
-            <span>Ngày: ${new Date(item.orderedAt).toLocaleDateString('vi-VN')}</span>
+            <span>Ngày: ${new Date(order.orderedAt).toLocaleDateString('vi-VN')}</span>
           </div>
 
-          <div class="dish-card">
-            <div class="info-row">
-              <span class="dish-name bold">${item.name}</span>
-              <span class="bold" style="font-size: 20px;">SL: ${item.quantity}</span>
-            </div>
-            ${item.notes ? `<div class="notes bold">📝 Chú thích: ${item.notes}</div>` : ''}
-          </div>
+          ${dishesHtml}
 
           <div class="footer center">
             <div>SmartDine - In lúc: ${new Date().toLocaleTimeString('vi-VN')}</div>
@@ -159,8 +189,11 @@ export const orderService = {
           <script>
             window.onload = function() {
               window.print();
+            };
+            // Chỉ đóng khi người dùng xác nhận hoặc hủy hộp thoại in (không in ngầm sau Cancel)
+            window.onafterprint = function() {
               window.close();
-            }
+            };
           </script>
         </body>
       </html>
@@ -314,5 +347,22 @@ export const orderService = {
   completePaymentByTable: async (tableNumber: number): Promise<boolean> => {
     await apiClient.post(`/payments/complete-by-table/${tableNumber}`);
     return true;
+  },
+
+  /** Bàn đang chờ thu tiền mặt (PENDING + CASH). */
+  getPendingCashPayments: async (): Promise<PendingCashPayment[]> => {
+    const response = await apiClient.get<any>('/payments/pending-cash');
+    const data = response.data.data || response.data;
+    return Array.isArray(data) ? data : [];
   }
 };
+
+export interface PendingCashPayment {
+  paymentId: number;
+  invoiceId: string;
+  sessionId: number;
+  tableId: number;
+  tableNumber: number;
+  amount: number;
+  createdAt: string;
+}

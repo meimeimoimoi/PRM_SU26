@@ -6,9 +6,16 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../viewmodels/order_viewmodel.dart';
 import '../../viewmodels/auth_viewmodel.dart';
 import '../../services/socket/socket_service.dart';
+import '../../widgets/customer_bottom_nav.dart';
 
 bool _isStaffRole(String? role) {
   return role == 'MANAGER' || role == 'STAFF' || role == 'CHEF';
+}
+
+void _showComingSoon(BuildContext context, String feature) {
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(content: Text('$feature đang được phát triển, sẽ sớm ra mắt!')),
+  );
 }
 
 class _AppColors {
@@ -203,33 +210,7 @@ class _OrderTrackingPageState extends ConsumerState<OrderTrackingPage> with Sing
         ],
       ),
       body: _buildBody(),
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          color: _AppColors.surface,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.04),
-              blurRadius: 20,
-              offset: const Offset(0, -4),
-            ),
-          ],
-          borderRadius: BorderRadius.vertical(top: Radius.circular(16.r)),
-        ),
-        child: SafeArea(
-          child: Padding(
-            padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 8.h),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                _buildNavItem(Icons.menu_book, 'Thực đơn', false, () => context.go('/home')),
-                _buildNavItem(Icons.receipt_long, 'Đơn hàng', true, () {}),
-                _buildNavItem(Icons.shopping_cart, 'Giỏ hàng', false, () => context.push('/cart')),
-                _buildNavItem(Icons.person, 'Tài khoản', false, () => context.push('/profile')),
-              ],
-            ),
-          ),
-        ),
-      ),
+      bottomNavigationBar: const CustomerBottomNav(activeTab: CustomerNavTab.orders),
     );
   }
 
@@ -504,7 +485,7 @@ class _OrderTrackingPageState extends ConsumerState<OrderTrackingPage> with Sing
                     ),
                     SizedBox(height: 16.h),
                     OutlinedButton(
-                      onPressed: () {},
+                      onPressed: () => _showComingSoon(context, 'Gọi nhân viên hỗ trợ'),
                       style: OutlinedButton.styleFrom(
                         side: BorderSide(color: _AppColors.primary, width: 2),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
@@ -796,35 +777,4 @@ class _OrderTrackingPageState extends ConsumerState<OrderTrackingPage> with Sing
     }
   }
 
-  Widget _buildNavItem(IconData icon, String label, bool isActive, VoidCallback onTap) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 8.h),
-        decoration: BoxDecoration(
-          color: isActive ? _AppColors.primaryContainer : Colors.transparent,
-          borderRadius: BorderRadius.circular(12.r),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              icon,
-              color: isActive ? _AppColors.onPrimaryContainer : _AppColors.secondary,
-              size: 24.sp,
-            ),
-            SizedBox(height: 4.h),
-            Text(
-              label,
-              style: TextStyle(
-                color: isActive ? _AppColors.onPrimaryContainer : _AppColors.secondary,
-                fontSize: 12.sp,
-                fontWeight: isActive ? FontWeight.bold : FontWeight.w600,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 }

@@ -3,6 +3,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../viewmodels/auth_viewmodel.dart';
+import '../../widgets/customer_bottom_nav.dart';
 
 class _AppColors {
   static const Color primary = Color(0xFFad2c00);
@@ -20,6 +21,12 @@ class _AppColors {
   static const Color onSecondaryContainer = Color(0xFF6c605e);
   static const Color outline = Color(0xFF8f7068);
   static const Color outlineVariant = Color(0xFFe3beb5);
+}
+
+void _showComingSoon(BuildContext context, String feature) {
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(content: Text('$feature đang được phát triển, sẽ sớm ra mắt!')),
+  );
 }
 
 class SettingsPage extends ConsumerStatefulWidget {
@@ -60,12 +67,6 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           ),
         ),
         centerTitle: true,
-        actions: [
-          IconButton(
-            icon: Icon(Icons.settings, color: _AppColors.primary),
-            onPressed: () {},
-          ),
-        ],
       ),
       body: SingleChildScrollView(
         padding: EdgeInsets.symmetric(horizontal: 20.w, vertical: 16.h),
@@ -185,6 +186,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                         Icon(Icons.chevron_right, color: _AppColors.outline, size: 20.sp),
                       ],
                     ),
+                    onTap: () => _showComingSoon(context, 'Đổi ngôn ngữ'),
                   ),
                   _buildDivider(),
                   _buildSettingRow(
@@ -192,9 +194,11 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                     title: 'Chế độ tối',
                     trailing: _buildCustomToggle(_darkModeEnabled, (val) {
                       setState(() => _darkModeEnabled = val);
+                      _showComingSoon(context, 'Chế độ tối');
                     }),
                     onTap: () {
                       setState(() => _darkModeEnabled = !_darkModeEnabled);
+                      _showComingSoon(context, 'Chế độ tối');
                     },
                   ),
                 ],
@@ -233,18 +237,21 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                     icon: Icons.help,
                     title: 'Trung tâm trợ giúp',
                     trailing: Icon(Icons.chevron_right, color: _AppColors.outline, size: 20.sp),
+                    onTap: () => _showComingSoon(context, 'Trung tâm trợ giúp'),
                   ),
                   _buildDivider(),
                   _buildSettingRow(
                     icon: Icons.policy,
                     title: 'Điều khoản & Chính sách',
                     trailing: Icon(Icons.chevron_right, color: _AppColors.outline, size: 20.sp),
+                    onTap: () => _showComingSoon(context, 'Điều khoản & Chính sách'),
                   ),
                   _buildDivider(),
                   _buildSettingRow(
                     icon: Icons.mail,
                     title: 'Liên hệ',
                     trailing: Icon(Icons.chevron_right, color: _AppColors.outline, size: 20.sp),
+                    onTap: () => _showComingSoon(context, 'Trang liên hệ'),
                   ),
                 ],
               ),
@@ -303,34 +310,9 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         ),
       ),
       
-      // Bottom Navigation Bar
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          color: _AppColors.surface,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.04),
-              blurRadius: 20,
-              offset: const Offset(0, -4),
-            ),
-          ],
-          borderRadius: BorderRadius.vertical(top: Radius.circular(16.r)),
-        ),
-        child: SafeArea(
-          child: Padding(
-            padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 8.h),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                _buildNavItem(Icons.home, 'Home', false, () => context.go('/home')),
-                _buildNavItem(Icons.receipt_long, 'Orders', false, () => context.push('/orders')),
-                _buildNavItem(Icons.person, 'Account', false, () => context.push('/profile')),
-                _buildNavItem(Icons.settings, 'Settings', true, () {}),
-              ],
-            ),
-          ),
-        ),
-      ),
+      // Settings không phải 1 trong 4 tab chính (luôn vào từ nút gear ở trang Tài
+      // khoản) nên không tab nào active ở đây.
+      bottomNavigationBar: const CustomerBottomNav(),
     );
   }
 
@@ -416,35 +398,4 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     );
   }
 
-  Widget _buildNavItem(IconData icon, String label, bool isActive, VoidCallback onTap) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 8.h),
-        decoration: BoxDecoration(
-          color: isActive ? _AppColors.secondaryContainer : Colors.transparent,
-          borderRadius: BorderRadius.circular(100.r), // capsule shape for nav
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              icon,
-              color: isActive ? _AppColors.onSecondaryContainer : _AppColors.onSurfaceVariant,
-              size: 24.sp,
-            ),
-            SizedBox(height: 4.h),
-            Text(
-              label,
-              style: TextStyle(
-                color: isActive ? _AppColors.onSecondaryContainer : _AppColors.onSurfaceVariant,
-                fontSize: 12.sp,
-                fontWeight: isActive ? FontWeight.bold : FontWeight.w600,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 }

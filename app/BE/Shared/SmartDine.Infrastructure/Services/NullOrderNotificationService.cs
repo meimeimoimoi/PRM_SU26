@@ -17,4 +17,7 @@ public class NullOrderNotificationService : IOrderNotificationService
 
     public Task NotifyPaymentSuccessAsync(int tableId, int tableNumber, string invoiceId, decimal amount)
         => Task.CompletedTask;
+
+    public Task NotifyCashPaymentPendingAsync(int tableId, int tableNumber, string invoiceId, decimal amount)
+        => Task.CompletedTask;
 }

@@ -120,6 +120,8 @@ public static class ValidationMessages
     public const string PAYMENT_WEBHOOK_INVALID_SIGNATURE = "PAYMENT_WEBHOOK_INVALID_SIGNATURE";
     public const string PAYMENT_NOT_FOUND = "PAYMENT_NOT_FOUND";
     public const string PAYMENT_ACCESS_DENIED = "Bạn không có quyền thực hiện thanh toán cho phiên ăn này.";
+    public const string PAYMENT_NO_PENDING_TO_CANCEL = "Không có giao dịch nào đang chờ xử lý để hủy.";
+    public const string PAYMENT_CANCELLED = "Đã hủy giao dịch thanh toán.";
 
     // ===== Order — block khi CHECKOUT =====
     public const string ORDER_BLOCKED_CHECKOUT = "Phiên ăn đang trong quá trình thanh toán, không thể đặt thêm món.";

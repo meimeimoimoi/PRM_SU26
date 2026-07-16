@@ -14,7 +14,7 @@ export const tableService = {
     return (response.data.data || response.data) as Table;
   },
 
-  // Cập nhật trạng thái bàn (AVAILABLE / OCCUPIED)
+  // Cập nhật trạng thái bàn (AVAILABLE / OCCUPIED / MAINTENANCE / RESERVED)
   updateTableStatus: async (id: number, status: TableStatus): Promise<Table> => {
     const response = await apiClient.patch<any>(`/tables/${id}/status`, { status });
     return (response.data.data || response.data) as Table;

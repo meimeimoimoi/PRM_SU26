@@ -38,6 +38,8 @@ public class OrderResponse
     public decimal DiscountAmount { get; set; }
     public decimal FinalAmount { get; set; }
     public string Status { get; set; } = nameof(OrderStatus.PENDING);
+    /// <summary>ACTIVE | CHECKOUT | CLOSED — CHECKOUT = đang chờ thanh toán (vd. tiền mặt tại quầy).</summary>
+    public string SessionStatus { get; set; } = nameof(DiningSessionStatus.ACTIVE);
     public string? SpecialInstructions { get; set; }
     public DateTime CreatedAt { get; set; }
 }

@@ -3,6 +3,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../viewmodels/auth_viewmodel.dart';
+import '../../widgets/customer_bottom_nav.dart';
 
 class _AppColors {
   static const Color primary = Color(0xFFad2c00);
@@ -20,6 +21,12 @@ class _AppColors {
   static const Color error = Color(0xFFba1a1a);
   static const Color errorContainer = Color(0xFFffdad6);
   static const Color onPrimary = Color(0xFFffffff);
+}
+
+void _showComingSoon(BuildContext context, String feature) {
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(content: Text('$feature đang được phát triển, sẽ sớm ra mắt!')),
+  );
 }
 
 class ProfilePage extends ConsumerWidget {
@@ -54,7 +61,8 @@ class ProfilePage extends ConsumerWidget {
         scrolledUnderElevation: 2,
         leading: IconButton(
           icon: Icon(Icons.arrow_back, color: _AppColors.primary),
-          onPressed: () => context.pop(),
+          // Tài khoản luôn được vào qua tab bottom-nav (context.go, không push).
+          onPressed: () => context.canPop() ? context.pop() : context.go('/home'),
         ),
         title: Text(
           'Tài khoản',
@@ -258,7 +266,7 @@ class ProfilePage extends ConsumerWidget {
                         ),
                         SizedBox(height: 16.h),
                         InkWell(
-                          onTap: () {},
+                          onTap: () => _showComingSoon(context, 'Trang quyền lợi thành viên'),
                           borderRadius: BorderRadius.circular(8.r),
                           child: Container(
                             padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 8.h),
@@ -316,13 +324,13 @@ class ProfilePage extends ConsumerWidget {
                   _buildMenuItem(
                     icon: Icons.payments,
                     title: 'Phương thức thanh toán',
-                    onTap: () {},
+                    onTap: () => _showComingSoon(context, 'Quản lý phương thức thanh toán'),
                   ),
                   _buildDivider(),
                   _buildMenuItem(
                     icon: Icons.confirmation_number,
                     title: 'Mã giảm giá của tôi',
-                    onTap: () {},
+                    onTap: () => _showComingSoon(context, 'Danh sách mã giảm giá'),
                   ),
                 ],
               ),
@@ -349,7 +357,7 @@ class ProfilePage extends ConsumerWidget {
                     iconBgColor: _AppColors.surfaceContainer,
                     iconColor: _AppColors.onSurfaceVariant,
                     title: 'Địa chỉ đã lưu',
-                    onTap: () {},
+                    onTap: () => _showComingSoon(context, 'Địa chỉ đã lưu'),
                   ),
                   _buildDivider(),
                   _buildMenuItem(
@@ -357,7 +365,7 @@ class ProfilePage extends ConsumerWidget {
                     iconBgColor: _AppColors.surfaceContainer,
                     iconColor: _AppColors.onSurfaceVariant,
                     title: 'Trợ giúp & Hỗ trợ',
-                    onTap: () {},
+                    onTap: () => _showComingSoon(context, 'Trung tâm trợ giúp'),
                   ),
                 ],
               ),
@@ -396,34 +404,7 @@ class ProfilePage extends ConsumerWidget {
         ),
       ),
       
-      // Bottom Navigation Bar
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          color: _AppColors.surface,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.04),
-              blurRadius: 20,
-              offset: const Offset(0, -4),
-            ),
-          ],
-          borderRadius: BorderRadius.vertical(top: Radius.circular(16.r)),
-        ),
-        child: SafeArea(
-          child: Padding(
-            padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 8.h),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                _buildNavItem(Icons.home, 'Trang chủ', false, () => context.go('/home')),
-                _buildNavItem(Icons.receipt_long, 'Đơn hàng', false, () => context.push('/orders')),
-                _buildNavItem(Icons.person, 'Tài khoản', true, () {}),
-                _buildNavItem(Icons.settings, 'Cài đặt', false, () => context.push('/settings')),
-              ],
-            ),
-          ),
-        ),
-      ),
+      bottomNavigationBar: const CustomerBottomNav(activeTab: CustomerNavTab.account),
     );
   }
 
@@ -484,35 +465,4 @@ class ProfilePage extends ConsumerWidget {
     );
   }
 
-  Widget _buildNavItem(IconData icon, String label, bool isActive, VoidCallback onTap) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 8.h),
-        decoration: BoxDecoration(
-          color: isActive ? _AppColors.secondaryContainer : Colors.transparent,
-          borderRadius: BorderRadius.circular(100.r), // capsule shape for nav
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              icon,
-              color: isActive ? _AppColors.onSecondaryContainer : _AppColors.onSurfaceVariant,
-              size: 24.sp,
-            ),
-            SizedBox(height: 4.h),
-            Text(
-              label,
-              style: TextStyle(
-                color: isActive ? _AppColors.onSecondaryContainer : _AppColors.onSurfaceVariant,
-                fontSize: 12.sp,
-                fontWeight: isActive ? FontWeight.bold : FontWeight.w600,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 }

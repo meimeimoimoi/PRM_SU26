@@ -19,9 +19,25 @@ import {
 import { Transaction } from '@/types/transaction';
 import { apiClient } from '../../services/api/client';
 import { getErrorMessage } from '@/utils/apiError';
+import { downloadCsv } from '@/utils/csvExport';
 
 const { Option } = Select;
 const PAGE_SIZE = 10;
+// BE giới hạn pageSize tối đa 100/request (xem PaymentsController.GetHistory) — export phải phân trang gộp lại.
+const EXPORT_PAGE_SIZE = 100;
+
+const mapPaymentToTransaction = (p: any): Transaction => ({
+  id: p.invoiceId ? `#INV-${p.invoiceId}` : `#PAY-${p.id}`,
+  dateTime: p.paidAt
+    ? new Date(p.paidAt).toLocaleString('vi-VN')
+    : p.createdAt
+    ? new Date(p.createdAt).toLocaleString('vi-VN')
+    : 'N/A',
+  tableNo: p.tableNumber ? `T-${p.tableNumber}` : 'N/A',
+  totalAmount: p.amount !== undefined ? p.amount : (p.totalAmount || 0),
+  paymentMethod: p.paymentMethod || p.method || 'N/A',
+  status: p.paymentStatus || p.status || 'PENDING',
+});
 
 const TransactionsPage: React.FC = () => {
   const [searchText, setSearchText] = useState<string>('');
@@ -48,18 +64,7 @@ const TransactionsPage: React.FC = () => {
         const items = response.data.data || [];
         const pagination = response.data.pagination;
 
-        const mapped: Transaction[] = items.map((p: any) => ({
-          id: p.invoiceId ? `#INV-${p.invoiceId}` : `#PAY-${p.id}`,
-          dateTime: p.paidAt
-            ? new Date(p.paidAt).toLocaleString('vi-VN')
-            : p.createdAt
-            ? new Date(p.createdAt).toLocaleString('vi-VN')
-            : 'N/A',
-          tableNo: p.tableNumber ? `T-${p.tableNumber}` : 'N/A',
-          totalAmount: p.amount !== undefined ? p.amount : (p.totalAmount || 0),
-          paymentMethod: p.paymentMethod || p.method || 'N/A',
-          status: p.paymentStatus || p.status || 'PENDING',
-        }));
+        const mapped: Transaction[] = items.map(mapPaymentToTransaction);
 
         setTransactions(mapped);
         setTotal(pagination?.total ?? mapped.length);
@@ -90,8 +95,52 @@ const TransactionsPage: React.FC = () => {
     );
   }, [searchText, transactions]);
 
-  const handleExportData = () => {
-    message.success('Đang kết xuất dữ liệu lịch sử giao dịch dưới dạng CSV...');
+  const [exporting, setExporting] = useState(false);
+
+  // Xuất toàn bộ giao dịch khớp status filter đang chọn (không chỉ trang hiện tại) —
+  // gộp nhiều request vì BE giới hạn tối đa 100 bản ghi/lần (PaymentsController.GetHistory).
+  const handleExportData = async () => {
+    setExporting(true);
+    try {
+      const allItems: any[] = [];
+      let currentPage = 1;
+      let totalCount = Infinity;
+
+      while (allItems.length < totalCount) {
+        const response = await apiClient.get<any>('/payments', {
+          params: {
+            page: currentPage,
+            pageSize: EXPORT_PAGE_SIZE,
+            status: statusFilter === 'ALL' ? undefined : statusFilter,
+          }
+        });
+        const items = response.data.data || [];
+        totalCount = response.data.pagination?.total ?? items.length;
+        allItems.push(...items);
+        if (items.length === 0) break;
+        currentPage++;
+      }
+
+      if (allItems.length === 0) {
+        message.warning('Không có giao dịch nào để xuất.');
+        return;
+      }
+
+      const rows: (string | number)[][] = [
+        ['Order ID', 'Date & Time', 'Table No', 'Total Amount (VND)', 'Payment Method', 'Status'],
+        ...allItems.map(mapPaymentToTransaction).map((t) => [
+          t.id, t.dateTime, t.tableNo, t.totalAmount, t.paymentMethod, t.status,
+        ]),
+      ];
+
+      const dateStr = new Date().toISOString().slice(0, 10);
+      downloadCsv(`transactions_${dateStr}.csv`, rows);
+      message.success(`Đã xuất ${allItems.length} giao dịch ra file CSV.`);
+    } catch (err) {
+      message.error(getErrorMessage(err, 'Không thể xuất dữ liệu giao dịch.'));
+    } finally {
+      setExporting(false);
+    }
   };
 
   const handleViewDetails = (transaction: Transaction) => {
@@ -236,11 +285,12 @@ const TransactionsPage: React.FC = () => {
             </div>
           </div>
 
-          <Button 
+          <Button
             icon={<DownloadOutlined />}
             onClick={handleExportData}
-            style={{ 
-              borderRadius: 6, 
+            loading={exporting}
+            style={{
+              borderRadius: 6,
               height: 38,
               fontWeight: 500,
               alignSelf: 'flex-end',

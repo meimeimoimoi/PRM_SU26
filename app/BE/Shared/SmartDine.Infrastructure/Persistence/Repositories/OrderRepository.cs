@@ -32,10 +32,16 @@ public class OrderRepository : GenericRepository<Order>, IOrderRepository
     }
 
     public async Task<IReadOnlyList<Order>> GetActiveOrdersAsync() =>
+        // Bao gồm cả order COMPLETED khi session còn ACTIVE/CHECKOUT:
+        // khách thường thanh toán sau khi món đã giao xong — nếu loại COMPLETED thì
+        // tab Thanh toán & Hóa đơn của staff sẽ trống dù phiên vẫn mở.
         await _dbSet.Include(o => o.OrderDetails).ThenInclude(d => d.MenuItem)
                     .Include(o => o.Session).ThenInclude(s => s.Table)
                     .Include(o => o.Session).ThenInclude(s => s.Customer)
-                    .Where(o => o.Status != OrderStatus.COMPLETED && o.Status != OrderStatus.CANCELLED)
+                    .Where(o =>
+                        o.Status != OrderStatus.CANCELLED &&
+                        (o.Session.Status == DiningSessionStatus.ACTIVE ||
+                         o.Session.Status == DiningSessionStatus.CHECKOUT))
                     .OrderBy(o => o.CreatedAt)
                     .ToListAsync();
 

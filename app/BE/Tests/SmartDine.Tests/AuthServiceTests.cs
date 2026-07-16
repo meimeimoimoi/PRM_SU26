@@ -532,7 +532,7 @@ public class AuthServiceTests
     public async Task LoginGuest_AvailableTable_CreatesSessionAndReturnsToken()
     {
         var table = new Table { Id = 5, TableNumber = 12, Status = TableStatus.AVAILABLE };
-        _tableRepoMock.Setup(r => r.GetByIdAsync(5)).ReturnsAsync(table);
+        _tableRepoMock.Setup(r => r.GetByTableNumberAsync(12)).ReturnsAsync(table);
         _sessionRepoMock.Setup(r => r.GetActiveByTableIdAsync(5)).ReturnsAsync((DiningSession?)null);
         _sessionRepoMock.Setup(r => r.AddAsync(It.IsAny<DiningSession>()))
             .ReturnsAsync((DiningSession s) => { s.Id = 120; return s; });
@@ -540,7 +540,7 @@ public class AuthServiceTests
             .Returns(("guest_token", "jti"));
 
         var result = await _authService.LoginGuestAsync(new GuestLoginRequest
-        { TableId = 5, GuestName = "Anh Hoàng", GuestPhone = "0912345678" });
+        { TableId = 12, GuestName = "Anh Hoàng", GuestPhone = "0912345678" });
 
         Assert.Equal("guest_token", result.Token);
         Assert.Equal(120, result.SessionId);
@@ -554,12 +554,12 @@ public class AuthServiceTests
     {
         var table = new Table { Id = 5, TableNumber = 12, Status = TableStatus.OCCUPIED };
         var session = new DiningSession { Id = 99, TableId = 5, Status = DiningSessionStatus.ACTIVE };
-        _tableRepoMock.Setup(r => r.GetByIdAsync(5)).ReturnsAsync(table);
+        _tableRepoMock.Setup(r => r.GetByTableNumberAsync(12)).ReturnsAsync(table);
         _sessionRepoMock.Setup(r => r.GetActiveByTableIdAsync(5)).ReturnsAsync(session);
         _jwtMock.Setup(j => j.GenerateGuestToken(It.IsAny<string>(), 99, It.IsAny<string>())).Returns(("t", "j"));
 
         var result = await _authService.LoginGuestAsync(new GuestLoginRequest
-        { TableId = 5, GuestName = "Khách 2" });
+        { TableId = 12, GuestName = "Khách 2" });
 
         Assert.Equal(99, result.SessionId);
         _sessionRepoMock.Verify(r => r.AddAsync(It.IsAny<DiningSession>()), Times.Never);
@@ -570,7 +570,7 @@ public class AuthServiceTests
     [Fact]
     public async Task LoginGuest_TableNotFound_ThrowsEntityNotFound()
     {
-        _tableRepoMock.Setup(r => r.GetByIdAsync(999)).ReturnsAsync((Table?)null);
+        _tableRepoMock.Setup(r => r.GetByTableNumberAsync(999)).ReturnsAsync((Table?)null);
 
         await Assert.ThrowsAsync<EntityNotFoundException>(() =>
             _authService.LoginGuestAsync(new GuestLoginRequest { TableId = 999, GuestName = "Khách" }));
@@ -580,7 +580,7 @@ public class AuthServiceTests
     public async Task LoginGuest_NullGuestName_UsesGuestDefault()
     {
         var table = new Table { Id = 1, TableNumber = 1, Status = TableStatus.AVAILABLE };
-        _tableRepoMock.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(table);
+        _tableRepoMock.Setup(r => r.GetByTableNumberAsync(1)).ReturnsAsync(table);
         _sessionRepoMock.Setup(r => r.GetActiveByTableIdAsync(1)).ReturnsAsync((DiningSession?)null);
         _sessionRepoMock.Setup(r => r.AddAsync(It.IsAny<DiningSession>())).ReturnsAsync((DiningSession s) => s);
         _jwtMock.Setup(j => j.GenerateGuestToken(It.IsAny<string>(), It.IsAny<int>(), "Guest")).Returns(("t", "j"));
@@ -594,7 +594,7 @@ public class AuthServiceTests
     public async Task LoginGuest_DoesNotCreateRefreshToken()
     {
         var table = new Table { Id = 1, TableNumber = 1, Status = TableStatus.AVAILABLE };
-        _tableRepoMock.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(table);
+        _tableRepoMock.Setup(r => r.GetByTableNumberAsync(1)).ReturnsAsync(table);
         _sessionRepoMock.Setup(r => r.GetActiveByTableIdAsync(1)).ReturnsAsync((DiningSession?)null);
         _sessionRepoMock.Setup(r => r.AddAsync(It.IsAny<DiningSession>())).ReturnsAsync((DiningSession s) => s);
         _jwtMock.Setup(j => j.GenerateGuestToken(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<string>())).Returns(("t", "j"));

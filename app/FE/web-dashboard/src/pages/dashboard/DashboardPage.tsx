@@ -2,12 +2,14 @@ import React, { useEffect, useState } from 'react';
 import {
   DollarCircleOutlined,
   ShoppingCartOutlined,
-  AppstoreOutlined
+  AppstoreOutlined,
+  DownloadOutlined
 } from '@ant-design/icons';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { Spin, Segmented } from 'antd';
+import { Spin, Segmented, Button, message } from 'antd';
 import { apiClient } from '../../services/api/client';
 import { orderService, ChartPoint, ChartPeriod } from '@/services/orderService';
+import { downloadCsv } from '@/utils/csvExport';
 import '@/styles/DashboardPage.css';
 
 interface DashboardStats {
@@ -105,6 +107,40 @@ const DashboardPage: React.FC = () => {
 
     fetchCharts();
   }, [period]);
+
+  const periodLabel = PERIOD_OPTIONS.find((p) => p.value === period)?.label || period;
+
+  // Gộp chỉ số tổng quan + 2 chart hiện đang xem thành 1 file CSV nhiều phần.
+  const handleExportReport = () => {
+    if (chartLoading) {
+      message.warning('Vui lòng chờ biểu đồ tải xong trước khi xuất báo cáo.');
+      return;
+    }
+
+    const rows: (string | number)[][] = [
+      [`Báo cáo tổng quan Dashboard - ${new Date().toLocaleString('vi-VN')}`],
+      [],
+      ['CHỈ SỐ TỔNG QUAN'],
+      ['Chỉ số', 'Giá trị'],
+      ['Doanh thu hôm nay (VND)', stats.todayRevenue],
+      ['Doanh thu tháng này (VND)', stats.monthRevenue],
+      ['Đơn hàng đang xử lý', stats.activeOrders],
+      ['Bàn trống', stats.availableTables],
+      ['Tổng số bàn', stats.totalTables],
+      [],
+      [`DOANH SỐ ĐƠN HÀNG (theo ${periodLabel})`],
+      ['Thời điểm', 'Giá trị (VND)'],
+      ...orderChartData.map((d) => [d.label, d.value]),
+      [],
+      [`DOANH THU THỰC NHẬN (theo ${periodLabel})`],
+      ['Thời điểm', 'Giá trị (VND)'],
+      ...revenueChartData.map((d) => [d.label, d.value]),
+    ];
+
+    const dateStr = new Date().toISOString().slice(0, 10);
+    downloadCsv(`dashboard_report_${dateStr}.csv`, rows);
+    message.success('Đã xuất báo cáo dashboard ra file CSV.');
+  };
 
   if (loading) {
     return (
@@ -228,7 +264,10 @@ const DashboardPage: React.FC = () => {
         </div>
       </div>
 
-      <div style={{ display: 'flex', justifyContent: 'flex-end', margin: '20px 0 4px' }}>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, margin: '20px 0 4px' }}>
+        <Button icon={<DownloadOutlined />} onClick={handleExportReport}>
+          Xuất báo cáo
+        </Button>
         <Segmented options={PERIOD_OPTIONS} value={period} onChange={(val) => setPeriod(val as ChartPeriod)} />
       </div>
 

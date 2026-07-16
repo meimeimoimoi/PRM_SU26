@@ -3,11 +3,14 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../widgets/simple_qr_view.dart';
 import '../../viewmodels/auth_viewmodel.dart';
 import '../../viewmodels/order_viewmodel.dart';
 import '../../services/order_repository.dart';
+import '../../services/settings_repository.dart';
 import '../../services/socket/socket_service.dart';
 import '../../models/order_models.dart';
+import '../../utils/error_utils.dart';
 
 class _AppColors {
   static const Color primary = Color(0xFFad2c00);
@@ -92,6 +95,24 @@ class _OrderHistoryPageState extends ConsumerState<OrderHistoryPage> {
     );
   }
 
+  /// Khách bấm "Hủy thanh toán" trên dialog QR/tiền mặt — trước đây nút này chỉ đóng
+  /// dialog, payment vẫn PENDING và session vẫn khóa CHECKOUT tới khi PaymentExpiryJob
+  /// tự dọn sau tối đa 30 phút. Gọi API cancel-intent để mở khóa ngay lập tức.
+  Future<void> _cancelAndClose(int sessionId) async {
+    Navigator.of(context).pop();
+    try {
+      await ref.read(orderRepositoryProvider).cancelPaymentIntent(sessionId);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Không thể hủy ngay: ${extractErrorMessage(e)}')),
+        );
+      }
+    } finally {
+      ref.invalidate(orderListProvider);
+    }
+  }
+
   Future<void> _handlePayment(int sessionId) async {
     if (_isProcessingPayment) return;
 
@@ -101,15 +122,9 @@ class _OrderHistoryPageState extends ConsumerState<OrderHistoryPage> {
 
     try {
       // Map selection to payment method:
-      // 0: MOMO
-      // 1: VNPAY
-      // 2: CASH
-      String method = 'VNPAY';
-      if (_selectedPaymentMethod == 0) {
-        method = 'MOMO';
-      } else if (_selectedPaymentMethod == 2) {
-        method = 'CASH';
-      }
+      // 0: VNPAY (Ngân hàng/QR)
+      // 1: CASH
+      final method = _selectedPaymentMethod == 1 ? 'CASH' : 'VNPAY';
 
       final repo = ref.read(orderRepositoryProvider);
       final response = await repo.createPaymentIntent(sessionId, method);
@@ -133,16 +148,15 @@ class _OrderHistoryPageState extends ConsumerState<OrderHistoryPage> {
                 SizedBox(height: 8.h),
                 Text('Số tiền: ${response.totalPayable.toStringAsFixed(0)}đ'),
                 SizedBox(height: 16.h),
-                const Text('Vui lòng di chuyển đến quầy thu ngân và cung cấp số bàn hoặc mã hóa đơn để thanh toán. Xin cảm ơn!'),
+                const Text(
+                  'Phiên ăn đã được khóa. Vui lòng đến quầy thu ngân và cung cấp số bàn hoặc mã hóa đơn. Nhân viên sẽ xác nhận thanh toán.',
+                ),
               ],
             ),
             actions: [
               TextButton(
-                onPressed: () {
-                  Navigator.of(context).pop();
-                  ref.invalidate(orderListProvider);
-                },
-                child: const Text('Đóng'),
+                onPressed: () => _cancelAndClose(sessionId),
+                child: const Text('Hủy thanh toán'),
               ),
             ],
           ),
@@ -155,7 +169,7 @@ class _OrderHistoryPageState extends ConsumerState<OrderHistoryPage> {
           context: context,
           barrierDismissible: false,
           builder: (context) => AlertDialog(
-            title: Text(method == 'MOMO' ? 'Thanh toán qua MoMo' : 'Thanh toán VietQR'),
+            title: const Text('Thanh toán VietQR'),
             content: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -178,17 +192,14 @@ class _OrderHistoryPageState extends ConsumerState<OrderHistoryPage> {
                         border: Border.all(color: _AppColors.surfaceVariant),
                         borderRadius: BorderRadius.circular(12.r),
                       ),
-                      child: Image.network(
-                        response.qrUrl!,
-                        width: 200.r,
-                        height: 200.r,
-                        fit: BoxFit.contain,
-                        errorBuilder: (context, error, stackTrace) => Container(
-                          width: 200.r,
-                          height: 200.r,
-                          color: _AppColors.surfaceContainerHigh,
-                          child: Icon(Icons.qr_code, size: 64.sp, color: _AppColors.outline),
-                        ),
+                      // PayOS trả về qrUrl là chuỗi EMV thô (dữ liệu VietQR gốc), không
+                      // phải link ảnh — phải tự sinh ảnh QR ở client, không dùng
+                      // Image.network (luôn lỗi vì đó không phải 1 URL hợp lệ).
+                      child: SimpleQrView(
+                        data: response.qrUrl!,
+                        size: 200.r,
+                        backgroundColor: _AppColors.surface,
+                        foregroundColor: _AppColors.onSurface,
                       ),
                     ),
                   SizedBox(height: 16.h),
@@ -222,11 +233,8 @@ class _OrderHistoryPageState extends ConsumerState<OrderHistoryPage> {
             ),
             actions: [
               TextButton(
-                onPressed: () {
-                  Navigator.of(context).pop();
-                  ref.invalidate(orderListProvider);
-                },
-                child: const Text('Đóng'),
+                onPressed: () => _cancelAndClose(sessionId),
+                child: const Text('Hủy thanh toán'),
               ),
             ],
           ),
@@ -236,11 +244,8 @@ class _OrderHistoryPageState extends ConsumerState<OrderHistoryPage> {
         });
       }
     } catch (e) {
-      final msg = e.toString().contains('đang chờ') || e.toString().contains('ALREADY')
-          ? 'Bạn đã có thanh toán đang chờ xử lý.'
-          : 'Lỗi thanh toán: ${e.toString()}';
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(msg)),
+        SnackBar(content: Text('Lỗi thanh toán: ${extractErrorMessage(e)}')),
       );
     } finally {
       if (mounted) {
@@ -258,6 +263,8 @@ class _OrderHistoryPageState extends ConsumerState<OrderHistoryPage> {
     final sessionId = authState.guestSession?.sessionId ?? 1;
 
     final ordersAsync = ref.watch(orderListProvider);
+    final billingSettings = ref.watch(billingSettingsProvider).valueOrNull
+        ?? const RestaurantBillingSettings();
 
     return Scaffold(
       backgroundColor: _AppColors.background,
@@ -349,12 +356,10 @@ class _OrderHistoryPageState extends ConsumerState<OrderHistoryPage> {
           final List<OrderDetailResponse> allItems = [];
           double subtotal = 0;
           double discount = 0;
-          double total = 0;
 
           for (final order in activeOrders) {
             subtotal += order.totalAmount;
             discount += order.discountAmount;
-            total += order.finalAmount;
             allItems.addAll(order.items);
           }
 
@@ -381,7 +386,13 @@ class _OrderHistoryPageState extends ConsumerState<OrderHistoryPage> {
             }
           }
           final itemsList = groupedItems.values.toList();
-          final vat = (subtotal - discount) * 0.08;
+          // VAT + phí DV lấy từ RestaurantSettings (Manager chỉnh trên dashboard)
+          final taxRatePercent = billingSettings.taxRate;
+          final serviceRatePercent = billingSettings.serviceChargeRate;
+          final netAmount = subtotal - discount;
+          final serviceFee = netAmount * serviceRatePercent / 100;
+          final vat = netAmount * taxRatePercent / 100;
+          final payableTotal = netAmount + serviceFee + vat;
 
           return SingleChildScrollView(
             padding: EdgeInsets.symmetric(horizontal: 20.w, vertical: 24.h),
@@ -511,7 +522,7 @@ class _OrderHistoryPageState extends ConsumerState<OrderHistoryPage> {
                             ),
                           ),
                           Text(
-                            'Điểm tích lũy nhận được: +${(total / 1000).round()} points',
+                            'Điểm tích lũy nhận được: +${(payableTotal / 1000).round()} points',
                             style: TextStyle(
                               color: _AppColors.onPrimaryContainer,
                               fontSize: 14.sp,
@@ -538,22 +549,14 @@ class _OrderHistoryPageState extends ConsumerState<OrderHistoryPage> {
 
                 _buildPaymentOption(
                   index: 0,
-                  title: 'Ví Điện Tử (Momo)',
-                  icon: Icons.account_balance_wallet,
-                  iconBgColor: _AppColors.onTertiaryContainer,
-                  iconColor: _AppColors.tertiary,
-                ),
-                SizedBox(height: 12.h),
-                _buildPaymentOption(
-                  index: 1,
-                  title: 'Thẻ Ngân Hàng/VietQR',
+                  title: 'Ngân Hàng/QR',
                   icon: Icons.qr_code_2,
                   iconBgColor: _AppColors.secondaryContainer,
                   iconColor: _AppColors.secondary,
                 ),
                 SizedBox(height: 12.h),
                 _buildPaymentOption(
-                  index: 2,
+                  index: 1,
                   title: 'Tiền Mặt tại quầy',
                   icon: Icons.payments,
                   iconBgColor: _AppColors.surfaceContainerHighest,
@@ -601,12 +604,28 @@ class _OrderHistoryPageState extends ConsumerState<OrderHistoryPage> {
                         ),
                       ],
                       SizedBox(height: 12.h),
+                      if (serviceFee > 0) ...[
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'Phí dịch vụ (${serviceRatePercent.toStringAsFixed(serviceRatePercent.truncateToDouble() == serviceRatePercent ? 0 : 1)}%)',
+                              style: TextStyle(color: _AppColors.onSurfaceVariant, fontSize: 16.sp),
+                            ),
+                            Text('${serviceFee.round()}đ',
+                                style: TextStyle(color: _AppColors.onSurfaceVariant, fontSize: 16.sp)),
+                          ],
+                        ),
+                        SizedBox(height: 12.h),
+                      ],
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Text('Thuế (VAT 8%)',
-                              style: TextStyle(color: _AppColors.onSurfaceVariant, fontSize: 16.sp)),
-                          Text('${vat.toStringAsFixed(0)}đ',
+                          Text(
+                            'Thuế (VAT ${taxRatePercent.toStringAsFixed(taxRatePercent.truncateToDouble() == taxRatePercent ? 0 : 1)}%)',
+                            style: TextStyle(color: _AppColors.onSurfaceVariant, fontSize: 16.sp),
+                          ),
+                          Text('${vat.round()}đ',
                               style: TextStyle(color: _AppColors.onSurfaceVariant, fontSize: 16.sp)),
                         ],
                       ),
@@ -619,13 +638,26 @@ class _OrderHistoryPageState extends ConsumerState<OrderHistoryPage> {
                       ),
                       SizedBox(height: 4.h),
                       Text(
-                        '${total.toStringAsFixed(0)}đ',
+                        '${payableTotal.round()}đ',
+                        key: const ValueKey('payable_total_with_vat'),
                         style: TextStyle(
                           color: _AppColors.onSurface,
                           fontSize: 26.sp,
                           fontWeight: FontWeight.w800,
                         ),
                       ),
+                      if (vat > 0 || serviceFee > 0) ...[
+                        SizedBox(height: 4.h),
+                        Text(
+                          serviceFee > 0
+                              ? '(đã gồm phí DV ${serviceFee.round()}đ + VAT ${vat.round()}đ)'
+                              : '(đã gồm VAT ${vat.round()}đ)',
+                          style: TextStyle(
+                            color: _AppColors.onSurfaceVariant,
+                            fontSize: 12.sp,
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -645,7 +677,7 @@ class _OrderHistoryPageState extends ConsumerState<OrderHistoryPage> {
                       SizedBox(width: 12.w),
                       Expanded(
                         child: Text(
-                          'Vui lòng dọn bàn sạch sẽ sau khi nhân viên xác nhận thanh toán thành công. Cảm ơn quý khách!',
+                          'Vui lòng đến quầy thu ngân. Sau khi nhân viên xác nhận thanh toán, bàn sẽ được dọn sạch trước khi nhận khách mới. Cảm ơn quý khách!',
                           style: TextStyle(
                             color: _AppColors.onErrorContainer,
                             fontSize: 14.sp,
@@ -702,7 +734,9 @@ class _OrderHistoryPageState extends ConsumerState<OrderHistoryPage> {
                     const Icon(Icons.payment, size: 24),
                     SizedBox(width: 8.w),
                     Text(
-                      'TIẾN HÀNH THANH TOÁN',
+                      _selectedPaymentMethod == 1
+                          ? 'XÁC NHẬN & KHÓA PHIÊN'
+                          : 'TIẾN HÀNH THANH TOÁN',
                       style: TextStyle(
                         fontSize: 18.sp,
                         fontWeight: FontWeight.bold,

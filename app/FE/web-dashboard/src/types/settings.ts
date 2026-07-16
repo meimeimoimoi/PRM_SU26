@@ -1,4 +1,5 @@
-// Khớp với BE: SmartDine.Application.DTOs.Settings (SettingsController — chỉ MANAGER truy cập).
+// Khớp với BE: SmartDine.Application.DTOs.Settings.
+// GET: CUSTOMER/GUEST/STAFF/MANAGER | PATCH: chỉ MANAGER.
 // Bản ghi cấu hình duy nhất (singleton) trong hệ thống.
 export interface RestaurantSettings {
   id: number;

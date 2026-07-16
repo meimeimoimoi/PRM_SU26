@@ -3,12 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:url_launcher/url_launcher.dart';
 import '../../viewmodels/order_viewmodel.dart';
 import '../../viewmodels/auth_viewmodel.dart';
-import '../../services/order_repository.dart';
 import '../../services/socket/socket_service.dart';
-import '../../models/order_models.dart';
+import '../../widgets/customer_bottom_nav.dart';
 
 
 class _AppColors {
@@ -38,15 +36,8 @@ class OrderListPage extends ConsumerStatefulWidget {
 }
 
 class _OrderListPageState extends ConsumerState<OrderListPage> {
-  int _selectedPaymentMethod = 1; // Default VietQR
-  bool _isProcessingPayment = false;
   Timer? _pollingTimer;
   final SocketService _socketService = SocketService();
-
-  // Theo dõi hộp thoại QR/tiền mặt đang mở để tự đóng khi ReceivePaymentSuccess
-  // báo về, thay vì bắt khách phải tự bấm "Đóng".
-  bool _isPaymentDialogOpen = false;
-  String? _pendingInvoiceId;
 
   @override
   void initState() {
@@ -67,32 +58,6 @@ class _OrderListPageState extends ConsumerState<OrderListPage> {
     _socketService.subscribeToEvent('ReceiveNewOrder', (data) {
       if (mounted) ref.invalidate(orderListProvider);
     });
-    _socketService.subscribeToEvent('ReceivePaymentSuccess', _onPaymentSuccess);
-  }
-
-  void _onPaymentSuccess(dynamic data) {
-    if (!mounted || data is! Map) return;
-    final invoiceId = (data['invoiceId'] ?? data['InvoiceId'])?.toString();
-    if (invoiceId == null || invoiceId != _pendingInvoiceId) return;
-
-    _pendingInvoiceId = null;
-    if (_isPaymentDialogOpen) {
-      Navigator.of(context, rootNavigator: true).pop();
-    }
-    ref.invalidate(orderListProvider);
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Thanh toán thành công'),
-        content: const Text('Cảm ơn quý khách! Phiên ăn đã được thanh toán.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('OK'),
-          ),
-        ],
-      ),
-    );
   }
 
   @override
@@ -100,350 +65,13 @@ class _OrderListPageState extends ConsumerState<OrderListPage> {
     _pollingTimer?.cancel();
     _socketService.unsubscribeFromEvent('ReceiveOrderStatusUpdate');
     _socketService.unsubscribeFromEvent('ReceiveNewOrder');
-    _socketService.unsubscribeFromEvent('ReceivePaymentSuccess');
     _socketService.disconnect();
     super.dispose();
   }
 
-  Future<void> _handlePayment(int sessionId) async {
-    if (_isProcessingPayment) return;
-    setState(() => _isProcessingPayment = true);
-
-    try {
-      String method;
-      switch (_selectedPaymentMethod) {
-        case 0: method = 'MOMO'; break;
-        case 2: method = 'CASH'; break;
-        default: method = 'VNPAY'; break;
-      }
-
-      final repo = ref.read(orderRepositoryProvider);
-      final response = await repo.createPaymentIntent(sessionId, method);
-      if (!mounted) return;
-
-      Navigator.of(context).pop(); // Close bottom sheet
-
-      _pendingInvoiceId = response.invoiceId;
-      _isPaymentDialogOpen = true;
-
-      if (method == 'CASH') {
-        showDialog(
-          context: context,
-          barrierDismissible: false,
-          builder: (_) => AlertDialog(
-            title: const Text('Thanh toán tiền mặt'),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Mã hóa đơn: ${response.invoiceId}'),
-                SizedBox(height: 8.h),
-                Text('Số tiền: ${response.totalPayable.toStringAsFixed(0)}đ'),
-                SizedBox(height: 16.h),
-                const Text('Vui lòng di chuyển đến quầy thu ngân để thanh toán.'),
-              ],
-            ),
-            actions: [
-              TextButton(
-                onPressed: () {
-                  Navigator.of(context).pop();
-                  ref.invalidate(orderListProvider);
-                },
-                child: const Text('Đóng'),
-              ),
-            ],
-          ),
-        ).then((_) {
-          _isPaymentDialogOpen = false;
-          _pendingInvoiceId = null;
-        });
-      } else {
-        showDialog(
-          context: context,
-          barrierDismissible: false,
-          builder: (_) => AlertDialog(
-            title: Text(method == 'MOMO' ? 'Thanh toán qua MoMo' : 'Thanh toán VietQR'),
-            content: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text('Mã hóa đơn: ${response.invoiceId}'),
-                  SizedBox(height: 8.h),
-                  Text(
-                    '${response.totalPayable.toStringAsFixed(0)}đ',
-                    style: TextStyle(
-                      fontSize: 22.sp,
-                      fontWeight: FontWeight.bold,
-                      color: _AppColors.primary,
-                    ),
-                  ),
-                  SizedBox(height: 16.h),
-                  if (response.qrUrl != null)
-                    Container(
-                      padding: EdgeInsets.all(8.r),
-                      decoration: BoxDecoration(
-                        border: Border.all(color: _AppColors.outlineVariant),
-                        borderRadius: BorderRadius.circular(12.r),
-                      ),
-                      child: Image.network(
-                        response.qrUrl!,
-                        width: 200.r,
-                        height: 200.r,
-                        fit: BoxFit.contain,
-                        errorBuilder: (_, __, ___) => Container(
-                          width: 200.r,
-                          height: 200.r,
-                          color: _AppColors.surfaceContainerHigh,
-                          child: Icon(Icons.qr_code, size: 64.sp, color: _AppColors.outlineVariant),
-                        ),
-                      ),
-                    ),
-                  SizedBox(height: 16.h),
-                  const Text(
-                    'Quét mã QR bằng ứng dụng ngân hàng hoặc ví điện tử.',
-                    textAlign: TextAlign.center,
-                  ),
-                  if (response.deeplink != null) ...[
-                    SizedBox(height: 16.h),
-                    ElevatedButton.icon(
-                      onPressed: () async {
-                        final uri = Uri.parse(response.deeplink!);
-                        if (await canLaunchUrl(uri)) {
-                          await launchUrl(uri, mode: LaunchMode.externalApplication);
-                        }
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: _AppColors.primary,
-                        foregroundColor: Colors.white,
-                      ),
-                      icon: const Icon(Icons.open_in_new),
-                      label: const Text('Mở liên kết thanh toán'),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () {
-                  Navigator.of(context).pop();
-                  ref.invalidate(orderListProvider);
-                },
-                child: const Text('Đóng'),
-              ),
-            ],
-          ),
-        ).then((_) {
-          _isPaymentDialogOpen = false;
-          _pendingInvoiceId = null;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        Navigator.of(context).pop(); // Close bottom sheet first
-        final msg = e.toString().contains('đang chờ') || e.toString().contains('ALREADY')
-            ? 'Bạn đã có thanh toán đang chờ xử lý.'
-            : 'Lỗi thanh toán: $e';
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(msg)),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _isProcessingPayment = false);
-    }
-  }
-
-  void _showPaymentSheet(int sessionId, double totalAmount) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => StatefulBuilder(
-        builder: (ctx, setSheetState) => Container(
-          constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.75),
-          decoration: BoxDecoration(
-            color: _AppColors.background,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(24.r)),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Handle bar
-              Container(
-                margin: EdgeInsets.only(top: 12.h),
-                width: 40.w,
-                height: 4.h,
-                decoration: BoxDecoration(
-                  color: _AppColors.surfaceContainerHighest,
-                  borderRadius: BorderRadius.circular(2.r),
-                ),
-              ),
-              Padding(
-                padding: EdgeInsets.symmetric(horizontal: 24.w, vertical: 16.h),
-                child: Text(
-                  'Thanh toán phiên ăn',
-                  style: TextStyle(
-                    fontSize: 20.sp,
-                    fontWeight: FontWeight.bold,
-                    color: _AppColors.primary,
-                  ),
-                ),
-              ),
-
-              // Total
-              Container(
-                margin: EdgeInsets.symmetric(horizontal: 24.w),
-                padding: EdgeInsets.all(16.r),
-                decoration: BoxDecoration(
-                  color: _AppColors.surfaceContainerLowest,
-                  borderRadius: BorderRadius.circular(12.r),
-                  border: Border.all(color: _AppColors.outlineVariant.withOpacity(0.3)),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text('Tổng cộng', style: TextStyle(fontSize: 16.sp, color: _AppColors.onSurfaceVariant)),
-                    Text(
-                      '${totalAmount.toStringAsFixed(0)}đ',
-                      style: TextStyle(fontSize: 20.sp, fontWeight: FontWeight.bold, color: _AppColors.primary),
-                    ),
-                  ],
-                ),
-              ),
-              SizedBox(height: 16.h),
-
-              // Payment methods
-              Padding(
-                padding: EdgeInsets.symmetric(horizontal: 24.w),
-                child: Column(
-                  children: [
-                    _buildPaymentOption(
-                      index: 0,
-                      title: 'Ví Điện Tử (Momo)',
-                      icon: Icons.account_balance_wallet,
-                      iconBgColor: _AppColors.secondaryContainer,
-                      iconColor: _AppColors.primary,
-                      isSelected: _selectedPaymentMethod == 0,
-                      onTap: () => setSheetState(() => _selectedPaymentMethod = 0),
-                    ),
-                    SizedBox(height: 10.h),
-                    _buildPaymentOption(
-                      index: 1,
-                      title: 'Thẻ Ngân Hàng / VietQR',
-                      icon: Icons.qr_code_2,
-                      iconBgColor: _AppColors.secondaryContainer,
-                      iconColor: _AppColors.primary,
-                      isSelected: _selectedPaymentMethod == 1,
-                      onTap: () => setSheetState(() => _selectedPaymentMethod = 1),
-                    ),
-                    SizedBox(height: 10.h),
-                    _buildPaymentOption(
-                      index: 2,
-                      title: 'Tiền Mặt tại quầy',
-                      icon: Icons.payments,
-                      iconBgColor: _AppColors.surfaceContainerHighest,
-                      iconColor: _AppColors.onSurfaceVariant,
-                      isSelected: _selectedPaymentMethod == 2,
-                      onTap: () => setSheetState(() => _selectedPaymentMethod = 2),
-                    ),
-                  ],
-                ),
-              ),
-              SizedBox(height: 20.h),
-
-              // Pay button
-              Padding(
-                padding: EdgeInsets.fromLTRB(24.w, 0, 24.w, 32.h),
-                child: SizedBox(
-                  width: double.infinity,
-                  height: 52.h,
-                  child: ElevatedButton(
-                    onPressed: _isProcessingPayment
-                        ? null
-                        : () {
-                            setSheetState(() => _isProcessingPayment = true);
-                            _handlePayment(sessionId).then((_) {
-                              if (mounted) setSheetState(() => _isProcessingPayment = false);
-                            });
-                          },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: _AppColors.primary,
-                      foregroundColor: Colors.white,
-                      disabledBackgroundColor: _AppColors.surfaceContainerHighest,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
-                    ),
-                    child: _isProcessingPayment
-                        ? const SizedBox(
-                            width: 24, height: 24,
-                            child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                          )
-                        : Text(
-                            'Xác nhận thanh toán',
-                            style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.bold),
-                          ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildPaymentOption({
-    required int index,
-    required String title,
-    required IconData icon,
-    required Color iconBgColor,
-    required Color iconColor,
-    required bool isSelected,
-    required VoidCallback onTap,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(12.r),
-      child: Container(
-        padding: EdgeInsets.all(14.r),
-        decoration: BoxDecoration(
-          color: _AppColors.surfaceContainerLowest,
-          borderRadius: BorderRadius.circular(12.r),
-          border: Border.all(
-            color: isSelected ? _AppColors.primary : Colors.transparent,
-            width: 2,
-          ),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 36.r,
-              height: 36.r,
-              decoration: BoxDecoration(
-                color: iconBgColor,
-                borderRadius: BorderRadius.circular(10.r),
-              ),
-              child: Icon(icon, color: iconColor, size: 20.sp),
-            ),
-            SizedBox(width: 12.w),
-            Expanded(
-              child: Text(
-                title,
-                style: TextStyle(
-                  fontSize: 14.sp,
-                  fontWeight: FontWeight.w600,
-                  color: _AppColors.onSurface,
-                ),
-              ),
-            ),
-            Icon(
-              isSelected ? Icons.radio_button_checked : Icons.radio_button_unchecked,
-              color: isSelected ? _AppColors.primary : _AppColors.surfaceContainerHighest,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+  // Thanh toán đã có 1 điểm vào duy nhất: nút "Thanh toán" ở trang Thực đơn →
+  // /invoice (OrderHistoryPage, hóa đơn tạm tính đầy đủ + chọn phương thức + trạng
+  // thái ReceivePaymentSuccess). Trang này chỉ còn là danh sách lịch sử đơn thuần túy.
 
   @override
   Widget build(BuildContext context) {
@@ -457,7 +85,8 @@ class _OrderListPageState extends ConsumerState<OrderListPage> {
         scrolledUnderElevation: 2,
         leading: IconButton(
           icon: Icon(Icons.arrow_back, color: _AppColors.primary),
-          onPressed: () => context.pop(),
+          // Đơn hàng luôn được vào qua tab bottom-nav (context.go, không push).
+          onPressed: () => context.canPop() ? context.pop() : context.go('/home'),
         ),
         title: Text(
           'Lịch sử đơn hàng',
@@ -515,32 +144,7 @@ class _OrderListPageState extends ConsumerState<OrderListPage> {
         error: (err, stack) => Center(child: Text('Lỗi tải danh sách: $err')),
       ),
       
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          color: _AppColors.surface,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.04),
-              blurRadius: 20,
-              offset: const Offset(0, -4),
-            ),
-          ],
-        ),
-        child: SafeArea(
-          child: Padding(
-            padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 8.h),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                _buildNavItem(Icons.menu_book, 'Thực đơn', false, () => context.go('/home')),
-                _buildNavItem(Icons.receipt_long, 'Đơn hàng', true, () {}),
-                _buildNavItem(Icons.person, 'Tài khoản', false, () => context.push('/profile')),
-                _buildNavItem(Icons.settings, 'Cài đặt', false, () => context.push('/settings')),
-              ],
-            ),
-          ),
-        ),
-      ),
+      bottomNavigationBar: const CustomerBottomNav(activeTab: CustomerNavTab.orders),
     );
   }
 
@@ -739,35 +343,4 @@ class _OrderListPageState extends ConsumerState<OrderListPage> {
     );
   }
 
-  Widget _buildNavItem(IconData icon, String label, bool isActive, VoidCallback onTap) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 8.h),
-        decoration: BoxDecoration(
-          color: isActive ? _AppColors.primaryContainer.withOpacity(0.1) : Colors.transparent,
-          borderRadius: BorderRadius.circular(12.r),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              icon,
-              color: isActive ? _AppColors.primary : _AppColors.onSurfaceVariant,
-              size: 24.sp,
-            ),
-            SizedBox(height: 4.h),
-            Text(
-              label,
-              style: TextStyle(
-                color: isActive ? _AppColors.primary : _AppColors.onSurfaceVariant,
-                fontSize: 12.sp,
-                fontWeight: isActive ? FontWeight.bold : FontWeight.w500,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 }

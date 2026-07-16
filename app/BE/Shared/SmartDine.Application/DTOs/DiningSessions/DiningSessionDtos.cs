@@ -24,8 +24,13 @@ public class BillSummaryResponse
 {
     public int SessionId { get; set; }
     public decimal SubTotal { get; set; }
+    public decimal ServiceCharge { get; set; }
     public decimal Tax { get; set; }
     public decimal EstimatedTotal { get; set; }
+    /// <summary>Thuế suất đang áp dụng (%), lấy từ RestaurantSettings.</summary>
+    public decimal TaxRate { get; set; }
+    /// <summary>Phí dịch vụ đang áp dụng (%), lấy từ RestaurantSettings.</summary>
+    public decimal ServiceChargeRate { get; set; }
 }
 
 public class SessionOrderItemDetail

@@ -122,6 +122,26 @@ public class PaymentsController : ControllerBase
     }
 
     // ═══════════════════════════════════════════════════════════════
+    // POST /api/v1/payments/cancel-intent
+    // ═══════════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// Hủy giao dịch đang chờ (khách đổi ý ở dialog QR/tiền mặt) — mở khóa session ngay
+    /// thay vì đợi PaymentExpiryJob tự dọn sau tối đa 30 phút.
+    /// Roles: DINER, GUEST, STAFF.
+    /// </summary>
+    [HttpPost("cancel-intent")]
+    [Authorize(Roles = Roles.AllExceptChef)]
+    public async Task<IActionResult> CancelIntent([FromBody] CancelPaymentIntentRequest request)
+    {
+        var (customerId, guestSessionId) = ExtractIdentity();
+        var isStaff = IsStaff();
+
+        await _paymentService.CancelIntentAsync(customerId, guestSessionId, isStaff, request.SessionId);
+        return Ok(ApiResponse<bool>.Ok(true, ValidationMessages.PAYMENT_CANCELLED));
+    }
+
+    // ═══════════════════════════════════════════════════════════════
     // POST /api/v1/payments/webhook
     // ═══════════════════════════════════════════════════════════════
 
@@ -153,6 +173,18 @@ public class PaymentsController : ControllerBase
 
         var result = await _paymentService.HandleWebhookAsync(rawBody, signature);
         return Ok(result);
+    }
+
+    /// <summary>
+    /// GET /api/v1/payments/pending-cash — Bàn đang chờ thu tiền mặt.
+    /// Roles: STAFF, MANAGER.
+    /// </summary>
+    [HttpGet("pending-cash")]
+    [Authorize(Roles = Roles.StaffAndManager)]
+    public async Task<IActionResult> GetPendingCash()
+    {
+        var result = await _paymentService.GetPendingCashAsync();
+        return Ok(ApiResponse<List<PendingCashPaymentResponse>>.Ok(result));
     }
 
     /// <summary>

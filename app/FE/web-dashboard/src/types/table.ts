@@ -1,4 +1,4 @@
-export type TableStatus = 'AVAILABLE' | 'OCCUPIED';
+export type TableStatus = 'AVAILABLE' | 'OCCUPIED' | 'RESERVED' | 'MAINTENANCE';
 
 export interface Table {
   id: number;

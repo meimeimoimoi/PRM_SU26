@@ -243,6 +243,13 @@ public class DiningSessionRepository : GenericRepository<DiningSession>, IDining
                     .Include(d => d.Participants)
                     .FirstOrDefaultAsync(d => d.TableId == tableId && d.Status == DiningSessionStatus.ACTIVE);
 
+    public async Task<DiningSession?> GetPayableByTableIdAsync(int tableId) =>
+        await _dbSet.Include(d => d.Orders)
+                    .Include(d => d.Participants)
+                    .FirstOrDefaultAsync(d =>
+                        d.TableId == tableId &&
+                        (d.Status == DiningSessionStatus.ACTIVE || d.Status == DiningSessionStatus.CHECKOUT));
+
     public async Task<DiningSession?> GetByIdWithParticipantsAsync(int id) =>
         await _dbSet.Include(d => d.Table)
                     .Include(d => d.Customer)
@@ -315,6 +322,16 @@ public class PaymentRepository : GenericRepository<Payment>, IPaymentRepository
         await _dbSet.Where(p => p.SessionId == sessionId)
                     .OrderByDescending(p => p.CreatedAt)
                     .FirstOrDefaultAsync();
+
+    public async Task<IReadOnlyList<Payment>> GetPendingCashAsync() =>
+        await _dbSet.Include(p => p.Session).ThenInclude(s => s.Table)
+                    .Where(p =>
+                        p.PaymentStatus == PaymentStatus.PENDING &&
+                        p.PaymentMethod == PaymentMethod.CASH &&
+                        (p.Session.Status == DiningSessionStatus.ACTIVE ||
+                         p.Session.Status == DiningSessionStatus.CHECKOUT))
+                    .OrderBy(p => p.CreatedAt)
+                    .ToListAsync();
 
     /// <summary>
     /// Tìm payment bằng ExternalRef (PayOS orderCode dạng string).

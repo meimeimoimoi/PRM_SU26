@@ -28,11 +28,38 @@ import {
   SearchOutlined,
   TableOutlined
 } from '@ant-design/icons';
-import { KitchenItem, KitchenItemStatus } from '@/types/chef';
-import { orderService, OrderResponse } from '@/services/orderService';
+import { KitchenItem, KitchenItemStatus, KitchenOrderGroup } from '@/types/chef';
+import { orderService, OrderResponse, PendingCashPayment } from '@/services/orderService';
+import { tableService } from '@/services/tableService';
+import { settingsService } from '@/services/settingsService';
+import { Table as RestaurantTable } from '@/types/table';
 import '@/styles/StaffDashboardPage.css';
 
 const { TabPane } = Tabs;
+
+/** Gộp các món cùng orderId trong cùng cột trạng thái thành 1 thẻ đơn. */
+const groupKitchenItemsByOrder = (items: KitchenItem[]): KitchenOrderGroup[] => {
+  const map = new Map<number, KitchenOrderGroup>();
+  items.forEach((item) => {
+    const existing = map.get(item.orderId);
+    if (existing) {
+      existing.items.push(item);
+      existing.elapsedSeconds = Math.max(existing.elapsedSeconds, item.elapsedSeconds);
+    } else {
+      map.set(item.orderId, {
+        orderId: item.orderId,
+        tableNumber: item.tableNumber,
+        status: item.status,
+        orderedAt: item.orderedAt,
+        elapsedSeconds: item.elapsedSeconds,
+        items: [item],
+      });
+    }
+  });
+  return Array.from(map.values()).sort(
+    (a, b) => new Date(a.orderedAt).getTime() - new Date(b.orderedAt).getTime()
+  );
+};
 
 const StaffDashboardPage: React.FC = () => {
   const user = useSelector(selectCurrentUser);
@@ -50,40 +77,93 @@ const StaffDashboardPage: React.FC = () => {
   const [selectedTable, setSelectedTable] = useState<number | null>(null);
   const [billingModalVisible, setBillingModalVisible] = useState<boolean>(false);
   const [searchTableText, setSearchTableText] = useState<string>('');
+  const [activeTab, setActiveTab] = useState<string>('queue');
+  /** Bàn vừa báo thanh toán tiền mặt — highlight trên tab hóa đơn */
+  const [pendingCashTables, setPendingCashTables] = useState<Set<number>>(new Set());
+  const [pendingCashPayments, setPendingCashPayments] = useState<PendingCashPayment[]>([]);
+  const [maintenanceTables, setMaintenanceTables] = useState<RestaurantTable[]>([]);
+  /** % từ RestaurantSettings — Manager chỉnh ở Settings */
+  const [taxRatePercent, setTaxRatePercent] = useState<number>(8);
+  const [serviceChargePercent, setServiceChargePercent] = useState<number>(0);
 
   // Load active orders and kitchen items
-  const loadData = useCallback(async () => {
-    setLoading(true);
+  const loadData = useCallback(async (showSpinner = true) => {
+    if (showSpinner) setLoading(true);
     try {
-      const orders = await orderService.getActiveOrders();
+      const [orders, items, tables, pendingCash, settings] = await Promise.all([
+        orderService.getActiveOrders(),
+        orderService.getKitchenItems(),
+        tableService.getAllTables(),
+        orderService.getPendingCashPayments().catch(() => [] as PendingCashPayment[]),
+        settingsService.getSettings().catch(() => null),
+      ]);
       setActiveOrders(orders);
-
-      const items = await orderService.getKitchenItems();
       setKitchenItems(items);
+      setMaintenanceTables((tables || []).filter((t) => t.status === 'MAINTENANCE'));
+      setPendingCashPayments(pendingCash);
+      if (settings) {
+        setTaxRatePercent(Number(settings.taxRate) || 0);
+        setServiceChargePercent(Number(settings.serviceChargeRate) || 0);
+      }
+      if (pendingCash.length > 0) {
+        setPendingCashTables((prev) => {
+          const next = new Set(prev);
+          pendingCash.forEach((p) => next.add(p.tableNumber));
+          return next;
+        });
+      }
     } catch (err) {
-      message.error('Không thể tải danh sách dữ liệu.');
+      if (showSpinner) message.error('Không thể tải danh sách dữ liệu.');
     } finally {
-      setLoading(false);
+      if (showSpinner) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    loadData();
+    loadData(true);
+  }, [loadData]);
+
+  // Polling nhẹ mỗi 5s — đảm bảo realtime kể cả khi SignalR gián đoạn (không hiện spinner)
+  useEffect(() => {
+    const poll = setInterval(() => {
+      loadData(false);
+    }, 5000);
+    return () => clearInterval(poll);
   }, [loadData]);
 
   // Nhóm nhiều sự kiện realtime đến gần nhau (vd. một đơn nhiều món) thành 1 lần reload.
   const reloadTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scheduleReload = useCallback(() => {
     if (reloadTimerRef.current) clearTimeout(reloadTimerRef.current);
-    reloadTimerRef.current = setTimeout(() => loadData(), 300);
+    reloadTimerRef.current = setTimeout(() => loadData(false), 200);
   }, [loadData]);
 
-  // Tham gia KitchenGroup qua SignalR để nhận đơn mới / cập nhật trạng thái theo
-  // thời gian thực thay vì chỉ dựa vào nút "Tải lại dữ liệu" thủ công.
+  // Tham gia KitchenGroup qua SignalR để nhận đơn mới / cập nhật trạng thái /
+  // yêu cầu thu tiền mặt theo thời gian thực.
   const kitchenHubEvents = useMemo(
     () => ({
       ReceiveNewOrder: () => scheduleReload(),
       ReceiveOrderStatusUpdate: () => scheduleReload(),
+      ReceiveCashPaymentPending: (data: { tableNumber?: number; TableNumber?: number; invoiceId?: string; InvoiceId?: string; amount?: number; Amount?: number }) => {
+        const tableNo = data.tableNumber ?? data.TableNumber;
+        if (tableNo != null) {
+          setPendingCashTables((prev) => new Set(prev).add(tableNo));
+          setActiveTab('billing');
+          message.info(`Bàn ${tableNo} yêu cầu thanh toán tiền mặt — vui lòng xác nhận thu tiền.`);
+        }
+        scheduleReload();
+      },
+      ReceivePaymentSuccess: (data: { tableNumber?: number; TableNumber?: number }) => {
+        const tableNo = data.tableNumber ?? data.TableNumber;
+        if (tableNo != null) {
+          setPendingCashTables((prev) => {
+            const next = new Set(prev);
+            next.delete(tableNo);
+            return next;
+          });
+        }
+        scheduleReload();
+      },
     }),
     [scheduleReload]
   );
@@ -119,36 +199,44 @@ const StaffDashboardPage: React.FC = () => {
     return 'normal';
   };
 
-  // Transition dish status
-  const handleStatusChange = async (id: number, newStatus: KitchenItemStatus) => {
+  // Transition toàn bộ món trong cùng 1 lượt order
+  const handleOrderStatusChange = async (group: KitchenOrderGroup, newStatus: KitchenItemStatus) => {
     try {
-      await orderService.updateItemStatus(id, newStatus);
-      
+      const itemIds = group.items.map((i) => i.id);
+      await orderService.updateOrderItemsStatus(itemIds, newStatus);
+
       if (newStatus === 'SERVED') {
-        setKitchenItems((prev) => prev.filter((item) => item.id !== id));
-        message.success('Đã giao món thành công!');
+        setKitchenItems((prev) => prev.filter((item) => !itemIds.includes(item.id)));
+        message.success(`Đã giao đơn #${group.orderId} (Bàn ${group.tableNumber})!`);
       } else {
         setKitchenItems((prev) =>
-          prev.map((item) => (item.id === id ? { ...item, status: newStatus } : item))
+          prev.map((item) => (itemIds.includes(item.id) ? { ...item, status: newStatus } : item))
         );
         message.success(
-          newStatus === 'DOING' 
-            ? 'Đã nhận nấu món!' 
-            : 'Đã nấu xong! Chờ phục vụ giao.'
+          newStatus === 'DOING'
+            ? `Đã nhận nấu đơn #${group.orderId} (${group.items.length} món)!`
+            : `Đã nấu xong đơn #${group.orderId}! Chờ phục vụ giao.`
         );
       }
-      // Reload active orders from service in background to keep billing aligned
-      const orders = await orderService.getActiveOrders();
-      setActiveOrders(orders);
+      scheduleReload();
     } catch (error) {
-      message.error('Lỗi khi cập nhật trạng thái món.');
+      message.error('Lỗi khi cập nhật trạng thái đơn.');
     }
   };
 
-  // Kitchen Slip printing
-  const handlePrintKitchenSlip = (item: KitchenItem) => {
-    orderService.printKitchenTicket(item);
-    message.success(`Đã xuất lệnh in phiếu bếp cho món ${item.name}!`);
+  // Kitchen Slip printing — 1 phiếu gồm tất cả món của đơn
+  const handlePrintKitchenSlip = (group: KitchenOrderGroup) => {
+    orderService.printKitchenOrderTicket({
+      orderId: group.orderId,
+      tableNumber: group.tableNumber,
+      orderedAt: group.orderedAt,
+      items: group.items.map((item) => ({
+        name: item.name,
+        quantity: item.quantity,
+        notes: item.notes,
+      })),
+    });
+    message.success(`Đã mở phiếu bếp đơn #${group.orderId} (${group.items.length} món).`);
   };
 
   // Table Checkout Bill printing
@@ -157,12 +245,12 @@ const StaffDashboardPage: React.FC = () => {
     message.success(`Đã in hóa đơn thanh toán cho Bàn ${tableNo}!`);
   };
 
-  // Checkout table (Archive/Close table session locally)
+  // Checkout table — xác nhận đã thu tiền → session CLOSED, bàn → MAINTENANCE (chờ dọn)
   const handleCheckoutTable = (tableNo: number) => {
     Modal.confirm({
       title: `Xác nhận thanh toán Bàn ${tableNo}`,
-      content: `Bạn có chắc chắn muốn xác nhận thanh toán và đóng phiên phục vụ của Bàn ${tableNo}? Thao tác này sẽ xóa bàn khỏi danh sách hóa đơn hiện tại.`,
-      okText: 'Thanh toán & Đóng bàn',
+      content: `Xác nhận đã thu tiền cho Bàn ${tableNo}? Phiên ăn sẽ đóng và bàn chuyển sang trạng thái cần dọn (MAINTENANCE). Sau khi dọn xong, hãy đánh dấu Trống ở Quản lý bàn.`,
+      okText: 'Xác nhận đã thu tiền',
       okType: 'primary',
       cancelText: 'Hủy',
       onOk: async () => {
@@ -170,9 +258,15 @@ const StaffDashboardPage: React.FC = () => {
           await orderService.completePaymentByTable(tableNo);
           setActiveOrders((prev) => prev.filter((o) => o.tableNumber !== tableNo));
           setKitchenItems((prev) => prev.filter((item) => item.tableNumber !== tableNo));
+          setPendingCashTables((prev) => {
+            const next = new Set(prev);
+            next.delete(tableNo);
+            return next;
+          });
           setBillingModalVisible(false);
           setSelectedTable(null);
-          message.success(`Thanh toán thành công! Bàn ${tableNo} hiện đã trống.`);
+          message.success(`Thanh toán thành công! Bàn ${tableNo} đang chờ dọn (MAINTENANCE).`);
+          loadData();
         } catch (err) {
           message.error('Không thể xác nhận thanh toán trên hệ thống.');
         }
@@ -180,35 +274,113 @@ const StaffDashboardPage: React.FC = () => {
     });
   };
 
-  // Group kitchen queue items by status
-  const pendingItems = kitchenItems.filter((item) => item.status === 'WAITING');
-  const preparingItems = kitchenItems.filter((item) => item.status === 'DOING');
-  const readyItems = kitchenItems.filter((item) => item.status === 'DONE');
+  const handleMarkTableCleaned = (table: RestaurantTable) => {
+    Modal.confirm({
+      title: `Đã dọn xong Bàn ${table.tableNumber}?`,
+      content: 'Xác nhận bàn đã sạch và sẵn sàng nhận khách. Trạng thái sẽ chuyển thành Trống (AVAILABLE).',
+      okText: 'Đã dọn — Trống',
+      cancelText: 'Hủy',
+      onOk: async () => {
+        try {
+          await tableService.updateTableStatus(table.id, 'AVAILABLE');
+          setMaintenanceTables((prev) => prev.filter((t) => t.id !== table.id));
+          message.success(`Bàn ${table.tableNumber} đã trống, sẵn sàng phục vụ.`);
+        } catch {
+          message.error('Không thể cập nhật trạng thái bàn.');
+        }
+      },
+    });
+  };
 
-  // Group active tables from active orders
+  // Group kitchen queue items by status, rồi gộp theo orderId
+  const pendingGroups = useMemo(
+    () => groupKitchenItemsByOrder(kitchenItems.filter((item) => item.status === 'WAITING')),
+    [kitchenItems]
+  );
+  const preparingGroups = useMemo(
+    () => groupKitchenItemsByOrder(kitchenItems.filter((item) => item.status === 'DOING')),
+    [kitchenItems]
+  );
+  const readyGroups = useMemo(
+    () => groupKitchenItemsByOrder(kitchenItems.filter((item) => item.status === 'DONE')),
+    [kitchenItems]
+  );
+
+  // Group active tables from active orders + pending cash (fallback nếu order đã COMPLETED cũ)
   const activeTablesList = useMemo(() => {
-    const tableMap: { [key: number]: { tableNumber: number; totalAmount: number; itemsCount: number } } = {};
+    const tableMap: {
+      [key: number]: {
+        tableNumber: number;
+        totalAmount: number;
+        itemsCount: number;
+        sessionStatus: string;
+        awaitingCash: boolean;
+        invoiceId?: string;
+      };
+    } = {};
+
     activeOrders.forEach((o) => {
       const tableNo = o.tableNumber;
       const amount = o.finalAmount;
       const count = o.items.reduce((sum, item) => sum + item.quantity, 0);
+      const sessionStatus = o.sessionStatus || 'ACTIVE';
+      const awaitingCash =
+        sessionStatus === 'CHECKOUT' || pendingCashTables.has(tableNo);
 
       if (tableMap[tableNo]) {
         tableMap[tableNo].totalAmount += amount;
         tableMap[tableNo].itemsCount += count;
+        if (sessionStatus === 'CHECKOUT') {
+          tableMap[tableNo].sessionStatus = 'CHECKOUT';
+          tableMap[tableNo].awaitingCash = true;
+        }
       } else {
         tableMap[tableNo] = {
           tableNumber: tableNo,
           totalAmount: amount,
-          itemsCount: count
+          itemsCount: count,
+          sessionStatus,
+          awaitingCash,
         };
       }
     });
 
-    return Object.values(tableMap).filter((t) => 
-      searchTableText === '' || t.tableNumber.toString().includes(searchTableText)
-    );
-  }, [activeOrders, searchTableText]);
+    // Cộng VAT + phí DV theo settings cho tổng từ orders
+    Object.values(tableMap).forEach((t) => {
+      const net = t.totalAmount;
+      const service = Math.round(net * serviceChargePercent / 100);
+      const tax = Math.round(net * taxRatePercent / 100);
+      t.totalAmount = net + service + tax;
+    });
+
+    // Đảm bảo bàn có pending cash vẫn hiện dù activeOrders trống
+    pendingCashPayments.forEach((p) => {
+      if (!tableMap[p.tableNumber]) {
+        tableMap[p.tableNumber] = {
+          tableNumber: p.tableNumber,
+          totalAmount: p.amount, // pending cash amount đã gồm VAT từ BE
+          itemsCount: 0,
+          sessionStatus: 'CHECKOUT',
+          awaitingCash: true,
+          invoiceId: p.invoiceId,
+        };
+      } else {
+        tableMap[p.tableNumber].awaitingCash = true;
+        tableMap[p.tableNumber].sessionStatus = 'CHECKOUT';
+        tableMap[p.tableNumber].invoiceId = p.invoiceId;
+        // Ưu tiên số tiền từ payment PENDING (đã gồm VAT, khớp hóa đơn)
+        tableMap[p.tableNumber].totalAmount = p.amount;
+      }
+    });
+
+    return Object.values(tableMap)
+      .filter((t) =>
+        searchTableText === '' || t.tableNumber.toString().includes(searchTableText)
+      )
+      .sort((a, b) => Number(b.awaitingCash) - Number(a.awaitingCash) || a.tableNumber - b.tableNumber);
+  }, [activeOrders, searchTableText, pendingCashTables, pendingCashPayments, taxRatePercent, serviceChargePercent]);
+
+  const pendingCashCount = activeTablesList.filter((t) => t.awaitingCash).length;
 
   // Selected table billing details calculation
   const selectedTableBillDetails = useMemo(() => {
@@ -245,9 +417,16 @@ const StaffDashboardPage: React.FC = () => {
       items: Object.values(itemMap),
       subtotal,
       discount,
-      totalAmount: subtotal - discount
+      serviceFee: Math.round((subtotal - discount) * serviceChargePercent / 100),
+      vat: Math.round((subtotal - discount) * taxRatePercent / 100),
+      taxRatePercent,
+      serviceChargePercent,
+      totalAmount: Math.round(
+        (subtotal - discount) *
+          (1 + taxRatePercent / 100 + serviceChargePercent / 100)
+      ),
     };
-  }, [selectedTable, activeOrders]);
+  }, [selectedTable, activeOrders, taxRatePercent, serviceChargePercent]);
 
   return (
     <div className="staff-dashboard-container">
@@ -264,7 +443,7 @@ const StaffDashboardPage: React.FC = () => {
         <Button 
           type="default" 
           icon={<PlayCircleOutlined />} 
-          onClick={loadData}
+          onClick={() => loadData(true)}
           className="staff-btn-simulate"
         >
           Tải lại dữ liệu
@@ -283,7 +462,7 @@ const StaffDashboardPage: React.FC = () => {
           <div className="staff-stat-icon pending"><ClockCircleOutlined /></div>
           <div className="staff-stat-info">
             <h4>Chờ chế biến</h4>
-            <div>{pendingItems.length} món</div>
+            <div>{pendingGroups.length} đơn</div>
           </div>
         </div>
 
@@ -291,7 +470,7 @@ const StaffDashboardPage: React.FC = () => {
           <div className="staff-stat-icon preparing"><FireOutlined /></div>
           <div className="staff-stat-info">
             <h4>Đang nấu</h4>
-            <div>{preparingItems.length} món</div>
+            <div>{preparingGroups.length} đơn</div>
           </div>
         </div>
 
@@ -299,7 +478,7 @@ const StaffDashboardPage: React.FC = () => {
           <div className="staff-stat-icon ready"><CoffeeOutlined /></div>
           <div className="staff-stat-info">
             <h4>Chờ giao khách</h4>
-            <div>{readyItems.length} món</div>
+            <div>{readyGroups.length} đơn</div>
           </div>
         </div>
 
@@ -310,16 +489,24 @@ const StaffDashboardPage: React.FC = () => {
             <div>{activeTablesList.length} bàn</div>
           </div>
         </div>
+
+        <div className="staff-stat-card">
+          <div className="staff-stat-icon pending"><TableOutlined /></div>
+          <div className="staff-stat-info">
+            <h4>Cần dọn bàn</h4>
+            <div>{maintenanceTables.length} bàn</div>
+          </div>
+        </div>
       </div>
 
       {/* Main Tabs Container */}
       <div className="staff-main-tabs-card">
-        <Tabs defaultActiveKey="queue" className="staff-custom-tabs">
+        <Tabs activeKey={activeTab} onChange={setActiveTab} className="staff-custom-tabs">
           {/* TAB 1: KITCHEN QUEUE */}
           <TabPane 
             tab={
               <span>
-                <FireOutlined /> HÀNG CHỜ CHẾ BIẾN ({kitchenItems.length})
+                <FireOutlined /> HÀNG CHỜ CHẾ BIẾN ({pendingGroups.length + preparingGroups.length + readyGroups.length})
               </span>
             } 
             key="queue"
@@ -332,36 +519,39 @@ const StaffDashboardPage: React.FC = () => {
                     <span className="staff-column-title">
                       <span className="bullet-pink">●</span> CHỜ NHẬN (WAITING)
                     </span>
-                    <span className="staff-column-count">{pendingItems.length}</span>
+                    <span className="staff-column-count">{pendingGroups.length}</span>
                   </div>
 
                   <div className="staff-card-list">
-                    {pendingItems.length === 0 ? (
+                    {pendingGroups.length === 0 ? (
                       <div className="staff-column-empty">
                         <ClockCircleOutlined />
                         <p>Hàng chờ trống.<br />Chưa có món mới cần chế biến.</p>
                       </div>
                     ) : (
-                      pendingItems.map((item) => (
-                        <div key={item.id} className="staff-item-card pending">
+                      pendingGroups.map((group) => (
+                        <div key={group.orderId} className="staff-item-card pending">
                           <div className="staff-card-header">
-                            <span className="staff-table-badge">BÀN {item.tableNumber}</span>
-                            <span className={`staff-timer-badge ${getTimerClass(item.elapsedSeconds, item.status)}`}>
-                              <ClockCircleOutlined /> {formatTime(item.elapsedSeconds)}
+                            <span className="staff-table-badge">BÀN {group.tableNumber} · Đơn #{group.orderId}</span>
+                            <span className={`staff-timer-badge ${getTimerClass(group.elapsedSeconds, group.status)}`}>
+                              <ClockCircleOutlined /> {formatTime(group.elapsedSeconds)}
                             </span>
                           </div>
 
                           <div className="staff-card-body">
-                            <div className="staff-item-name">{item.name}</div>
-                            <div className="staff-item-qty">Số lượng: {item.quantity}</div>
-                            {item.notes && <div className="staff-item-notes">📝 Chú thích: {item.notes}</div>}
+                            {group.items.map((item) => (
+                              <div key={item.id} className="staff-order-line">
+                                <div className="staff-item-name">{item.name}</div>
+                                <div className="staff-item-qty">x{item.quantity}{item.notes ? ` · ${item.notes}` : ''}</div>
+                              </div>
+                            ))}
                           </div>
 
                           <div className="staff-card-footer">
-                            <Button 
-                              type="default" 
-                              icon={<PrinterOutlined />} 
-                              onClick={() => handlePrintKitchenSlip(item)}
+                            <Button
+                              type="default"
+                              icon={<PrinterOutlined />}
+                              onClick={() => handlePrintKitchenSlip(group)}
                               className="staff-btn-print-ticket"
                             >
                               In phiếu bếp
@@ -370,10 +560,10 @@ const StaffDashboardPage: React.FC = () => {
                               <Button
                                 type="primary"
                                 icon={<PlayCircleOutlined />}
-                                onClick={() => handleStatusChange(item.id, 'DOING')}
+                                onClick={() => handleOrderStatusChange(group, 'DOING')}
                                 className="staff-btn-action-pending"
                               >
-                                Nhận nấu
+                                Nhận nấu ({group.items.length})
                               </Button>
                             )}
                           </div>
@@ -389,36 +579,39 @@ const StaffDashboardPage: React.FC = () => {
                     <span className="staff-column-title">
                       <span className="bullet-blue">●</span> ĐANG CHẾ BIẾN (DOING)
                     </span>
-                    <span className="staff-column-count">{preparingItems.length}</span>
+                    <span className="staff-column-count">{preparingGroups.length}</span>
                   </div>
 
                   <div className="staff-card-list">
-                    {preparingItems.length === 0 ? (
+                    {preparingGroups.length === 0 ? (
                       <div className="staff-column-empty">
                         <FireOutlined />
                         <p>Bếp đang rảnh.<br />Hãy nhận món ở cột chờ.</p>
                       </div>
                     ) : (
-                      preparingItems.map((item) => (
-                        <div key={item.id} className="staff-item-card preparing">
+                      preparingGroups.map((group) => (
+                        <div key={group.orderId} className="staff-item-card preparing">
                           <div className="staff-card-header">
-                            <span className="staff-table-badge">BÀN {item.tableNumber}</span>
-                            <span className={`staff-timer-badge ${getTimerClass(item.elapsedSeconds, item.status)}`}>
-                              <ClockCircleOutlined /> {formatTime(item.elapsedSeconds)}
+                            <span className="staff-table-badge">BÀN {group.tableNumber} · Đơn #{group.orderId}</span>
+                            <span className={`staff-timer-badge ${getTimerClass(group.elapsedSeconds, group.status)}`}>
+                              <ClockCircleOutlined /> {formatTime(group.elapsedSeconds)}
                             </span>
                           </div>
 
                           <div className="staff-card-body">
-                            <div className="staff-item-name">{item.name}</div>
-                            <div className="staff-item-qty">Số lượng: {item.quantity}</div>
-                            {item.notes && <div className="staff-item-notes">📝 Chú thích: {item.notes}</div>}
+                            {group.items.map((item) => (
+                              <div key={item.id} className="staff-order-line">
+                                <div className="staff-item-name">{item.name}</div>
+                                <div className="staff-item-qty">x{item.quantity}{item.notes ? ` · ${item.notes}` : ''}</div>
+                              </div>
+                            ))}
                           </div>
 
                           <div className="staff-card-footer">
-                            <Button 
-                              type="default" 
-                              icon={<PrinterOutlined />} 
-                              onClick={() => handlePrintKitchenSlip(item)}
+                            <Button
+                              type="default"
+                              icon={<PrinterOutlined />}
+                              onClick={() => handlePrintKitchenSlip(group)}
                               className="staff-btn-print-ticket"
                             >
                               In phiếu bếp
@@ -427,10 +620,10 @@ const StaffDashboardPage: React.FC = () => {
                               <Button
                                 type="primary"
                                 icon={<CheckCircleOutlined />}
-                                onClick={() => handleStatusChange(item.id, 'DONE')}
+                                onClick={() => handleOrderStatusChange(group, 'DONE')}
                                 className="staff-btn-action-preparing"
                               >
-                                Hoàn thành
+                                Hoàn thành ({group.items.length})
                               </Button>
                             )}
                           </div>
@@ -446,36 +639,39 @@ const StaffDashboardPage: React.FC = () => {
                     <span className="staff-column-title">
                       <span className="bullet-green">●</span> CHỜ GIAO (DONE)
                     </span>
-                    <span className="staff-column-count">{readyItems.length}</span>
+                    <span className="staff-column-count">{readyGroups.length}</span>
                   </div>
 
                   <div className="staff-card-list">
-                    {readyItems.length === 0 ? (
+                    {readyGroups.length === 0 ? (
                       <div className="staff-column-empty">
                         <CoffeeOutlined />
                         <p>Không có món chờ giao.<br />Đang nấu hoàn thiện các món khác.</p>
                       </div>
                     ) : (
-                      readyItems.map((item) => (
-                        <div key={item.id} className="staff-item-card ready">
+                      readyGroups.map((group) => (
+                        <div key={group.orderId} className="staff-item-card ready">
                           <div className="staff-card-header">
-                            <span className="staff-table-badge">BÀN {item.tableNumber}</span>
+                            <span className="staff-table-badge">BÀN {group.tableNumber} · Đơn #{group.orderId}</span>
                             <span className="staff-timer-badge normal">
                               <CheckOutlined /> Đã xong
                             </span>
                           </div>
 
                           <div className="staff-card-body">
-                            <div className="staff-item-name">{item.name}</div>
-                            <div className="staff-item-qty">Số lượng: {item.quantity}</div>
-                            {item.notes && <div className="staff-item-notes">📝 Chú thích: {item.notes}</div>}
+                            {group.items.map((item) => (
+                              <div key={item.id} className="staff-order-line">
+                                <div className="staff-item-name">{item.name}</div>
+                                <div className="staff-item-qty">x{item.quantity}{item.notes ? ` · ${item.notes}` : ''}</div>
+                              </div>
+                            ))}
                           </div>
 
                           <div className="staff-card-footer">
-                            <Button 
-                              type="default" 
-                              icon={<PrinterOutlined />} 
-                              onClick={() => handlePrintKitchenSlip(item)}
+                            <Button
+                              type="default"
+                              icon={<PrinterOutlined />}
+                              onClick={() => handlePrintKitchenSlip(group)}
                               className="staff-btn-print-ticket"
                             >
                               In lại phiếu
@@ -484,10 +680,10 @@ const StaffDashboardPage: React.FC = () => {
                               <Button
                                 type="primary"
                                 icon={<DoubleRightOutlined />}
-                                onClick={() => handleStatusChange(item.id, 'SERVED')}
+                                onClick={() => handleOrderStatusChange(group, 'SERVED')}
                                 className="staff-btn-action-ready"
                               >
-                                Đã giao bàn
+                                Đã giao bàn ({group.items.length})
                               </Button>
                             )}
                           </div>
@@ -504,7 +700,8 @@ const StaffDashboardPage: React.FC = () => {
           <TabPane 
             tab={
               <span>
-                <DollarCircleOutlined /> THÀNH TOÁN & HÓA ĐƠN ({activeTablesList.length})
+                <DollarCircleOutlined /> THANH TOÁN & HÓA ĐƠN ({activeTablesList.length}
+                {pendingCashCount > 0 ? ` · ${pendingCashCount} chờ thu` : ''})
               </span>
             } 
             key="billing"
@@ -522,6 +719,9 @@ const StaffDashboardPage: React.FC = () => {
                 />
                 <span className="staff-billing-total-count">
                   Danh sách gồm <strong>{activeTablesList.length}</strong> bàn đang dùng bữa
+                  {pendingCashCount > 0 && (
+                    <> · <strong style={{ color: '#d46b08' }}>{pendingCashCount}</strong> chờ thu tiền mặt</>
+                  )}
                 </span>
               </div>
 
@@ -540,7 +740,7 @@ const StaffDashboardPage: React.FC = () => {
                     {activeTablesList.map((table) => (
                       <Col xs={24} sm={12} md={8} lg={6} key={table.tableNumber}>
                         <Card 
-                          className="staff-table-billing-card"
+                          className={`staff-table-billing-card${table.awaitingCash ? ' awaiting-cash' : ''}`}
                           bordered={false}
                           bodyStyle={{ padding: '20px' }}
                         >
@@ -551,6 +751,14 @@ const StaffDashboardPage: React.FC = () => {
                             <div className="table-title">
                               <h3>BÀN {table.tableNumber}</h3>
                               <span>Số lượng món: {table.itemsCount}</span>
+                              {table.awaitingCash && (
+                                <span className="staff-cash-pending-badge">Chờ thu tiền mặt</span>
+                              )}
+                              {table.invoiceId && (
+                                <span style={{ display: 'block', fontSize: 11, color: '#ad4e00', marginTop: 2 }}>
+                                  {table.invoiceId}
+                                </span>
+                              )}
                             </div>
                           </div>
 
@@ -570,14 +778,26 @@ const StaffDashboardPage: React.FC = () => {
                             >
                               Xem chi tiết
                             </Button>
-                            <Button 
-                              type="primary" 
-                              icon={<PrinterOutlined />} 
-                              onClick={() => handlePrintCheckoutBill(table.tableNumber)}
-                              className="btn-print"
-                            >
-                              In hóa đơn
-                            </Button>
+                            {table.awaitingCash && !isManagerViewOnly ? (
+                              <Button
+                                type="primary"
+                                icon={<CheckOutlined />}
+                                onClick={() => handleCheckoutTable(table.tableNumber)}
+                                className="btn-confirm-cash"
+                                danger
+                              >
+                                Xác nhận thu tiền
+                              </Button>
+                            ) : (
+                              <Button 
+                                type="primary" 
+                                icon={<PrinterOutlined />} 
+                                onClick={() => handlePrintCheckoutBill(table.tableNumber)}
+                                className="btn-print"
+                              >
+                                In hóa đơn
+                              </Button>
+                            )}
                           </div>
                         </Card>
                       </Col>
@@ -585,6 +805,47 @@ const StaffDashboardPage: React.FC = () => {
                   </Row>
                 )}
               </Spin>
+
+              {/* Bàn cần dọn sau thanh toán — STAFF chuyển MAINTENANCE → AVAILABLE */}
+              <div className="staff-maintenance-section">
+                <div className="staff-maintenance-header">
+                  <h3>
+                    <TableOutlined /> Bàn cần dọn ({maintenanceTables.length})
+                  </h3>
+                  <span>Sau khi dọn xong, đánh dấu Trống để nhận khách mới.</span>
+                </div>
+                {maintenanceTables.length === 0 ? (
+                  <Empty
+                    image={Empty.PRESENTED_IMAGE_SIMPLE}
+                    description="Không có bàn đang chờ dọn."
+                    style={{ padding: '24px 0' }}
+                  />
+                ) : (
+                  <Row gutter={[16, 16]}>
+                    {maintenanceTables.map((table) => (
+                      <Col xs={24} sm={12} md={8} lg={6} key={table.id}>
+                        <Card className="staff-maintenance-card" bordered={false} bodyStyle={{ padding: 16 }}>
+                          <div className="staff-maintenance-card-title">BÀN {table.tableNumber}</div>
+                          <div className="staff-maintenance-card-sub">
+                            {table.locationName || 'Chưa gán khu vực'} · {table.capacity} chỗ
+                          </div>
+                          {!isManagerViewOnly && (
+                            <Button
+                              type="primary"
+                              icon={<CheckCircleOutlined />}
+                              block
+                              onClick={() => handleMarkTableCleaned(table)}
+                              className="staff-btn-mark-cleaned"
+                            >
+                              Đã dọn xong
+                            </Button>
+                          )}
+                        </Card>
+                      </Col>
+                    ))}
+                  </Row>
+                )}
+              </div>
             </div>
           </TabPane>
         </Tabs>
@@ -625,13 +886,21 @@ const StaffDashboardPage: React.FC = () => {
               onClick={() => selectedTable && handleCheckoutTable(selectedTable)}
               danger
             >
-              Thành toán & Trả bàn
+              Xác nhận đã thu tiền
             </Button>
           ])
         ]}
       >
         {selectedTableBillDetails ? (
           <div className="staff-modal-bill-content">
+            {(pendingCashTables.has(selectedTable!) ||
+              activeOrders.some(
+                (o) => o.tableNumber === selectedTable && o.sessionStatus === 'CHECKOUT'
+              )) && (
+              <div className="staff-modal-cash-banner">
+                Khách đã chọn thanh toán tiền mặt — phiên đang khóa. Xác nhận sau khi thu đủ tiền tại quầy.
+              </div>
+            )}
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
               <span className="label-gray">Thời gian in phiếu:</span>
               <span className="val-dark">{new Date().toLocaleString('vi-VN')}</span>
@@ -673,6 +942,16 @@ const StaffDashboardPage: React.FC = () => {
                   <span>-{selectedTableBillDetails.discount.toLocaleString('vi-VN')}đ</span>
                 </div>
               )}
+              {selectedTableBillDetails.serviceFee > 0 && (
+                <div className="summary-row">
+                  <span>Phí dịch vụ ({selectedTableBillDetails.serviceChargePercent}%):</span>
+                  <span>{selectedTableBillDetails.serviceFee.toLocaleString('vi-VN')}đ</span>
+                </div>
+              )}
+              <div className="summary-row">
+                <span>Thuế (VAT {selectedTableBillDetails.taxRatePercent}%):</span>
+                <span>{selectedTableBillDetails.vat.toLocaleString('vi-VN')}đ</span>
+              </div>
               <div className="summary-row total bold">
                 <span>CẦN THANH TOÁN:</span>
                 <span>{selectedTableBillDetails.totalAmount.toLocaleString('vi-VN')}đ</span>

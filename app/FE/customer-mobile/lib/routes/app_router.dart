@@ -1,9 +1,9 @@
 import 'package:go_router/go_router.dart';
 import '../pages/auth/login_page.dart';
 import '../pages/auth/signup_page.dart';
+import '../pages/auth/forgot_password_page.dart';
 import '../pages/auth/qr_scan_page.dart';
 import '../pages/home/home_page.dart';
-import '../pages/menu/menu_page.dart';
 import '../pages/cart/cart_page.dart';
 import '../pages/checkout/checkout_page.dart';
 import '../pages/orders/order_history_page.dart'; // Invoice
@@ -25,16 +25,16 @@ final GoRouter appRouter = GoRouter(
       builder: (context, state) => const SignupPage(),
     ),
     GoRoute(
+      path: AppRoutes.forgotPassword,
+      builder: (context, state) => const ForgotPasswordPage(),
+    ),
+    GoRoute(
       path: AppRoutes.qrScan,
       builder: (context, state) => const QrScanPage(),
     ),
     GoRoute(
       path: AppRoutes.home,
       builder: (context, state) => const HomePage(),
-    ),
-    GoRoute(
-      path: AppRoutes.menu,
-      builder: (context, state) => const MenuPage(),
     ),
     GoRoute(
       path: AppRoutes.cart,

@@ -14,7 +14,8 @@ interface UseOrderHubOptions {
 
 /**
  * Kết nối tới OrderHub (SignalR) và lắng nghe các sự kiện realtime thực sự do BE
- * gửi: ReceiveNewOrder, ReceiveOrderStatusUpdate, ReceivePaymentSuccess.
+ * gửi: ReceiveNewOrder, ReceiveOrderStatusUpdate, ReceivePaymentSuccess,
+ * ReceiveCashPaymentPending.
  */
 export const useOrderHub = (
   eventMap: { [eventName: string]: (data: any) => void },

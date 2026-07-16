@@ -160,9 +160,7 @@ class _SignupPageState extends ConsumerState<SignupPage> {
               Align(
                 alignment: Alignment.centerRight,
                 child: TextButton(
-                  onPressed: () {
-                    // TODO: Navigate to forgot password
-                  },
+                  onPressed: () => context.push('/forgot_password'),
                   child: Text(
                     'Quên mật khẩu?',
                     style: TextStyle(

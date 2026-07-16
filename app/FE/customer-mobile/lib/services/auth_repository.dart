@@ -43,6 +43,21 @@ class AuthRepository {
     await _dio.post('auth/logout');
   }
 
+  /// Trả về resetToken nếu email tồn tại (BE hiện luôn trả trực tiếp trong response,
+  /// chưa có hạ tầng gửi email — xem comment ForgotPasswordResponse ở BE).
+  Future<String?> forgotPassword(String email) async {
+    final response = await _dio.post('auth/forgot-password', data: {'email': email});
+    return response.data['data']?['resetToken'];
+  }
+
+  Future<void> resetPassword(String token, String newPassword, String confirmPassword) async {
+    await _dio.post('auth/reset-password', data: {
+      'token': token,
+      'newPassword': newPassword,
+      'confirmPassword': confirmPassword,
+    });
+  }
+
   Future<UserInfo> getCurrentUser() async {
     final response = await _dio.get('auth/me');
     return UserInfo.fromJson(response.data['data']);

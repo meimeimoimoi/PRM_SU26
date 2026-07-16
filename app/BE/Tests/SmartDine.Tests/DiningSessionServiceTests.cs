@@ -13,6 +13,7 @@ public class DiningSessionServiceTests
     private readonly Mock<IDiningSessionRepository> _sessionRepoMock;
     private readonly Mock<IOrderRepository> _orderRepoMock;
     private readonly Mock<IRepository<SessionParticipant>> _participantRepoMock;
+    private readonly Mock<ISettingsRepository> _settingsRepoMock;
     private readonly DiningSessionService _service;
 
     public DiningSessionServiceTests()
@@ -21,11 +22,19 @@ public class DiningSessionServiceTests
         _sessionRepoMock = new Mock<IDiningSessionRepository>();
         _orderRepoMock = new Mock<IOrderRepository>();
         _participantRepoMock = new Mock<IRepository<SessionParticipant>>();
+        _settingsRepoMock = new Mock<ISettingsRepository>();
 
         _uowMock.Setup(u => u.DiningSessions).Returns(_sessionRepoMock.Object);
         _uowMock.Setup(u => u.Orders).Returns(_orderRepoMock.Object);
         _uowMock.Setup(u => u.SessionParticipants).Returns(_participantRepoMock.Object);
+        _uowMock.Setup(u => u.Settings).Returns(_settingsRepoMock.Object);
         _uowMock.Setup(u => u.SaveChangesAsync(It.IsAny<CancellationToken>())).ReturnsAsync(1);
+
+        _settingsRepoMock.Setup(r => r.GetSingletonAsync()).ReturnsAsync(new RestaurantSettings
+        {
+            TaxRate = 8.00m,
+            ServiceChargeRate = 0m
+        });
 
         _service = new DiningSessionService(_uowMock.Object);
     }
@@ -326,7 +335,7 @@ public class DiningSessionServiceTests
     }
 
     [Fact]
-    public async Task GetBillSummary_ExcludesCancelledOrders_Calculates10PercentTax()
+    public async Task GetBillSummary_ExcludesCancelledOrders_CalculatesTaxFromSettings()
     {
         var session = BuildSession();
         session.Participants.Add(new SessionParticipant { CustomerId = 1, Role = ParticipantRole.HOST, JoinedAt = DateTime.UtcNow });
@@ -341,8 +350,10 @@ public class DiningSessionServiceTests
         var result = await _service.GetBillSummaryAsync(1, 1, null, isStaff: false);
 
         Assert.Equal(150_000m, result.SubTotal);
-        Assert.Equal(15_000m, result.Tax);
-        Assert.Equal(165_000m, result.EstimatedTotal);
+        Assert.Equal(12_000m, result.Tax); // 8% of 150k
+        Assert.Equal(0m, result.ServiceCharge);
+        Assert.Equal(162_000m, result.EstimatedTotal);
+        Assert.Equal(8.00m, result.TaxRate);
     }
 
     // BUG FIX VERIFIED: trước đây GetBillSummaryAsync không kiểm tra caller có thuộc session

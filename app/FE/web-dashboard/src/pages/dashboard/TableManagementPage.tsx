@@ -121,10 +121,25 @@ const TableManagementPage: React.FC = () => {
     try {
       const updated = await tableService.updateTableStatus(tableId, status);
       setTables((prev) => prev.map((t) => (t.id === tableId ? updated : t)));
-      message.success(`Đã chuyển trạng thái bàn sang ${status === 'AVAILABLE' ? 'Trống (AVAILABLE)' : 'Đang có khách (OCCUPIED)'}`);
+      const label =
+        status === 'AVAILABLE' ? 'Trống (AVAILABLE)' :
+        status === 'OCCUPIED' ? 'Đang có khách (OCCUPIED)' :
+        status === 'MAINTENANCE' ? 'Cần dọn / Bảo trì (MAINTENANCE)' :
+        status;
+      message.success(`Đã chuyển trạng thái bàn sang ${label}`);
     } catch (error: any) {
       message.error(getErrorMessage(error, 'Cập nhật trạng thái thất bại'));
     }
+  };
+
+  const handleMarkCleaned = (table: TableType) => {
+    Modal.confirm({
+      title: `Đã dọn xong Bàn ${table.tableNumber}?`,
+      content: 'Xác nhận bàn đã được dọn sạch và sẵn sàng nhận khách mới. Trạng thái sẽ chuyển thành Trống (AVAILABLE).',
+      okText: 'Đã dọn — Trống',
+      cancelText: 'Hủy',
+      onOk: () => handleStatusChange(table.id, 'AVAILABLE'),
+    });
   };
 
   // 4. Edit basic info (Capacity + Location) — không cho sửa Số bàn vì QR đã in mã hóa theo số bàn.
@@ -177,8 +192,7 @@ const TableManagementPage: React.FC = () => {
 
       const matchesStatus =
         statusFilter === 'ALL' ||
-        (statusFilter === 'AVAILABLE' && table.status === 'AVAILABLE') ||
-        (statusFilter === 'OCCUPIED' && table.status === 'OCCUPIED');
+        table.status === statusFilter;
 
       return matchesSearch && matchesStatus;
     });
@@ -217,21 +231,26 @@ const TableManagementPage: React.FC = () => {
       dataIndex: 'status',
       key: 'status',
       render: (status: TableStatus) => {
-        const isAvailable = status === 'AVAILABLE';
+        const config: Record<TableStatus, { label: string; bg: string; color: string }> = {
+          AVAILABLE: { label: 'Empty', bg: '#e6f7ff', color: '#1890ff' },
+          OCCUPIED: { label: 'Occupied', bg: '#fff2f0', color: '#ff4d4f' },
+          MAINTENANCE: { label: 'Needs Cleaning', bg: '#fff7e6', color: '#d46b08' },
+          RESERVED: { label: 'Reserved', bg: '#f9f0ff', color: '#722ed1' },
+        };
+        const style = config[status] || config.OCCUPIED;
         return (
           <Tag
-            color={isAvailable ? 'success' : 'error'}
             style={{
               borderRadius: 12,
               padding: '2px 12px',
               fontWeight: 500,
               fontSize: '12px',
               border: 'none',
-              backgroundColor: isAvailable ? '#e6f7ff' : '#fff2f0',
-              color: isAvailable ? '#1890ff' : '#ff4d4f'
+              backgroundColor: style.bg,
+              color: style.color,
             }}
           >
-            {isAvailable ? 'Empty' : 'Occupied'}
+            {style.label}
           </Tag>
         );
       },
@@ -245,18 +264,37 @@ const TableManagementPage: React.FC = () => {
             key: 'available',
             label: 'Đánh dấu Trống (Empty)',
             icon: <CheckCircleOutlined style={{ color: '#52c41a' }} />,
-            onClick: () => handleStatusChange(record.id, 'AVAILABLE')
+            onClick: () => handleStatusChange(record.id, 'AVAILABLE'),
           },
           {
             key: 'occupied',
             label: 'Đánh dấu Có Khách (Occupied)',
             icon: <ExclamationCircleOutlined style={{ color: '#ff4d4f' }} />,
-            onClick: () => handleStatusChange(record.id, 'OCCUPIED')
-          }
+            onClick: () => handleStatusChange(record.id, 'OCCUPIED'),
+          },
+          {
+            key: 'maintenance',
+            label: 'Đánh dấu Cần dọn (Maintenance)',
+            icon: <ExclamationCircleOutlined style={{ color: '#d46b08' }} />,
+            onClick: () => handleStatusChange(record.id, 'MAINTENANCE'),
+          },
         ];
 
         return (
           <Space size="middle">
+            {record.status === 'MAINTENANCE' && (
+              <Tooltip title="Đã dọn xong — chuyển bàn thành Trống">
+                <Button
+                  type="primary"
+                  size="small"
+                  icon={<CheckCircleOutlined />}
+                  onClick={() => handleMarkCleaned(record)}
+                  style={{ backgroundColor: '#52c41a', borderColor: '#52c41a' }}
+                >
+                  Đã dọn
+                </Button>
+              </Tooltip>
+            )}
             <Tooltip title="Xem mã QR để dán lên bàn">
               <Button
                 type="text"
@@ -334,6 +372,7 @@ const TableManagementPage: React.FC = () => {
               <Option value="ALL">All Status</Option>
               <Option value="AVAILABLE">Empty (Available)</Option>
               <Option value="OCCUPIED">Occupied</Option>
+              <Option value="MAINTENANCE">Needs Cleaning</Option>
             </Select>
           </div>
 

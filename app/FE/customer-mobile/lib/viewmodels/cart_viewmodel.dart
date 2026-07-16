@@ -59,7 +59,28 @@ class CartViewModel extends StateNotifier<CartState> {
     state = state.copyWith(items: state.items.where((element) => element.menuItem.id != itemId).toList());
   }
 
-  Future<int?> checkout(int tableId, int sessionId) async {
+  void incrementQuantity(int itemId) {
+    final index = state.items.indexWhere((element) => element.menuItem.id == itemId);
+    if (index < 0) return;
+    final updatedItems = List<CartItem>.from(state.items);
+    updatedItems[index].quantity += 1;
+    state = state.copyWith(items: updatedItems);
+  }
+
+  /// Giảm số lượng 1 món — nếu về 0 thì xóa hẳn khỏi giỏ (giống hành vi UX phổ biến).
+  void decrementQuantity(int itemId) {
+    final index = state.items.indexWhere((element) => element.menuItem.id == itemId);
+    if (index < 0) return;
+    if (state.items[index].quantity <= 1) {
+      removeItem(itemId);
+      return;
+    }
+    final updatedItems = List<CartItem>.from(state.items);
+    updatedItems[index].quantity -= 1;
+    state = state.copyWith(items: updatedItems);
+  }
+
+  Future<int?> checkout(int tableId, int sessionId, {String? couponCode}) async {
     if (state.items.isEmpty) return null;
 
     state = state.copyWith(isSubmitting: true, error: null);
@@ -67,6 +88,7 @@ class CartViewModel extends StateNotifier<CartState> {
       final request = PlaceOrderRequest(
         tableId: tableId,
         diningSessionId: sessionId,
+        couponCode: couponCode,
         items: state.items.map((e) => OrderDetailRequest(
           menuItemId: e.menuItem.id,
           quantity: e.quantity,

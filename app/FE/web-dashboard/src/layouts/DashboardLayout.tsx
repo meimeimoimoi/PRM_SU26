@@ -15,6 +15,7 @@ import {
 import { useSelector, useDispatch } from 'react-redux';
 import { selectCurrentUser, logout } from '@/store/slices/authSlice';
 import NotificationBell from '@/components/NotificationBell';
+import ChatWidget from '@/components/ChatWidget';
 
 const { Header, Content, Sider } = Layout;
 const { Title } = Typography;
@@ -262,6 +263,9 @@ const DashboardLayout: React.FC = () => {
           <Outlet />
         </Content>
       </Layout>
+
+      {/* Trợ lý AI — chỉ MANAGER thấy vì AiController.Query yêu cầu role Manager */}
+      {user && user.role === 'MANAGER' && <ChatWidget />}
     </Layout>
   );
 };

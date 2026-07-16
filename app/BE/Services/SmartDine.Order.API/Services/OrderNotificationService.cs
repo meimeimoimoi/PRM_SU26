@@ -30,14 +30,17 @@ public class OrderNotificationService : IOrderNotificationService
 
     public async Task NotifyOrderStatusChangedAsync(int orderId, int tableId, string status)
     {
-        // Gửi thông báo đến nhóm khách hàng đang ngồi tại bàn "table_{tableId}"
-        await _hubContext.Clients.Group($"table_{tableId}").SendAsync("ReceiveOrderStatusUpdate", new
+        var payload = new
         {
             OrderId = orderId,
             TableId = tableId,
             Status = status,
             Timestamp = DateTime.UtcNow
-        });
+        };
+
+        // Khách tại bàn + staff/bếp đều cần biết để refresh realtime
+        await _hubContext.Clients.Group($"table_{tableId}").SendAsync("ReceiveOrderStatusUpdate", payload);
+        await _hubContext.Clients.Group("KitchenGroup").SendAsync("ReceiveOrderStatusUpdate", payload);
     }
 
     /// <summary>
@@ -59,5 +62,19 @@ public class OrderNotificationService : IOrderNotificationService
 
         await _hubContext.Clients.Group($"table_{tableId}").SendAsync("ReceivePaymentSuccess", payload);
         await _hubContext.Clients.Group("KitchenGroup").SendAsync("ReceivePaymentSuccess", payload);
+    }
+
+    public async Task NotifyCashPaymentPendingAsync(int tableId, int tableNumber, string invoiceId, decimal amount)
+    {
+        var payload = new
+        {
+            TableId = tableId,
+            TableNumber = tableNumber,
+            InvoiceId = invoiceId,
+            Amount = amount,
+            Timestamp = DateTime.UtcNow
+        };
+
+        await _hubContext.Clients.Group("KitchenGroup").SendAsync("ReceiveCashPaymentPending", payload);
     }
 }

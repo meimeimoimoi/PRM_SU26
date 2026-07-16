@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../viewmodels/cart_viewmodel.dart';
 import '../../viewmodels/auth_viewmodel.dart';
+import 'package:intl/intl.dart';
 
 
 class _AppColors {
@@ -40,7 +41,15 @@ class CartPage extends ConsumerStatefulWidget {
 }
 
 class _CartPageState extends ConsumerState<CartPage> {
+  final TextEditingController _couponController = TextEditingController();
+  final currencyFormat = NumberFormat('#,###', 'vi_VN');
+  String? _appliedCoupon;
 
+  @override
+  void dispose() {
+    _couponController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -61,18 +70,24 @@ class _CartPageState extends ConsumerState<CartPage> {
         surfaceTintColor: Colors.transparent,
         leading: IconButton(
           icon: Icon(Icons.arrow_back, color: _AppColors.onSurface),
-          onPressed: () => context.pop(),
+          // Giỏ hàng luôn được vào qua tab bottom-nav (context.go, không push), nên
+          // không có gì để pop — quay lại nghĩa là về Thực đơn.
+          onPressed: () => context.canPop() ? context.pop() : context.go('/home'),
         ),
         title: Row(
           children: [
             Icon(Icons.restaurant, color: _AppColors.primary, size: 24.sp),
             SizedBox(width: 8.w),
-            Text(
-              'Giỏ hàng bàn số $tableNumber',
-              style: TextStyle(
-                color: _AppColors.primary,
-                fontSize: 20.sp,
-                fontWeight: FontWeight.bold,
+            Expanded(
+              child: Text(
+                'Giỏ hàng',
+                maxLines: 1, // Giới hạn chỉ hiển thị trên 1 dòng
+                overflow: TextOverflow.ellipsis, // Tự động cắt bằng dấu ... nếu quá dài
+                style: TextStyle(
+                  color: _AppColors.primary,
+                  fontSize: 20.sp,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ),
           ],
@@ -216,11 +231,22 @@ class _CartPageState extends ConsumerState<CartPage> {
                                   ),
                                 ),
                                 Text(
-                                  '${item.menuItem.price}k',
+                                  '${currencyFormat.format(item.menuItem.price)}VND',
                                   style: TextStyle(
                                     color: _AppColors.primary,
                                     fontSize: 18.sp,
                                     fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                SizedBox(width: 8.w),
+                                GestureDetector(
+                                  onTap: () => ref
+                                      .read(cartViewModelProvider.notifier)
+                                      .removeItem(item.menuItem.id),
+                                  child: Icon(
+                                    Icons.delete_outline,
+                                    size: 20.sp,
+                                    color: _AppColors.outline,
                                   ),
                                 ),
                               ],
@@ -246,13 +272,18 @@ class _CartPageState extends ConsumerState<CartPage> {
                                   ),
                                   child: Row(
                                     children: [
-                                      Container(
-                                        width: 32.r,
-                                        height: 32.r,
-                                        decoration: const BoxDecoration(
-                                          shape: BoxShape.circle,
+                                      GestureDetector(
+                                        onTap: () => ref
+                                            .read(cartViewModelProvider.notifier)
+                                            .decrementQuantity(item.menuItem.id),
+                                        child: Container(
+                                          width: 32.r,
+                                          height: 32.r,
+                                          decoration: const BoxDecoration(
+                                            shape: BoxShape.circle,
+                                          ),
+                                          child: Icon(Icons.remove, size: 20.sp, color: _AppColors.onSurface),
                                         ),
-                                        child: Icon(Icons.remove, size: 20.sp, color: _AppColors.onSurface),
                                       ),
                                       SizedBox(
                                         width: 32.w,
@@ -266,20 +297,25 @@ class _CartPageState extends ConsumerState<CartPage> {
                                           ),
                                         ),
                                       ),
-                                      Container(
-                                        width: 32.r,
-                                        height: 32.r,
-                                        decoration: BoxDecoration(
-                                          color: _AppColors.primary,
-                                          shape: BoxShape.circle,
-                                          boxShadow: [
-                                            BoxShadow(
-                                              color: Colors.black.withOpacity(0.1),
-                                              blurRadius: 4,
-                                            ),
-                                          ],
+                                      GestureDetector(
+                                        onTap: () => ref
+                                            .read(cartViewModelProvider.notifier)
+                                            .incrementQuantity(item.menuItem.id),
+                                        child: Container(
+                                          width: 32.r,
+                                          height: 32.r,
+                                          decoration: BoxDecoration(
+                                            color: _AppColors.primary,
+                                            shape: BoxShape.circle,
+                                            boxShadow: [
+                                              BoxShadow(
+                                                color: Colors.black.withOpacity(0.1),
+                                                blurRadius: 4,
+                                              ),
+                                            ],
+                                          ),
+                                          child: Icon(Icons.add, size: 20.sp, color: _AppColors.onPrimary),
                                         ),
-                                        child: Icon(Icons.add, size: 20.sp, color: _AppColors.onPrimary),
                                       ),
                                     ],
                                   ),
@@ -326,6 +362,8 @@ class _CartPageState extends ConsumerState<CartPage> {
                     children: [
                       Expanded(
                         child: TextField(
+                          controller: _couponController,
+                          textCapitalization: TextCapitalization.characters,
                           decoration: InputDecoration(
                             hintText: 'Nhập mã ưu đãi',
                             hintStyle: TextStyle(
@@ -349,7 +387,19 @@ class _CartPageState extends ConsumerState<CartPage> {
                       ),
                       SizedBox(width: 12.w),
                       ElevatedButton(
-                        onPressed: () {},
+                        onPressed: () {
+                          final code = _couponController.text.trim();
+                          setState(() => _appliedCoupon = code.isEmpty ? null : code);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                code.isEmpty
+                                    ? 'Đã bỏ áp dụng mã giảm giá'
+                                    : 'Mã "$code" sẽ được áp dụng khi gửi đơn đặt món',
+                              ),
+                            ),
+                          );
+                        },
                         style: ElevatedButton.styleFrom(
                           backgroundColor: _AppColors.secondary,
                           foregroundColor: _AppColors.onSecondary,
@@ -449,7 +499,9 @@ class _CartPageState extends ConsumerState<CartPage> {
             ElevatedButton(
               onPressed: () async {
                 // Submit order to API
-                final orderId = await ref.read(cartViewModelProvider.notifier).checkout(tableId, sessionId);
+                final orderId = await ref
+                    .read(cartViewModelProvider.notifier)
+                    .checkout(tableId, sessionId, couponCode: _appliedCoupon);
                 if (orderId != null && mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text('Đặt món thành công!')),

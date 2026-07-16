@@ -19,4 +19,11 @@ public interface IOrderNotificationService
     /// Ai dùng: PaymentService.HandleWebhookAsync/CompletePaymentAsync sau khi xác nhận SUCCESS.
     /// </summary>
     Task NotifyPaymentSuccessAsync(int tableId, int tableNumber, string invoiceId, decimal amount);
+
+    /// <summary>
+    /// Khách chọn thanh toán tiền mặt → khóa session CHECKOUT.
+    /// Gửi KitchenGroup để staffboard tab Thanh toán & Hóa đơn highlight bàn chờ thu tiền.
+    /// Event name: "ReceiveCashPaymentPending".
+    /// </summary>
+    Task NotifyCashPaymentPendingAsync(int tableId, int tableNumber, string invoiceId, decimal amount);
 }
