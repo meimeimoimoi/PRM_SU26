@@ -375,21 +375,13 @@ app.use('/api/maps/:id/files', (req, res, next) => {
 });
 
 // ---------------------------------------------------------------------------
-// Legacy robot‑control endpoints (kept unchanged for compatibility)
+// Robot-control endpoints (in-memory only, SignalR is primary transport)
 // ---------------------------------------------------------------------------
 app.post('/api/robot/control', (req, res) => {
   try {
     const { command, target, direction } = req.body;
-    const cmd = `${command || 'NONE'} ${target || 'NONE'} ${direction || 'NONE'}`;
-
-    // Push into in-memory queue for sidecar to pick up
     commandQueue.push({ command: command || 'NONE', target: target || 'NONE', direction: direction || 'NONE' });
-
-    // Also write to file for backward compatibility (local mode)
-    const commandPath = path.join(WEBOTS_CONTROLLER_DIR, 'command.txt');
-    fs.writeFileSync(commandPath, cmd);
-
-    console.log(`>>> [SERVER] Command queued + written: ${cmd}`);
+    console.log(`>>> [SERVER] Command queued: ${command || 'NONE'} ${target || 'NONE'} ${direction || 'NONE'}`);
     res.json({ success: true, queued: commandQueue.length });
   } catch (err) {
     console.error(err);
@@ -398,59 +390,11 @@ app.post('/api/robot/control', (req, res) => {
 });
 
 app.get('/api/robot/status', (req, res) => {
-  // Prefer in-memory state (populated by sidecar POST /api/robot/state)
-  if (robotState.status !== 'OFFLINE' || robotState.x !== 0 || robotState.y !== 0) {
-    return res.json(robotState);
-  }
-
-  // Fallback: read from file (backward compat for local mode)
-  try {
-    const statePath = path.join(WEBOTS_CONTROLLER_DIR, 'robot_state.txt');
-    if (fs.existsSync(statePath)) {
-      const data = fs.readFileSync(statePath, 'utf8').trim();
-      const parts = data.split(/\s+/);
-      if (parts.length >= 6) {
-        return res.json({
-          x: parseFloat(parts[0]),
-          y: parseFloat(parts[1]),
-          theta: parseFloat(parts[2]),
-          v: parseFloat(parts[3]),
-          omega: parseFloat(parts[4]),
-          status: parts[5],
-        });
-      }
-    }
-  } catch (err) {
-    // ignore read errors
-  }
-  res.json({ x: 0, y: 0, theta: 0, v: 0, omega: 0, status: 'OFFLINE' });
+  res.json(robotState);
 });
 
 app.get('/api/robot/path', (req, res) => {
-  // Prefer in-memory state (populated by sidecar POST /api/robot/path)
-  if (robotPath.path && robotPath.path.length > 0) {
-    return res.json(robotPath);
-  }
-
-  // Fallback: read from file (backward compat for local mode)
-  try {
-    const pathFile = path.join(WEBOTS_CONTROLLER_DIR, 'robot_path.txt');
-    if (fs.existsSync(pathFile)) {
-      const data = fs.readFileSync(pathFile, 'utf8').trim();
-      if (!data || data === 'NONE') return res.json({ path: [] });
-      const points = data.split('\n').map(line => {
-        const parts = line.trim().split(/\s+/);
-        if (parts.length >= 2) {
-          const x = parseFloat(parts[0]);
-          const y = parseFloat(parts[1]);
-          if (isFinite(x) && isFinite(y)) return { x, y };
-        }
-        return null;
-      }).filter(p => p !== null);
-      return res.json({ path: points });
-    }
-  } catch (err) { /* ignore */ }
-  res.json({ path: [] });
+  res.json(robotPath);
 });
 
 // ---------------------------------------------------------------------------

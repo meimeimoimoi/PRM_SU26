@@ -12,6 +12,7 @@ import {
   Utensils,
 } from 'lucide-react';
 import { useMapStore } from '../../store/mapStore';
+import { useSignalR } from '@/hooks/useSignalR';
 
 interface Telemetry {
   x: number;
@@ -29,6 +30,7 @@ export const RobotConsole: React.FC = () => {
   const kitchenNodes = graphNodes.filter((node) => node.type === 'kitchen');
   const kitchenNode = kitchenNodes[0];
 
+  const { invoke, on } = useSignalR();
   const [selectedTable, setSelectedTable] = useState<string | undefined>(undefined);
   const [telemetry, setTelemetry] = useState<Telemetry>({
     x: 0,
@@ -39,34 +41,21 @@ export const RobotConsole: React.FC = () => {
     status: 'OFFLINE',
   });
 
-  // Polling robot state from server
   useEffect(() => {
-    const fetchStatus = async () => {
-      try {
-        const res = await fetch('http://localhost:3001/api/robot/status');
-        const data = await res.json();
-        if (data && data.status !== 'OFFLINE') {
-          setTelemetry(data);
-        } else {
-          setTelemetry((prev) => ({ ...prev, status: 'OFFLINE' }));
-        }
-      } catch (err) {
+    const cleanup = on('ReceiveRobotState', (...args: unknown[]) => {
+      const data = args[0] as Telemetry;
+      if (data && data.status !== 'OFFLINE') {
+        setTelemetry(data);
+      } else {
         setTelemetry((prev) => ({ ...prev, status: 'OFFLINE' }));
       }
-    };
-
-    fetchStatus();
-    const interval = setInterval(fetchStatus, 150);
-    return () => clearInterval(interval);
-  }, []);
+    });
+    return cleanup;
+  }, [on]);
 
   const sendControlCommand = async (command: string, target?: string, direction?: string) => {
     try {
-      await fetch('http://localhost:3001/api/robot/control', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ command, target, direction }),
-      });
+      await invoke('SendRobotCommand', command, target || 'NONE', direction || 'NONE');
     } catch (_error) {
     }
   };

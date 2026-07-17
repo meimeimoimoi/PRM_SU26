@@ -2,17 +2,19 @@
 """
 SmartDine Robot Sidecar
 =======================
-Bridge between the Webots robot controller (file I/O) and the deployed map-server (HTTP).
+Bridge between the Webots robot controller (file I/O) and the deployed map-server (HTTP)
+with real-time SignalR connection for instant command delivery and state updates.
 
 Startup:
   1. Fetch active map from server
   2. Download map files (map.pgm, graph.json, waypoints.txt, meta.json)
   3. Write them to the robot controller directory
+  4. Connect to backend SignalR hub
 
 Main loop (~200ms):
-  1. Read robot_state.txt → POST /api/robot/state
-  2. Read robot_path.txt → POST /api/robot/path
-  3. GET /api/robot/command → write command.txt (if new command)
+  1. Read robot_state.txt → push via SignalR (or HTTP fallback)
+  2. Read robot_path.txt → push via SignalR (or HTTP fallback)
+  3. GET /api/robot/command → write command.txt (or receive via SignalR push)
 
 Usage:
   pip install -r requirements.txt
@@ -30,6 +32,8 @@ import sys
 import time
 
 import requests
+from signalrcore.hub.base_hub_connection import HubConnectionBuilder
+from signalrcore.services.base_reconnect_service import BaseReconnectService
 
 # ---------------------------------------------------------------------------
 # Logging
@@ -277,6 +281,9 @@ class RobotSidecar:
         self._last_path_hash = ""
         self._last_command = None
 
+        # SignalR connection
+        self.signalr_conn = None
+
     def startup(self) -> bool:
         """Connect to server and download map files."""
         log.info(f"Connecting to server: {self.client.base_url}")
@@ -304,12 +311,19 @@ class RobotSidecar:
         # Write to controller dir
         write_map_files_to_controller(self.controller_dir, map_data)
         log.info(f"Map {self.map_id} loaded into {self.controller_dir}")
+
+        # Connect to SignalR for real-time commands
+        self._connect_signalr()
+
         return True
 
     def tick(self):
         """One iteration of the main loop."""
-        self._sync_state()
-        self._sync_path()
+        # When SignalR is connected, state/path are pushed via SignalR.
+        # Only fall back to HTTP polling when SignalR is not available.
+        if self.signalr_conn is None:
+            self._sync_state()
+            self._sync_path()
         self._sync_command()
 
     def _sync_state(self):
@@ -362,6 +376,95 @@ class RobotSidecar:
         write_file(command_file, cmd_str)
         log.info(f"Command written: {cmd_str}")
 
+    # ------------------------------------------------------------------
+    # SignalR connection
+    # ------------------------------------------------------------------
+
+    def _connect_signalr(self):
+        """Connect to backend SignalR hub for real-time commands."""
+        signalr_url = os.environ.get("SIGNALR_URL", "http://localhost:5000/hubs/robot")
+        token = os.environ.get("AUTH_TOKEN", "")
+
+        self.signalr_conn = (
+            HubConnectionBuilder()
+            .with_url(signalr_url, options={"access_token_factory": lambda: token})
+            .with_automatic_reconnect(
+                BaseReconnectService(max_reconnect_attempts=10, reconnect_interval=5)
+            )
+            .build()
+        )
+
+        self.signalr_conn.on_open(lambda: self._on_signalr_connected())
+        self.signalr_conn.on_close(lambda: self._on_signalr_disconnected())
+        self.signalr_conn.on("ReceiveRobotCommand", self._on_robot_command)
+
+        try:
+            self.signalr_conn.start()
+            log.info(f"SignalR connected to {signalr_url}")
+        except Exception as e:
+            log.error(f"SignalR connection failed: {e}")
+
+    def _on_signalr_connected(self):
+        log.info("SignalR connected, joining RobotGroup")
+        try:
+            self.signalr_conn.invoke("JoinRobotGroup")
+        except Exception as e:
+            log.error(f"Failed to join RobotGroup: {e}")
+
+    def _on_signalr_disconnected(self):
+        log.warning("SignalR disconnected")
+
+    def _on_robot_command(self, args):
+        """Handle command received via SignalR."""
+        if args and len(args) > 0:
+            cmd = args[0]
+            cmd_str = f"{cmd.get('command', 'NONE')} {cmd.get('target', 'NONE')} {cmd.get('direction', 'NONE')}"
+            command_file = os.path.join(self.controller_dir, "command.txt")
+            write_file(command_file, cmd_str)
+            log.info(f"SignalR command received: {cmd_str}")
+
+    def _sync_state_signalr(self):
+        """Push robot state via SignalR (replaces HTTP POST)."""
+        state_file = os.path.join(self.controller_dir, "robot_state.txt")
+        h = file_hash(state_file)
+        if h == self._last_state_hash:
+            return
+        self._last_state_hash = h
+        raw = read_file(state_file)
+        if not raw:
+            return
+        state = parse_robot_state(raw)
+        if state and self.signalr_conn:
+            try:
+                self.signalr_conn.invoke(
+                    "SendRobotState",
+                    state["x"],
+                    state["y"],
+                    state["theta"],
+                    state["v"],
+                    state["omega"],
+                    state["status"],
+                )
+            except Exception as e:
+                log.warning(f"SignalR state push failed: {e}")
+
+    def _sync_path_signalr(self):
+        """Push robot path via SignalR (replaces HTTP POST)."""
+        path_file = os.path.join(self.controller_dir, "robot_path.txt")
+        h = file_hash(path_file)
+        if h == self._last_path_hash:
+            return
+        self._last_path_hash = h
+        raw = read_file(path_file)
+        if raw is None:
+            return
+        points = parse_robot_path(raw)
+        if self.signalr_conn:
+            try:
+                self.signalr_conn.invoke("SendRobotPath", points)
+            except Exception as e:
+                log.warning(f"SignalR path push failed: {e}")
+
     def run(self):
         """Main loop with graceful shutdown."""
         log.info(f"Sidecar started (poll={self.poll_interval}s, dir={self.controller_dir})")
@@ -377,6 +480,8 @@ class RobotSidecar:
                     connected = self.startup()
                 else:
                     self.tick()
+                    self._sync_state_signalr()
+                    self._sync_path_signalr()
             except KeyboardInterrupt:
                 break
             except Exception as e:

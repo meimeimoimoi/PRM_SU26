@@ -15,6 +15,7 @@ import type { MapObject, MapObjectType, MapTool } from '@/types/map';
 import { useMapStore } from '@/store/mapStore';
 import { Toolbox } from './Toolbox';
 import { getMapPixels, pixelToWorld, worldToPixel } from '@/utils/coordinateUtils';
+import { useSignalR } from '@/hooks/useSignalR';
 
 const MIN_ZOOM = 0.25;
 const MAX_ZOOM = 3;
@@ -454,6 +455,7 @@ export function MapCanvas() {
   const removeGraphNode = useMapStore((s) => s.removeGraphNode);
   const removeGraphEdge = useMapStore((s) => s.removeGraphEdge);
 
+  const { on } = useSignalR();
   const [robotState, setRobotState] = useState<{ x: number; y: number; theta: number; status: string } | null>(null);
   const [robotPath, setRobotPath] = useState<{ x: number; y: number }[]>([]);
 
@@ -475,50 +477,28 @@ export function MapCanvas() {
   const [mouseCanvasPos, setMouseCanvasPos] = useState<{ x: number; y: number } | null>(null);
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
 
-  // Poll robot position + path
+  // Listen to robot state + path via SignalR (replaces HTTP polling)
   useEffect(() => {
-    // ---------------------------------------------------------------
-    // Poll robot live status + path (unchanged)
-    // ---------------------------------------------------------------
-    const fetchRobotStatus = async () => {
-      try {
-        const res = await fetch('http://localhost:3001/api/robot/status');
-        const data = await res.json();
-        if (data && data.status !== 'OFFLINE') {
-          setRobotState(data);
-        }
-        // else: keep last known valid state to avoid flicker from
-        // transient file-read races (controller writes robot_state.txt
-        // every ~32ms via fopen+truncate, server reads every 150ms)
-      } catch (err) {
-        // ignore network errors silently; keep last known state
+    const cleanupState = on('ReceiveRobotState', (...args: unknown[]) => {
+      const data = args[0] as { x: number; y: number; theta: number; status: string };
+      if (data && data.status !== 'OFFLINE') {
+        setRobotState(data);
       }
-    };
-    const fetchRobotPath = async () => {
-      try {
-        const res = await fetch('http://localhost:3001/api/robot/path');
-        const data = await res.json();
-        setRobotPath(data.path || []);
-      } catch (err) {
-        setRobotPath([]);
-      }
-    };
-    fetchRobotStatus();
-    fetchRobotPath();
-    const statusInterval = setInterval(fetchRobotStatus, 150);
-    const pathInterval = setInterval(fetchRobotPath, 500);
+    });
+    const cleanupPath = on('ReceiveRobotPath', (...args: unknown[]) => {
+      const data = args[0] as { path: { x: number; y: number }[] };
+      setRobotPath(data?.path || []);
+    });
+    return () => { cleanupState(); cleanupPath(); };
+  }, [on]);
 
-    // ---------------------------------------------------------------
-    // Ensure a robotStart graph node exists when map meta provides one.
-    // This runs once per component mount and adds the node only if missing.
-    // ---------------------------------------------------------------
+  // Ensure a robotStart graph node exists when map meta provides one.
+  useEffect(() => {
     const ensureRobotStartNode = async () => {
-      // If a robotStart node already exists, nothing to do.
       if (graphNodes.some((n) => n.type === 'robotStart')) return;
 
       let nodeCreated = false;
 
-      // ① Try persisted selectedMapId first.
       if (selectedMapId) {
         try {
           const metaRes = await fetch(`http://localhost:3001/api/maps/${selectedMapId}`);
@@ -540,14 +520,12 @@ export function MapCanvas() {
         }
       }
 
-      // ② Fallback: fetch the list of maps, pick the first one and persist its ID.
       if (!nodeCreated) {
         try {
           const listRes = await fetch('http://localhost:3001/api/maps');
           const list = await listRes.json();
           if (!Array.isArray(list) || list.length === 0) return;
           const mapId = list[0].id;
-          // Persist the chosen map ID for future mounts.
           setSelectedMapId(mapId);
           const metaRes = await fetch(`http://localhost:3001/api/maps/${mapId}`);
           const meta = await metaRes.json();
@@ -568,7 +546,6 @@ export function MapCanvas() {
         }
       }
 
-      // ③ Final fallback: use live robot position if meta is missing.
       if (!nodeCreated) {
         try {
           const statusRes = await fetch('http://localhost:3001/api/robot/status');
@@ -590,9 +567,7 @@ export function MapCanvas() {
       }
     };
     ensureRobotStartNode();
-
-    return () => { clearInterval(statusInterval); clearInterval(pathInterval); };
-  }, [graphNodes, addGraphNode, selectedMapId]);
+  }, [graphNodes, addGraphNode, selectedMapId, setSelectedMapId]);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const [pan, setPan] = useState({ x: 0, y: 0 });

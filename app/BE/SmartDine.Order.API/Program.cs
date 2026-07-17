@@ -51,6 +51,7 @@ builder.Services.AddSignalR();
 
 // ===== Real-time & Caching Services =====
 builder.Services.AddScoped<IOrderNotificationService, OrderNotificationService>();
+builder.Services.AddScoped<RobotNotificationService>();
 builder.Services.AddDistributedMemoryCache();
 
 // ===== Swagger Setup with JWT Auth =====
@@ -105,5 +106,6 @@ app.UseAuthorization();
 
 app.MapControllers();
 app.MapHub<OrderHub>("/hubs/orders");
+app.MapHub<RobotHub>("/hubs/robot");
 
 app.Run();
