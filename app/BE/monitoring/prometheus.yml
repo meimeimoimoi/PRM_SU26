@@ -1,0 +1,24 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: 'smartdine-services'
+    static_configs:
+      - targets:
+        - 'identity-api:8080'
+        - 'menu-api:8080'
+        - 'order-api:8080'
+        - 'table-api:8080'
+        - 'ai-api:8080'
+        - 'gateway-api:8080'
+    metrics_path: '/metrics'
+    scheme: 'http'
+
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  - job_name: 'seq'
+    static_configs:
+      - targets: ['seq:5341']

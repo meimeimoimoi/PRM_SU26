@@ -5,32 +5,30 @@ export const tableService = {
   // Lấy danh sách tất cả bàn
   getAllTables: async (): Promise<Table[]> => {
     const response = await apiClient.get<any>('/tables');
-    const list = response.data.data || response.data;
-    
-    // Map zones dynamically for UI matching the screenshot
-    return (list as any[]).map((t: any) => ({
-      ...t,
-      zone: t.tableNumber > 10 ? 'VIP Room' : t.tableNumber > 5 ? 'Terrace' : 'Main Hall'
-    })) as Table[];
+    return (response.data.data || response.data || []) as Table[];
   },
 
   // Thêm bàn mới
-  createTable: async (tableNumber: number, capacity: number): Promise<Table> => {
-    const response = await apiClient.post<any>('/tables', { tableNumber, capacity });
-    const table = response.data.data || response.data;
-    return {
-      ...table,
-      zone: table.tableNumber > 10 ? 'VIP Room' : table.tableNumber > 5 ? 'Terrace' : 'Main Hall'
-    } as Table;
+  createTable: async (tableNumber: number, capacity: number, locationId?: number): Promise<Table> => {
+    const response = await apiClient.post<any>('/tables', { tableNumber, capacity, locationId });
+    return (response.data.data || response.data) as Table;
   },
 
-  // Cập nhật trạng thái bàn (AVAILABLE / OCCUPIED)
+  // Cập nhật trạng thái bàn (AVAILABLE / OCCUPIED / MAINTENANCE / RESERVED)
   updateTableStatus: async (id: number, status: TableStatus): Promise<Table> => {
     const response = await apiClient.patch<any>(`/tables/${id}/status`, { status });
-    const table = response.data.data || response.data;
-    return {
-      ...table,
-      zone: table.tableNumber > 10 ? 'VIP Room' : table.tableNumber > 5 ? 'Terrace' : 'Main Hall'
-    } as Table;
+    return (response.data.data || response.data) as Table;
+  },
+
+  // Cập nhật thông tin cơ bản của bàn — chỉ Capacity + Location, không đổi được TableNumber
+  // (QR đã in mã hóa theo số bàn, đổi số sẽ làm QR sai — xem TablesController PATCH /tables/{id}).
+  updateTable: async (id: number, data: { capacity?: number; locationId?: number }): Promise<Table> => {
+    const response = await apiClient.patch<any>(`/tables/${id}`, data);
+    return (response.data.data || response.data) as Table;
+  },
+
+  // Xóa (soft-delete) bàn — BE từ chối nếu bàn đang OCCUPIED.
+  deleteTable: async (id: number): Promise<void> => {
+    await apiClient.delete(`/tables/${id}`);
   }
 };

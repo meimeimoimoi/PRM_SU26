@@ -1,4 +1,4 @@
-export type TableStatus = 'AVAILABLE' | 'OCCUPIED';
+export type TableStatus = 'AVAILABLE' | 'OCCUPIED' | 'RESERVED' | 'MAINTENANCE';
 
 export interface Table {
   id: number;
@@ -6,6 +6,6 @@ export interface Table {
   capacity: number;
   status: TableStatus;
   qrCode?: string;
-  // Simulated properties for UI alignment with screenshot
-  zone?: string; 
+  locationId?: number;
+  locationName?: string;
 }

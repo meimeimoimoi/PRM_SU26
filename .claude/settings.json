@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(netstat -ano)",
+      "Bash(awk '{print $2}')",
+      "Bash(python3 -c ' *)",
+      "Bash(ngrok version *)",
+      "Bash(scoop --version)",
+      "Bash(scoop bucket *)",
+      "Bash(scoop install *)",
+      "Bash(ngrok config *)",
+      "Bash(curl -s -o /dev/null -w \"port 5003 \\(docker/gateway expose\\): %{http_code}\\\\n\" http://localhost:5003/api/v1/payments/webhook -X POST)",
+      "Bash(curl -s -o /dev/null -w \"gateway 5000: %{http_code}\\\\n\" http://localhost:5000/api/v1/payments/webhook -X POST)"
+    ]
+  }
+}

@@ -1,42 +1,49 @@
-import 'package:socket_io_client/socket_io_client.dart' as io;
+import 'package:signalr_netcore/signalr_client.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import '../../config/constants.dart';
 
 class SocketService {
-  io.Socket? _socket;
+  HubConnection? _hubConnection;
   final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();
 
-  void connect() async {
+  Future<void> connect(int tableId) async {
     final token = await _secureStorage.read(key: 'access_token');
     if (token == null) return;
 
-    _socket = io.io(
-      'http://localhost:5000',
-      io.OptionBuilder()
-          .setTransports(['websocket'])
-          .setAuth({'token': token})
-          .enableAutoConnect()
-          .setReconnectionAttempts(10)
-          .setReconnectionDelay(2000)
-          .build(),
-    );
+    final hubUrl = '${AppConstants.baseUrl.replaceAll('/api/v1/', '')}/hubs/orders';
 
-    _socket?.onConnect((_) => print('Socket.io connected successfully'));
-    _socket?.onDisconnect((_) => print('Socket.io disconnected'));
+    _hubConnection = HubConnectionBuilder()
+        .withUrl(
+          hubUrl,
+          options: HttpConnectionOptions(
+            accessTokenFactory: () async => token,
+            transport: HttpTransportType.WebSockets,
+          ),
+        )
+        .withAutomaticReconnect()
+        .build();
+
+    try {
+      await _hubConnection?.start();
+      await _hubConnection?.invoke('JoinTableGroup', args: [tableId.toString()]);
+    } catch (e) {
+      print('SignalR connect error: $e');
+    }
   }
 
   void subscribeToEvent(String eventName, Function(dynamic) callback) {
-    _socket?.on(eventName, callback);
+    _hubConnection?.on(eventName, (arguments) {
+      if (arguments != null && arguments.isNotEmpty) {
+        callback(arguments[0]);
+      }
+    });
   }
 
   void unsubscribeFromEvent(String eventName) {
-    _socket?.off(eventName);
+    _hubConnection?.off(eventName);
   }
 
-  void emit(String eventName, dynamic data) {
-    _socket?.emit(eventName, data);
-  }
-
-  void disconnect() {
-    _socket?.disconnect();
+  Future<void> disconnect() async {
+    await _hubConnection?.stop();
   }
 }

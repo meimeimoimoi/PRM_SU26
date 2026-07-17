@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   Table, 
   Tag, 
@@ -6,7 +6,6 @@ import {
   Card, 
   Input, 
   Select, 
-  DatePicker, 
   message, 
   Tooltip,
   Modal
@@ -18,86 +17,136 @@ import {
 } from '@ant-design/icons';
 
 import { Transaction } from '@/types/transaction';
+import { apiClient } from '../../services/api/client';
+import { getErrorMessage } from '@/utils/apiError';
+import { downloadCsv } from '@/utils/csvExport';
 
 const { Option } = Select;
-const { RangePicker } = DatePicker;
+const PAGE_SIZE = 10;
+// BE giới hạn pageSize tối đa 100/request (xem PaymentsController.GetHistory) — export phải phân trang gộp lại.
+const EXPORT_PAGE_SIZE = 100;
+
+const mapPaymentToTransaction = (p: any): Transaction => ({
+  id: p.invoiceId ? `#INV-${p.invoiceId}` : `#PAY-${p.id}`,
+  dateTime: p.paidAt
+    ? new Date(p.paidAt).toLocaleString('vi-VN')
+    : p.createdAt
+    ? new Date(p.createdAt).toLocaleString('vi-VN')
+    : 'N/A',
+  tableNo: p.tableNumber ? `T-${p.tableNumber}` : 'N/A',
+  totalAmount: p.amount !== undefined ? p.amount : (p.totalAmount || 0),
+  paymentMethod: p.paymentMethod || p.method || 'N/A',
+  status: p.paymentStatus || p.status || 'PENDING',
+});
 
 const TransactionsPage: React.FC = () => {
   const [searchText, setSearchText] = useState<string>('');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
 
-  // Initial mock data matching the screenshot exactly!
-  const transactions: Transaction[] = [
-    {
-      id: '#ORD-8921',
-      dateTime: 'Oct 24, 2023 • 19:45',
-      tableNo: 'T-12',
-      totalAmount: 145.50,
-      paymentMethod: 'Credit Card',
-      status: 'Completed'
-    },
-    {
-      id: '#ORD-8920',
-      dateTime: 'Oct 24, 2023 • 19:30',
-      tableNo: 'T-04',
-      totalAmount: 82.00,
-      paymentMethod: 'QR Pay',
-      status: 'Completed'
-    },
-    {
-      id: '#ORD-8919',
-      dateTime: 'Oct 24, 2023 • 19:15',
-      tableNo: 'Bar-02',
-      totalAmount: 34.00,
-      paymentMethod: 'Cash',
-      status: 'Cancelled'
-    },
-    {
-      id: '#ORD-8918',
-      dateTime: 'Oct 24, 2023 • 18:50',
-      tableNo: 'T-08',
-      totalAmount: 210.75,
-      paymentMethod: 'Credit Card',
-      status: 'Refunded'
-    },
-    {
-      id: '#ORD-8917',
-      dateTime: 'Oct 24, 2023 • 18:30',
-      tableNo: 'T-15',
-      totalAmount: 95.20,
-      paymentMethod: 'QR Pay',
-      status: 'Completed'
-    }
-  ];
+  useEffect(() => {
+    const fetchPayments = async () => {
+      setLoading(true);
+      try {
+        // Forward filter/pagination thật lên BE (PaymentsController.GetHistory) thay vì
+        // luôn fetch 100 bản ghi rồi lọc client-side toàn bộ.
+        const response = await apiClient.get<any>('/payments', {
+          params: {
+            page,
+            pageSize: PAGE_SIZE,
+            status: statusFilter === 'ALL' ? undefined : statusFilter,
+          }
+        });
+        const items = response.data.data || [];
+        const pagination = response.data.pagination;
 
-  // Search & Filter
-  const filteredTransactions = useMemo(() => {
-    return transactions.filter((t) => {
-      const matchesSearch = 
-        t.id.toLowerCase().includes(searchText.toLowerCase()) ||
-        t.tableNo.toLowerCase().includes(searchText.toLowerCase()) ||
-        t.paymentMethod.toLowerCase().includes(searchText.toLowerCase());
+        const mapped: Transaction[] = items.map(mapPaymentToTransaction);
 
-      const matchesStatus = 
-        statusFilter === 'ALL' || 
-        t.status === statusFilter;
+        setTransactions(mapped);
+        setTotal(pagination?.total ?? mapped.length);
+      } catch (err) {
+        message.error(getErrorMessage(err, 'Không tải được lịch sử giao dịch.'));
+        setTransactions([]);
+        setTotal(0);
+      } finally {
+        setLoading(false);
+      }
+    };
 
-      return matchesSearch && matchesStatus;
-    });
-  }, [searchText, statusFilter]);
+    fetchPayments();
+  }, [page, statusFilter]);
 
-  // Export handler
-  const handleExportData = () => {
-    message.success('Đang kết xuất dữ liệu lịch sử giao dịch dưới dạng CSV...');
+  // Đổi filter status thì quay về trang 1 (tránh xin trang không tồn tại).
+  const handleStatusFilterChange = (val: string) => {
+    setStatusFilter(val);
+    setPage(1);
   };
 
-  // View details modal
+  // Tìm kiếm theo text chỉ áp dụng trong phạm vi trang hiện tại — BE không có full-text search.
+  const filteredTransactions = useMemo(() => {
+    return transactions.filter((t) =>
+      t.id.toLowerCase().includes(searchText.toLowerCase()) ||
+      t.tableNo.toLowerCase().includes(searchText.toLowerCase()) ||
+      t.paymentMethod.toLowerCase().includes(searchText.toLowerCase())
+    );
+  }, [searchText, transactions]);
+
+  const [exporting, setExporting] = useState(false);
+
+  // Xuất toàn bộ giao dịch khớp status filter đang chọn (không chỉ trang hiện tại) —
+  // gộp nhiều request vì BE giới hạn tối đa 100 bản ghi/lần (PaymentsController.GetHistory).
+  const handleExportData = async () => {
+    setExporting(true);
+    try {
+      const allItems: any[] = [];
+      let currentPage = 1;
+      let totalCount = Infinity;
+
+      while (allItems.length < totalCount) {
+        const response = await apiClient.get<any>('/payments', {
+          params: {
+            page: currentPage,
+            pageSize: EXPORT_PAGE_SIZE,
+            status: statusFilter === 'ALL' ? undefined : statusFilter,
+          }
+        });
+        const items = response.data.data || [];
+        totalCount = response.data.pagination?.total ?? items.length;
+        allItems.push(...items);
+        if (items.length === 0) break;
+        currentPage++;
+      }
+
+      if (allItems.length === 0) {
+        message.warning('Không có giao dịch nào để xuất.');
+        return;
+      }
+
+      const rows: (string | number)[][] = [
+        ['Order ID', 'Date & Time', 'Table No', 'Total Amount (VND)', 'Payment Method', 'Status'],
+        ...allItems.map(mapPaymentToTransaction).map((t) => [
+          t.id, t.dateTime, t.tableNo, t.totalAmount, t.paymentMethod, t.status,
+        ]),
+      ];
+
+      const dateStr = new Date().toISOString().slice(0, 10);
+      downloadCsv(`transactions_${dateStr}.csv`, rows);
+      message.success(`Đã xuất ${allItems.length} giao dịch ra file CSV.`);
+    } catch (err) {
+      message.error(getErrorMessage(err, 'Không thể xuất dữ liệu giao dịch.'));
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const handleViewDetails = (transaction: Transaction) => {
     setSelectedTransaction(transaction);
   };
 
-  // Columns Configuration
   const columns = [
     {
       title: 'ORDER ID',
@@ -130,7 +179,7 @@ const TransactionsPage: React.FC = () => {
       key: 'totalAmount',
       render: (amount: number) => (
         <span style={{ fontWeight: 600, color: '#1a202c' }}>
-          ${amount.toFixed(2)}
+          {amount.toLocaleString('vi-VN')}đ
         </span>
       ),
     },
@@ -148,10 +197,13 @@ const TransactionsPage: React.FC = () => {
         let bgColor = '#f6ffed';
         let textColor = '#52c41a';
 
-        if (status === 'Cancelled') {
+        if (status === 'CANCELLED' || status === 'FAILED') {
           bgColor = '#fff1f0';
           textColor = '#f5222d';
-        } else if (status === 'Refunded') {
+        } else if (status === 'PENDING' || status === 'EXPIRED') {
+          bgColor = '#fffbe6';
+          textColor = '#faad14';
+        } else if (status === 'REFUNDED') {
           bgColor = '#fafafa';
           textColor = '#8c8c8c';
         }
@@ -189,13 +241,11 @@ const TransactionsPage: React.FC = () => {
 
   return (
     <div className="transactions-container">
-      {/* Page Header */}
       <div style={{ marginBottom: 24 }}>
         <h2 style={{ margin: 0, fontSize: '28px', fontWeight: 700, color: '#1a202c' }}>Order & Transaction History</h2>
         <p style={{ margin: 0, color: '#718096', fontSize: '14px' }}>View past orders and manage receipts.</p>
       </div>
 
-      {/* Filter Toolbar */}
       <Card 
         bordered={false}
         style={{
@@ -218,31 +268,29 @@ const TransactionsPage: React.FC = () => {
             </div>
 
             <div>
-              <span style={{ display: 'block', fontSize: '12px', color: '#718096', marginBottom: 4, fontWeight: 500 }}>Date Range</span>
-              <RangePicker style={{ height: 38, borderRadius: 6 }} />
-            </div>
-
-            <div>
               <span style={{ display: 'block', fontSize: '12px', color: '#718096', marginBottom: 4, fontWeight: 500 }}>Status</span>
               <Select
                 defaultValue="ALL"
                 value={statusFilter}
-                onChange={(val) => setStatusFilter(val)}
+                onChange={handleStatusFilterChange}
                 style={{ width: 140, height: 38 }}
               >
                 <Option value="ALL">All Statuses</Option>
-                <Option value="Completed">Completed</Option>
-                <Option value="Cancelled">Cancelled</Option>
-                <Option value="Refunded">Refunded</Option>
+                <Option value="SUCCESS">Completed</Option>
+                <Option value="PENDING">Pending</Option>
+                <Option value="FAILED">Failed</Option>
+                <Option value="REFUNDED">Refunded</Option>
+                <Option value="EXPIRED">Expired</Option>
               </Select>
             </div>
           </div>
 
-          <Button 
+          <Button
             icon={<DownloadOutlined />}
             onClick={handleExportData}
-            style={{ 
-              borderRadius: 6, 
+            loading={exporting}
+            style={{
+              borderRadius: 6,
               height: 38,
               fontWeight: 500,
               alignSelf: 'flex-end',
@@ -254,7 +302,6 @@ const TransactionsPage: React.FC = () => {
         </div>
       </Card>
 
-      {/* Table */}
       <Card
         bordered={false}
         style={{
@@ -265,22 +312,25 @@ const TransactionsPage: React.FC = () => {
         <Table 
           columns={columns} 
           dataSource={filteredTransactions} 
+          loading={loading}
           rowKey="id"
+          locale={{ emptyText: 'Không có giao dịch nào.' }}
           pagination={{
-            pageSize: 5,
-            showTotal: (total, range) => `Showing ${range[0]} to ${range[1]} of ${total} entries`
+            current: page,
+            pageSize: PAGE_SIZE,
+            total,
+            onChange: (nextPage) => setPage(nextPage),
+            showTotal: (t, range) => `Showing ${range[0]} to ${range[1]} of ${t} entries`
           }}
         />
       </Card>
 
-      {/* Details Modal */}
       <Modal
         title={`Chi tiết giao dịch ${selectedTransaction?.id}`}
         open={selectedTransaction !== null}
         onCancel={() => setSelectedTransaction(null)}
         footer={[
           <Button key="close" onClick={() => setSelectedTransaction(null)}>Đóng</Button>,
-          <Button key="print" type="primary" onClick={() => message.success('Đang in hóa đơn hóa đơn...')}>In hóa đơn</Button>
         ]}
       >
         {selectedTransaction && (
@@ -304,7 +354,7 @@ const TransactionsPage: React.FC = () => {
             <hr style={{ border: 'none', borderTop: '1px solid #f0f0f0', margin: '12px 0' }} />
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '16px', fontWeight: 600 }}>
               <span>TỔNG THANH TOÁN:</span>
-              <span style={{ color: '#1890ff' }}>${selectedTransaction.totalAmount.toFixed(2)}</span>
+              <span style={{ color: '#1890ff' }}>{selectedTransaction.totalAmount.toLocaleString('vi-VN')}đ</span>
             </div>
           </div>
         )}

@@ -28,6 +28,17 @@
   margin-right: 8px;
 }
 
+.staff-manager-readonly-banner {
+  background: #fffbe6;
+  border: 1px solid #ffe58f;
+  color: #874d00;
+  border-radius: 6px;
+  padding: 10px 16px;
+  margin-bottom: 16px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
 .staff-header-subtitle {
   margin: 4px 0 0 0;
   color: #718096;
@@ -217,13 +228,14 @@
 
 /* Dish Kanban Card */
 .staff-item-card {
-  background: #fff;
-  border-radius: 10px;
-  border: 1px solid #e2e8f0;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02);
-  transition: transform 0.2s, box-shadow 0.2s;
-  position: relative;
-  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-height: 140px; /* Dùng min-height thay vì height cố định */
+  padding: 12px;
+  margin-bottom: 12px;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
 }
 
 .staff-item-card:hover {
@@ -282,7 +294,8 @@
 }
 
 .staff-card-body {
-  padding: 16px;
+  flex-grow: 1;
+  padding: 8px 0 16px 0; /* Tăng padding-bottom (16px) để tạo khoảng trống */
 }
 
 .staff-item-name {
@@ -293,10 +306,10 @@
 }
 
 .staff-item-qty {
-  margin-top: 6px;
-  font-size: 13px;
-  font-weight: 600;
-  color: #4a5568;
+  font-size: 14px;
+  color: #555;
+  margin-top: 4px;
+  line-height: 1.5;
 }
 
 .staff-item-notes {
@@ -308,6 +321,20 @@
   font-size: 12px;
   color: #b7791f;
   font-weight: 500;
+}
+
+.staff-order-line {
+  padding: 6px 0;
+  border-bottom: 1px dashed #edf2f7;
+}
+
+.staff-order-line:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.staff-order-line:first-child {
+  padding-top: 0;
 }
 
 .staff-card-footer {
@@ -412,6 +439,40 @@
   box-shadow: 0 12px 20px -8px rgba(0, 0, 0, 0.1);
 }
 
+.staff-table-billing-card.awaiting-cash {
+  border: 2px solid #fa8c16;
+  background: #fff7e6;
+  box-shadow: 0 4px 12px rgba(250, 140, 22, 0.2);
+}
+
+.staff-cash-pending-badge {
+  display: inline-block;
+  margin-top: 4px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: #fa8c16;
+  color: #fff !important;
+  font-size: 11px !important;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+}
+
+.staff-modal-cash-banner {
+  background: #fff7e6;
+  border: 1px solid #ffd591;
+  color: #ad4e00;
+  border-radius: 6px;
+  padding: 10px 12px;
+  margin-bottom: 16px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.staff-table-billing-card-actions .btn-confirm-cash {
+  border-radius: 6px;
+  font-weight: 600;
+}
+
 .staff-table-billing-card-header {
   display: flex;
   gap: 14px;
@@ -485,6 +546,54 @@
 .staff-table-billing-card-actions .btn-print:hover {
   background-color: #8543e0;
   border-color: #8543e0;
+}
+
+.staff-maintenance-section {
+  margin-top: 32px;
+  padding-top: 24px;
+  border-top: 1px dashed #e2e8f0;
+}
+
+.staff-maintenance-header {
+  margin-bottom: 16px;
+}
+
+.staff-maintenance-header h3 {
+  margin: 0 0 4px 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: #1a202c;
+}
+
+.staff-maintenance-header span {
+  font-size: 13px;
+  color: #718096;
+}
+
+.staff-maintenance-card {
+  border: 1px solid #ffe7ba;
+  background: #fffbe6;
+  border-radius: 10px;
+}
+
+.staff-maintenance-card-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: #ad4e00;
+  margin-bottom: 4px;
+}
+
+.staff-maintenance-card-sub {
+  font-size: 12px;
+  color: #8c8c8c;
+  margin-bottom: 12px;
+}
+
+.staff-btn-mark-cleaned {
+  background: #52c41a !important;
+  border-color: #52c41a !important;
+  font-weight: 600;
+  border-radius: 6px;
 }
 
 /* Modal Checkout Bill details */

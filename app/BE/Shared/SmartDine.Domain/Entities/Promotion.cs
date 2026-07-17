@@ -1,0 +1,26 @@
+using System;
+using System.Collections.Generic;
+using SmartDine.Domain.Enums;
+
+namespace SmartDine.Domain.Entities;
+
+/// <summary>
+/// Khuyến mãi (promotions).
+/// </summary>
+public class Promotion : BaseEntity
+{
+    public string Code { get; set; } = string.Empty;
+    public string? Name { get; set; }
+    public string? Description { get; set; }
+    public PromotionType DiscountType { get; set; } = PromotionType.PERCENT;
+    public decimal DiscountValue { get; set; }
+    public DateTime StartDate { get; set; }
+    public DateTime EndDate { get; set; }
+    public bool IsActive { get; set; } = true;
+
+    // Navigation
+    public List<OrderPromotion> OrderPromotions { get; set; } = new();
+    public List<PromotionMembership> PromotionMemberships { get; set; } = new();
+    public List<PromotionMenuItem> PromotionMenuItems { get; set; } = new();
+    public List<CustomerCoupon> CustomerCoupons { get; set; } = new();
+}
