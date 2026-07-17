@@ -32,8 +32,7 @@ import sys
 import time
 
 import requests
-from signalrcore.hub.base_hub_connection import HubConnectionBuilder
-from signalrcore.services.base_reconnect_service import BaseReconnectService
+from signalrcore.hub.base_hub_connection import BaseHubConnection
 
 # ---------------------------------------------------------------------------
 # Logging
@@ -285,19 +284,18 @@ class RobotSidecar:
         self.signalr_conn = None
 
     def startup(self) -> bool:
-        """Connect to server and download map files."""
-        log.info(f"Connecting to server: {self.client.base_url}")
+        """Download map files from server if available. Non-blocking."""
+        log.info(f"Checking map server: {self.client.base_url}")
         if not self.client.is_alive():
-            log.error("Server is not reachable! Will retry in main loop.")
-            return False
+            log.warning("Map server unreachable, skipping map download.")
+            return True
 
         # Resolve map ID
         if not self.map_id:
             maps = self.client.list_maps()
             if not maps:
-                log.error("No maps found on server!")
-                return False
-            # Pick the most recent map
+                log.warning("No maps found on server, skipping map download.")
+                return True
             maps.sort(key=lambda m: m.get("createdAt", ""), reverse=True)
             self.map_id = maps[0]["id"]
             log.info(f"Auto-selected map: {self.map_id}")
@@ -305,26 +303,19 @@ class RobotSidecar:
         # Download map files
         map_data = self.client.get_map_files(self.map_id)
         if not map_data:
-            log.error(f"Failed to download map {self.map_id}")
-            return False
+            log.warning(f"Failed to download map {self.map_id}")
+            return True
 
-        # Write to controller dir
         write_map_files_to_controller(self.controller_dir, map_data)
         log.info(f"Map {self.map_id} loaded into {self.controller_dir}")
-
-        # Connect to SignalR for real-time commands
-        self._connect_signalr()
-
         return True
 
     def tick(self):
         """One iteration of the main loop."""
-        # When SignalR is connected, state/path are pushed via SignalR.
-        # Only fall back to HTTP polling when SignalR is not available.
         if self.signalr_conn is None:
             self._sync_state()
             self._sync_path()
-        self._sync_command()
+            self._sync_command()
 
     def _sync_state(self):
         """Read robot_state.txt → POST to server (only if changed)."""
@@ -385,13 +376,9 @@ class RobotSidecar:
         signalr_url = os.environ.get("SIGNALR_URL", "http://localhost:5000/hubs/robot")
         token = os.environ.get("AUTH_TOKEN", "")
 
-        self.signalr_conn = (
-            HubConnectionBuilder()
-            .with_url(signalr_url, options={"access_token_factory": lambda: token})
-            .with_automatic_reconnect(
-                BaseReconnectService(max_reconnect_attempts=10, reconnect_interval=5)
-            )
-            .build()
+        self.signalr_conn = BaseHubConnection(
+            url=signalr_url,
+            headers={"Authorization": f"Bearer {token}"} if token else {},
         )
 
         self.signalr_conn.on_open(lambda: self._on_signalr_connected())
@@ -407,7 +394,7 @@ class RobotSidecar:
     def _on_signalr_connected(self):
         log.info("SignalR connected, joining RobotGroup")
         try:
-            self.signalr_conn.invoke("JoinRobotGroup")
+            self.signalr_conn.invoke("JoinRobotGroup", [])
         except Exception as e:
             log.error(f"Failed to join RobotGroup: {e}")
 
@@ -425,6 +412,8 @@ class RobotSidecar:
 
     def _sync_state_signalr(self):
         """Push robot state via SignalR (replaces HTTP POST)."""
+        if not self.signalr_conn or self.signalr_conn.transport is None:
+            return
         state_file = os.path.join(self.controller_dir, "robot_state.txt")
         h = file_hash(state_file)
         if h == self._last_state_hash:
@@ -434,22 +423,20 @@ class RobotSidecar:
         if not raw:
             return
         state = parse_robot_state(raw)
-        if state and self.signalr_conn:
+        if state:
             try:
                 self.signalr_conn.invoke(
                     "SendRobotState",
-                    state["x"],
-                    state["y"],
-                    state["theta"],
-                    state["v"],
-                    state["omega"],
-                    state["status"],
+                    [state["x"], state["y"], state["theta"],
+                     state["v"], state["omega"], state["status"]],
                 )
             except Exception as e:
                 log.warning(f"SignalR state push failed: {e}")
 
     def _sync_path_signalr(self):
         """Push robot path via SignalR (replaces HTTP POST)."""
+        if not self.signalr_conn or self.signalr_conn.transport is None:
+            return
         path_file = os.path.join(self.controller_dir, "robot_path.txt")
         h = file_hash(path_file)
         if h == self._last_path_hash:
@@ -459,9 +446,9 @@ class RobotSidecar:
         if raw is None:
             return
         points = parse_robot_path(raw)
-        if self.signalr_conn:
+        if points:
             try:
-                self.signalr_conn.invoke("SendRobotPath", points)
+                self.signalr_conn.invoke("SendRobotPath", [points])
             except Exception as e:
                 log.warning(f"SignalR path push failed: {e}")
 
@@ -469,17 +456,13 @@ class RobotSidecar:
         """Main loop with graceful shutdown."""
         log.info(f"Sidecar started (poll={self.poll_interval}s, dir={self.controller_dir})")
 
-        # Try startup, retry if server not ready
-        connected = self.startup()
-        if not connected:
-            log.info("Waiting for server to become available...")
+        self._connect_signalr()
+        self.startup()
 
         while self.running:
             try:
-                if not connected:
-                    connected = self.startup()
-                else:
-                    self.tick()
+                self.tick()
+                if self.signalr_conn is not None:
                     self._sync_state_signalr()
                     self._sync_path_signalr()
             except KeyboardInterrupt:

@@ -60,6 +60,7 @@ builder.Services.AddSignalR();
 
 // ===== Real-time & Caching Services =====
 builder.Services.AddScoped<IOrderNotificationService, OrderNotificationService>();
+builder.Services.AddScoped<RobotNotificationService>();
 builder.Services.AddDistributedMemoryCache();
 
 // ===== Payment Gateway (PayOS) =====
