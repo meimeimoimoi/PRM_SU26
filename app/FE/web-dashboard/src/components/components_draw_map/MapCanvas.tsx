@@ -466,12 +466,12 @@ export function MapCanvas() {
   const navPhase = (() => {
     if (!robotState) return 'Idle';
     const status = robotState.status;
-    if (status === 'ARRIVED' || status === 'IDLE') return 'Phase3';
+    if (status === 'ARRIVED_TABLE' || status === 'ARRIVED_KITCHEN' || status === 'IDLE') return 'Phase3';
     if (status === 'NAV_TO_TABLE') {
       if (robotPath.length <= 2) return 'Phase1';
       return 'Phase2';
     }
-    // Fallback for other statuses (e.g., RETURN_TO_KITCHEN)
+    if (status === 'RETURN_TO_KITCHEN') return 'Phase2';
     return 'Idle';
   })();
   const [mouseCanvasPos, setMouseCanvasPos] = useState<{ x: number; y: number } | null>(null);

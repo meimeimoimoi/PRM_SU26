@@ -393,6 +393,8 @@ class RobotSidecar:
         self.signalr_conn.on_open(lambda: self._on_signalr_connected())
         self.signalr_conn.on_close(lambda: self._on_signalr_disconnected())
         self.signalr_conn.on("ReceiveRobotCommand", self._on_robot_command)
+        self.signalr_conn.on("ReceiveRobotState", lambda args: None)
+        self.signalr_conn.on("ReceiveRobotPath", lambda args: None)
 
         try:
             self.signalr_conn.start()
@@ -421,7 +423,7 @@ class RobotSidecar:
 
     def _sync_state_signalr(self):
         """Push robot state via SignalR (replaces HTTP POST)."""
-        if not self.signalr_conn or self.signalr_conn.transport is None:
+        if not self.signalr_conn:
             return
         state_file = os.path.join(self.controller_dir, "robot_state.txt")
         h = file_hash(state_file)
@@ -436,15 +438,16 @@ class RobotSidecar:
             try:
                 self.signalr_conn.invoke(
                     "SendRobotState",
-                    [state["x"], state["y"], state["theta"],
-                     state["v"], state["omega"], state["status"]],
+                    state["x"], state["y"], state["theta"],
+                    state["v"], state["omega"], state["status"],
                 )
+                log.debug(f"SignalR state pushed: ({state['x']:.3f},{state['y']:.3f}) status={state['status']}")
             except Exception as e:
                 log.warning(f"SignalR state push failed: {e}")
 
     def _sync_path_signalr(self):
         """Push robot path via SignalR (replaces HTTP POST)."""
-        if not self.signalr_conn or self.signalr_conn.transport is None:
+        if not self.signalr_conn:
             return
         path_file = os.path.join(self.controller_dir, "robot_path.txt")
         h = file_hash(path_file)
@@ -455,11 +458,14 @@ class RobotSidecar:
         if raw is None:
             return
         points = parse_robot_path(raw)
-        if points:
             try:
-                self.signalr_conn.invoke("SendRobotPath", [points])
-            except Exception as e:
-                log.warning(f"SignalR path push failed: {e}")
+                self.signalr_conn.invoke("SendRobotPath", points)
+            if points:
+                log.debug(f"SignalR path pushed: {len(points)} points")
+            else:
+                log.debug("SignalR path cleared")
+        except Exception as e:
+            log.warning(f"SignalR path push failed: {e}")
 
     def run(self):
         """Main loop with graceful shutdown."""

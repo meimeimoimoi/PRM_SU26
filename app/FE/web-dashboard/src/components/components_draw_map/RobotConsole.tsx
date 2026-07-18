@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { Alert, Button, Card, Col, Row, Select, Space, Statistic, Tag, Typography } from 'antd';
+import React, { useEffect, useRef, useState } from 'react';
+import { Alert, Button, Card, Col, Row, Select, Space, Statistic, Tag, Typography, message } from 'antd';
 import {
   ArrowDown,
   ArrowLeft,
@@ -41,11 +41,22 @@ export const RobotConsole: React.FC = () => {
     status: 'OFFLINE',
   });
 
+  const prevStatusRef = useRef<string>('OFFLINE');
+
   useEffect(() => {
     const cleanup = on('ReceiveRobotState', (...args: unknown[]) => {
       const data = args[0] as Telemetry;
       if (data && data.status !== 'OFFLINE') {
         setTelemetry(data);
+        const prevStatus = prevStatusRef.current;
+        if (prevStatus !== data.status) {
+          if (data.status === 'ARRIVED_TABLE') {
+            message.info('Đã đến bàn! Robot đã đến điểm giao hàng.');
+          } else if (data.status === 'ARRIVED_KITCHEN') {
+            message.info('Đã về bếp! Robot đã quay lại bếp.');
+          }
+        }
+        prevStatusRef.current = data.status;
       } else {
         setTelemetry((prev) => ({ ...prev, status: 'OFFLINE' }));
       }
@@ -86,6 +97,10 @@ export const RobotConsole: React.FC = () => {
         return 'orange';
       case 'RETURN_TO_KITCHEN':
         return 'gold';
+      case 'ARRIVED_TABLE':
+        return 'cyan';
+      case 'ARRIVED_KITCHEN':
+        return 'purple';
       case 'OFFLINE':
       default:
         return 'red';
@@ -95,15 +110,20 @@ export const RobotConsole: React.FC = () => {
   const getStatusLabel = (status: string) => {
     switch (status) {
       case 'IDLE': return '⏸️ Chờ lệnh';
-      case 'NAV_TO_TABLE': return '🚚 Giao hàng';
+      case 'NAV_TO_TABLE': return '🚚 Đang giao hàng';
       case 'MANUAL_MOVE': return '🕹️ Thủ công';
-      case 'RETURN_TO_KITCHEN': return '🔄 Calibrating...';
+      case 'RETURN_TO_KITCHEN': return '🔄 Đang về bếp';
+      case 'ARRIVED_TABLE': return '✅ Đã đến bàn';
+      case 'ARRIVED_KITCHEN': return '✅ Đã về bếp';
       case 'OFFLINE': return '🔴 Offline';
       default: return status;
     }
   };
 
   const isCalibrating = telemetry.status === 'RETURN_TO_KITCHEN';
+  const isNavigating = telemetry.status === 'NAV_TO_TABLE';
+  const isArrived = telemetry.status === 'ARRIVED_TABLE' || telemetry.status === 'ARRIVED_KITCHEN';
+  const isOffline = telemetry.status === 'OFFLINE';
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>

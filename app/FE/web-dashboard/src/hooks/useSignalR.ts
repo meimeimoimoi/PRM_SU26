@@ -85,7 +85,12 @@ export const useSignalR = () => {
 
   const on = useCallback(
     (event: string, callback: (...args: unknown[]) => void) => {
-      connectionRef.current?.on(event, callback);
+      const conn = connectionRef.current;
+      if (!conn) {
+        console.warn(`[SignalR] on('${event}'): connection not ready yet`);
+        return () => {};
+      }
+      conn.on(event, callback);
       return () => {
         connectionRef.current?.off(event, callback);
       };
