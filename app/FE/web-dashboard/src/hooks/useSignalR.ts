@@ -14,39 +14,39 @@ function getOrCreateConnection(): HubConnection {
   }
 
   const token = localStorage.getItem('access_token');
-  if (!token) throw new Error('No access_token in localStorage');
 
-  sharedConnection = new HubConnectionBuilder()
+  const conn = new HubConnectionBuilder()
     .withUrl(SIGNALR_URL, {
-      accessTokenFactory: () => token,
+      ...(token ? { accessTokenFactory: () => token } : {}),
       transport: 0,
     })
     .withAutomaticReconnect([0, 2, 5, 10, 15, 30])
     .build();
 
-  sharedConnection.onreconnecting(() => {
+  conn.onreconnecting(() => {
     sharedConnected = false;
     sharedListeners.forEach((l) => l());
   });
-  sharedConnection.onreconnected(() => {
+  conn.onreconnected(() => {
     sharedConnected = true;
-    sharedConnection?.invoke('JoinRobotGroup').catch(() => {});
+    conn.invoke('JoinRobotGroup').catch(() => {});
     sharedListeners.forEach((l) => l());
   });
-  sharedConnection.onclose(() => {
+  conn.onclose(() => {
     sharedConnected = false;
     sharedListeners.forEach((l) => l());
   });
 
-  sharedConnection.start()
+  conn.start()
     .then(() => {
       sharedConnected = true;
-      return sharedConnection!.invoke('JoinRobotGroup');
+      return conn.invoke('JoinRobotGroup');
     })
     .then(() => sharedListeners.forEach((l) => l()))
     .catch((err: unknown) => console.error('[SignalR] Connection error:', err));
 
-  return sharedConnection;
+  sharedConnection = conn;
+  return conn;
 }
 
 export const useSignalR = () => {

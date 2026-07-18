@@ -66,6 +66,8 @@ def read_file(filepath: str) -> str | None:
             return f.read().strip()
     except FileNotFoundError:
         return None
+    except PermissionError:
+        return None
     except Exception as e:
         log.warning(f"Error reading {filepath}: {e}")
         return None
@@ -82,6 +84,9 @@ def write_file(filepath: str, content: str) -> bool:
             os.remove(filepath)
         os.rename(tmp, filepath)
         return True
+    except PermissionError:
+        log.debug(f"Permission denied writing {filepath}, file locked by another process")
+        return False
     except Exception as e:
         log.error(f"Error writing {filepath}: {e}")
         return False
@@ -92,7 +97,9 @@ def file_hash(filepath: str) -> str:
     try:
         with open(filepath, "rb") as f:
             return hashlib.md5(f.read()).hexdigest()
-    except FileNotFoundError:
+    except (FileNotFoundError, PermissionError):
+        return ""
+    except Exception:
         return ""
 
 
@@ -268,11 +275,13 @@ def write_map_files_to_controller(controller_dir: str, map_data: dict) -> bool:
 # ---------------------------------------------------------------------------
 
 class RobotSidecar:
-    def __init__(self, server_url: str, controller_dir: str, poll_interval: float, map_id: str | None):
+    def __init__(self, server_url: str, controller_dir: str, poll_interval: float, map_id: str | None,
+                 signalr_url: str | None = None):
         self.client = ServerClient(server_url)
         self.controller_dir = os.path.abspath(controller_dir)
         self.poll_interval = poll_interval
         self.map_id = map_id
+        self.signalr_url = signalr_url or os.environ.get("SIGNALR_URL", "http://localhost:5000/hubs/robot")
         self.running = True
 
         # Change detection hashes
@@ -373,7 +382,7 @@ class RobotSidecar:
 
     def _connect_signalr(self):
         """Connect to backend SignalR hub for real-time commands."""
-        signalr_url = os.environ.get("SIGNALR_URL", "http://localhost:5000/hubs/robot")
+        signalr_url = self.signalr_url
         token = os.environ.get("AUTH_TOKEN", "")
 
         self.signalr_conn = BaseHubConnection(
@@ -485,6 +494,7 @@ class RobotSidecar:
 def main():
     parser = argparse.ArgumentParser(description="SmartDine Robot Sidecar")
     parser.add_argument("--server", default=DEFAULT_SERVER_URL, help="Map server URL")
+    parser.add_argument("--signalr-url", default=None, help="SignalR hub URL (default: http://localhost:5000/hubs/robot)")
     parser.add_argument("--dir", default=DEFAULT_CONTROLLER_DIR, help="Robot controller directory")
     parser.add_argument("--interval", type=float, default=DEFAULT_POLL_INTERVAL, help="Poll interval (seconds)")
     parser.add_argument("--map-id", default=DEFAULT_MAP_ID, help="Map ID to use (auto-detect if not set)")
@@ -495,6 +505,7 @@ def main():
         controller_dir=args.dir,
         poll_interval=args.interval,
         map_id=args.map_id,
+        signalr_url=args.signalr_url,
     )
 
     def shutdown(signum, frame):

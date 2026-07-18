@@ -501,7 +501,7 @@ export function MapCanvas() {
 
       if (selectedMapId) {
         try {
-          const metaRes = await fetch(`http://localhost:3001/api/maps/${selectedMapId}`);
+          const metaRes = await fetch(`/api/v1/maps/${selectedMapId}`);
           const meta = await metaRes.json();
           if (meta && typeof meta.robotStart?.x === 'number' && typeof meta.robotStart?.y === 'number') {
             addGraphNode({
@@ -522,12 +522,12 @@ export function MapCanvas() {
 
       if (!nodeCreated) {
         try {
-          const listRes = await fetch('http://localhost:3001/api/maps');
+          const listRes = await fetch('/api/v1/maps');
           const list = await listRes.json();
           if (!Array.isArray(list) || list.length === 0) return;
           const mapId = list[0].id;
           setSelectedMapId(mapId);
-          const metaRes = await fetch(`http://localhost:3001/api/maps/${mapId}`);
+          const metaRes = await fetch(`/api/v1/maps/${mapId}`);
           const meta = await metaRes.json();
           if (meta && typeof meta.robotStart?.x === 'number' && typeof meta.robotStart?.y === 'number') {
             addGraphNode({
@@ -546,28 +546,21 @@ export function MapCanvas() {
         }
       }
 
-      if (!nodeCreated) {
-        try {
-          const statusRes = await fetch('http://localhost:3001/api/robot/status');
-          const status = await statusRes.json();
-          if (status && status.status !== 'OFFLINE' && typeof status.x === 'number' && typeof status.y === 'number') {
-            addGraphNode({
-              id: `robotStart-${Date.now()}`,
-              type: 'robotStart',
-              name: 'Start',
-              x: status.x,
-              y: status.y,
-              theta: 0,
-            });
-            message.info('ℹ️ Created start node from live robot position (meta missing)');
-          }
-        } catch (e) {
-          console.warn('Failed to fallback to robot status for start node', e);
-        }
+      if (!nodeCreated && robotState && robotState.status !== 'OFFLINE'
+          && typeof robotState.x === 'number' && typeof robotState.y === 'number') {
+        addGraphNode({
+          id: `robotStart-${Date.now()}`,
+          type: 'robotStart',
+          name: 'Start',
+          x: robotState.x,
+          y: robotState.y,
+          theta: 0,
+        });
+        message.info('Created start node from live robot position (meta missing)');
       }
     };
     ensureRobotStartNode();
-  }, [graphNodes, addGraphNode, selectedMapId, setSelectedMapId]);
+  }, [graphNodes, addGraphNode, selectedMapId, setSelectedMapId, robotState]);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const [pan, setPan] = useState({ x: 0, y: 0 });

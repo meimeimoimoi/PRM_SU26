@@ -2,6 +2,7 @@ extern alias OrderApi;
 
 using Moq;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.Extensions.Logging;
 using OrderApi::SmartDine.Order.API.Services;
 using OrderApi::SmartDine.Order.API.Hubs;
 
@@ -10,13 +11,14 @@ namespace SmartDine.Tests.Unit;
 public class RobotNotificationServiceTests
 {
     private readonly Mock<IHubContext<RobotHub>> _hubMock = new();
+    private readonly Mock<ILogger<RobotNotificationService>> _loggerMock = new();
     private readonly Mock<IClientProxy> _clientProxyMock = new();
     private readonly RobotNotificationService _sut;
 
     public RobotNotificationServiceTests()
     {
         _hubMock.Setup(h => h.Clients.Group("RobotGroup")).Returns(_clientProxyMock.Object);
-        _sut = new RobotNotificationService(_hubMock.Object);
+        _sut = new RobotNotificationService(_hubMock.Object, _loggerMock.Object);
     }
 
     [Fact]
