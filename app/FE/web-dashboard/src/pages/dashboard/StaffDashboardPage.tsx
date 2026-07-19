@@ -416,7 +416,7 @@ const StaffDashboardPage: React.FC = () => {
       });
     });
 
-    const snap = tblOrders.find((o) => o.taxRate != null || o.serviceChargeRate != null);
+    const snap = tableOrders.find((o) => o.taxRate != null || o.serviceChargeRate != null);
     const billTax = snap?.taxRate != null ? Number(snap.taxRate) : taxRatePercent;
     const billService = snap?.serviceChargeRate != null ? Number(snap.serviceChargeRate) : serviceChargePercent;
     const net = subtotal - discount;
