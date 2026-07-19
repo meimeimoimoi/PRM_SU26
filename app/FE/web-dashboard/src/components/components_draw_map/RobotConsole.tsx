@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Alert, Button, Card, Col, Row, Select, Space, Statistic, Tag, Typography, message } from 'antd';
+import { Alert, Button, Card, Col, Row, Select, Space, Statistic, Tag, Typography } from 'antd';
 import {
   ArrowDown,
   ArrowLeft,
@@ -30,7 +30,7 @@ export const RobotConsole: React.FC = () => {
   const kitchenNodes = graphNodes.filter((node) => node.type === 'kitchen');
   const kitchenNode = kitchenNodes[0];
 
-  const { invoke, on } = useSignalR();
+  const { invoke, on, connected } = useSignalR();
   const [selectedTable, setSelectedTable] = useState<string | undefined>(undefined);
   const [telemetry, setTelemetry] = useState<Telemetry>({
     x: 0,
@@ -41,28 +41,18 @@ export const RobotConsole: React.FC = () => {
     status: 'OFFLINE',
   });
 
-  const prevStatusRef = useRef<string>('OFFLINE');
-
   useEffect(() => {
+    if (!connected) return;
     const cleanup = on('ReceiveRobotState', (...args: unknown[]) => {
       const data = args[0] as Telemetry;
       if (data && data.status !== 'OFFLINE') {
         setTelemetry(data);
-        const prevStatus = prevStatusRef.current;
-        if (prevStatus !== data.status) {
-          if (data.status === 'ARRIVED_TABLE') {
-            message.info('Đã đến bàn! Robot đã đến điểm giao hàng.');
-          } else if (data.status === 'ARRIVED_KITCHEN') {
-            message.info('Đã về bếp! Robot đã quay lại bếp.');
-          }
-        }
-        prevStatusRef.current = data.status;
       } else {
         setTelemetry((prev) => ({ ...prev, status: 'OFFLINE' }));
       }
     });
     return cleanup;
-  }, [on]);
+  }, [on, connected]);
 
   const sendControlCommand = async (command: string, target?: string, direction?: string) => {
     try {

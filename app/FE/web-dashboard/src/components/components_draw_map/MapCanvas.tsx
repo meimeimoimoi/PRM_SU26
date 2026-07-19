@@ -455,9 +455,10 @@ export function MapCanvas() {
   const removeGraphNode = useMapStore((s) => s.removeGraphNode);
   const removeGraphEdge = useMapStore((s) => s.removeGraphEdge);
 
-  const { on } = useSignalR();
+  const { on, connected } = useSignalR();
   const [robotState, setRobotState] = useState<{ x: number; y: number; theta: number; status: string } | null>(null);
   const [robotPath, setRobotPath] = useState<{ x: number; y: number }[]>([]);
+  const prevStatusRef = useRef<string>('OFFLINE');
 
   // Determine navigation phase based on robot status and path length
   // Phase1: Path calculation (path received but robot not yet moving)
@@ -479,10 +480,20 @@ export function MapCanvas() {
 
   // Listen to robot state + path via SignalR (replaces HTTP polling)
   useEffect(() => {
+    if (!connected) return;
     const cleanupState = on('ReceiveRobotState', (...args: unknown[]) => {
       const data = args[0] as { x: number; y: number; theta: number; status: string };
       if (data && data.status !== 'OFFLINE') {
         setRobotState(data);
+        const prevStatus = prevStatusRef.current;
+        if (prevStatus !== data.status) {
+          if (data.status === 'ARRIVED_TABLE') {
+            message.success('Robot đã đến bàn giao hàng thành công.');
+          } else if (data.status === 'ARRIVED_KITCHEN') {
+            message.success('Robot đã quay lại bếp thành công.');
+          }
+        }
+        prevStatusRef.current = data.status;
       }
     });
     const cleanupPath = on('ReceiveRobotPath', (...args: unknown[]) => {
@@ -490,7 +501,7 @@ export function MapCanvas() {
       setRobotPath(data?.path || []);
     });
     return () => { cleanupState(); cleanupPath(); };
-  }, [on]);
+  }, [on, connected]);
 
   // Ensure a robotStart graph node exists when map meta provides one.
   useEffect(() => {

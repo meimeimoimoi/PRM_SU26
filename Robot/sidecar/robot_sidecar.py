@@ -438,8 +438,8 @@ class RobotSidecar:
             try:
                 self.signalr_conn.invoke(
                     "SendRobotState",
-                    state["x"], state["y"], state["theta"],
-                    state["v"], state["omega"], state["status"],
+                    [state["x"], state["y"], state["theta"],
+                     state["v"], state["omega"], state["status"]],
                 )
                 log.debug(f"SignalR state pushed: ({state['x']:.3f},{state['y']:.3f}) status={state['status']}")
             except Exception as e:
@@ -458,8 +458,8 @@ class RobotSidecar:
         if raw is None:
             return
         points = parse_robot_path(raw)
-            try:
-                self.signalr_conn.invoke("SendRobotPath", points)
+        try:
+            self.signalr_conn.invoke("SendRobotPath", [points])
             if points:
                 log.debug(f"SignalR path pushed: {len(points)} points")
             else:
