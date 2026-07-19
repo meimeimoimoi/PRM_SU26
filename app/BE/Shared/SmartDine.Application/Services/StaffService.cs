@@ -23,7 +23,8 @@ public class StaffService
     private readonly IUnitOfWork _uow;
     private readonly IPasswordHasher _passwordHasher;
 
-    private static readonly UserRole[] AssignableRoles = { UserRole.STAFF, UserRole.CHEF, UserRole.MANAGER };
+    // Dashboard chỉ quản lý 2 role: Nhân viên (order/bếp/thanh toán chung 1 tài khoản) và Quản lý.
+    private static readonly UserRole[] AssignableRoles = { UserRole.STAFF, UserRole.MANAGER };
 
     public StaffService(IUnitOfWork uow, IPasswordHasher passwordHasher)
     {

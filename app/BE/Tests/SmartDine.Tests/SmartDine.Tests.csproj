@@ -22,6 +22,16 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\Services\SmartDine.Identity.API\SmartDine.Identity.API.csproj" />
+    <ProjectReference Include="..\..\Services\SmartDine.Menu.API\SmartDine.Menu.API.csproj">
+      <Aliases>MenuApi</Aliases>
+    </ProjectReference>
+    <ProjectReference Include="..\..\Services\SmartDine.Order.API\SmartDine.Order.API.csproj">
+      <Aliases>OrderApi</Aliases>
+    </ProjectReference>
+    <ProjectReference Include="..\..\Services\SmartDine.Table.API\SmartDine.Table.API.csproj">
+      <Aliases>TableApi</Aliases>
+    </ProjectReference>
     <ProjectReference Include="..\..\Shared\SmartDine.Application\SmartDine.Application.csproj" />
     <ProjectReference Include="..\..\Shared\SmartDine.Domain\SmartDine.Domain.csproj" />
     <ProjectReference Include="..\..\Shared\SmartDine.Infrastructure\SmartDine.Infrastructure.csproj" />

@@ -1,8 +1,9 @@
 import 'package:go_router/go_router.dart';
 import '../pages/auth/login_page.dart';
 import '../pages/auth/signup_page.dart';
+import '../pages/auth/forgot_password_page.dart';
+import '../pages/auth/qr_scan_page.dart';
 import '../pages/home/home_page.dart';
-import '../pages/menu/menu_page.dart';
 import '../pages/cart/cart_page.dart';
 import '../pages/checkout/checkout_page.dart';
 import '../pages/orders/order_history_page.dart'; // Invoice
@@ -24,12 +25,16 @@ final GoRouter appRouter = GoRouter(
       builder: (context, state) => const SignupPage(),
     ),
     GoRoute(
-      path: AppRoutes.home,
-      builder: (context, state) => const HomePage(),
+      path: AppRoutes.forgotPassword,
+      builder: (context, state) => const ForgotPasswordPage(),
     ),
     GoRoute(
-      path: AppRoutes.menu,
-      builder: (context, state) => const MenuPage(),
+      path: AppRoutes.qrScan,
+      builder: (context, state) => const QrScanPage(),
+    ),
+    GoRoute(
+      path: AppRoutes.home,
+      builder: (context, state) => const HomePage(),
     ),
     GoRoute(
       path: AppRoutes.cart,
@@ -37,7 +42,10 @@ final GoRouter appRouter = GoRouter(
     ),
     GoRoute(
       path: AppRoutes.checkout,
-      builder: (context, state) => const CheckoutPage(),
+      builder: (context, state) {
+        final orderId = state.extra as int?;
+        return CheckoutPage(orderId: orderId);
+      },
     ),
     GoRoute(
       path: AppRoutes.orders,
@@ -46,6 +54,13 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: AppRoutes.invoice,
       builder: (context, state) => const OrderHistoryPage(),
+    ),
+    GoRoute(
+      path: '${AppRoutes.orderTracking}/:orderId',
+      builder: (context, state) {
+        final orderId = int.tryParse(state.pathParameters['orderId'] ?? '') ?? 0;
+        return OrderTrackingPage(orderId: orderId);
+      },
     ),
     GoRoute(
       path: AppRoutes.orderTracking,

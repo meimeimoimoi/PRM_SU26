@@ -2,7 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/order_models.dart';
 import '../models/menu_models.dart';
 import '../services/order_repository.dart';
-import '../viewmodels/auth_viewmodel.dart';
+import 'order_viewmodel.dart';
 
 class CartItem {
   final MenuItemSummary menuItem;
@@ -59,14 +59,36 @@ class CartViewModel extends StateNotifier<CartState> {
     state = state.copyWith(items: state.items.where((element) => element.menuItem.id != itemId).toList());
   }
 
-  Future<bool> checkout(int tableId, int sessionId) async {
-    if (state.items.isEmpty) return false;
+  void incrementQuantity(int itemId) {
+    final index = state.items.indexWhere((element) => element.menuItem.id == itemId);
+    if (index < 0) return;
+    final updatedItems = List<CartItem>.from(state.items);
+    updatedItems[index].quantity += 1;
+    state = state.copyWith(items: updatedItems);
+  }
+
+  /// Giảm số lượng 1 món — nếu về 0 thì xóa hẳn khỏi giỏ (giống hành vi UX phổ biến).
+  void decrementQuantity(int itemId) {
+    final index = state.items.indexWhere((element) => element.menuItem.id == itemId);
+    if (index < 0) return;
+    if (state.items[index].quantity <= 1) {
+      removeItem(itemId);
+      return;
+    }
+    final updatedItems = List<CartItem>.from(state.items);
+    updatedItems[index].quantity -= 1;
+    state = state.copyWith(items: updatedItems);
+  }
+
+  Future<int?> checkout(int tableId, int sessionId, {String? couponCode}) async {
+    if (state.items.isEmpty) return null;
 
     state = state.copyWith(isSubmitting: true, error: null);
     try {
       final request = PlaceOrderRequest(
         tableId: tableId,
         diningSessionId: sessionId,
+        couponCode: couponCode,
         items: state.items.map((e) => OrderDetailRequest(
           menuItemId: e.menuItem.id,
           quantity: e.quantity,
@@ -74,12 +96,13 @@ class CartViewModel extends StateNotifier<CartState> {
         )).toList(),
       );
       
-      await _orderRepository.placeOrder(request);
+      final order = await _orderRepository.placeOrder(request);
       state = CartState(); // Clear cart on success
-      return true;
+      _ref.invalidate(orderListProvider);
+      return order.id;
     } catch (e) {
       state = state.copyWith(isSubmitting: false, error: e.toString());
-      return false;
+      return null;
     }
   }
 }

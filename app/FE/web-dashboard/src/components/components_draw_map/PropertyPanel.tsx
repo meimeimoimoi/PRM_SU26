@@ -1,6 +1,8 @@
+import { useCallback, useEffect, useState } from 'react';
 import { Button, Card, Empty, Form, Input, InputNumber, Select, Tabs, Typography } from 'antd';
 import type { TabsProps } from 'antd';
-import { Trash2 } from 'lucide-react';
+import { Trash2, RotateCw } from 'lucide-react';
+import type { GraphNode } from '@/types/graph';
 import type { MapObject, MapObjectType } from '@/types/map';
 import { useMapStore } from '@/store/mapStore';
 import { RobotConsole } from './RobotConsole';
@@ -80,19 +82,199 @@ function InspectorForm({ selectedObject, onUpdate, onDelete }: InspectorFormProp
   );
 }
 
+function StartNodeInspector({ node }: { node: GraphNode }) {
+  const updateGraphNode = useMapStore((s) => s.updateGraphNode);
+  const removeGraphNode = useMapStore((s) => s.removeGraphNode);
+  const [thetaDeg, setThetaDeg] = useState(((node.theta ?? 0) * 180) / Math.PI);
+  const [localX, setLocalX] = useState(node.x);
+  const [localY, setLocalY] = useState(node.y);
+
+  useEffect(() => {
+    setThetaDeg(((node.theta ?? 0) * 180) / Math.PI);
+    setLocalX(node.x);
+    setLocalY(node.y);
+  }, [node.theta, node.x, node.y, node.id]);
+
+  const commitTheta = useCallback(
+    (deg: number | null) => {
+      if (deg === null) return;
+      const clamped = ((deg % 360) + 360) % 360;
+      setThetaDeg(clamped);
+      updateGraphNode(node.id, { theta: (clamped * Math.PI) / 180 });
+    },
+    [node.id, updateGraphNode],
+  );
+
+  return (
+    <Card title="Start Position" className="panel-card" extra={
+      <Button danger size="small" icon={<Trash2 size={14} />} onClick={() => removeGraphNode(node.id)}>Delete</Button>
+    }>
+      <Form layout="vertical">
+        <div className="property-grid">
+          <Form.Item label="X (m)" style={{ marginBottom: 8 }}>
+            <InputNumber
+              className="full-width-control"
+              value={localX}
+              step={0.1}
+              onChange={(val) => { if (val !== null) { setLocalX(val); updateGraphNode(node.id, { x: val }); } }}
+            />
+          </Form.Item>
+          <Form.Item label="Y (m)" style={{ marginBottom: 8 }}>
+            <InputNumber
+              className="full-width-control"
+              value={localY}
+              step={0.1}
+              onChange={(val) => { if (val !== null) { setLocalY(val); updateGraphNode(node.id, { y: val }); } }}
+            />
+          </Form.Item>
+        </div>
+        <Form.Item label="Heading θ (degrees)" style={{ marginBottom: 4 }}>
+          <InputNumber
+            className="full-width-control"
+            value={thetaDeg}
+            min={0}
+            max={360}
+            step={1}
+            formatter={(val) => val !== undefined ? `${Number(val).toFixed(1)}°` : ''}
+            parser={(val) => parseFloat(val?.replace('°', '') || '0')}
+            addonAfter={<RotateCw size={14} />}
+            onChange={commitTheta}
+            onStep={(_val, info) => {
+              if (info.type === 'up') commitTheta(((thetaDeg + 1) % 360 + 360) % 360);
+              if (info.type === 'down') commitTheta(((thetaDeg - 1) % 360 + 360) % 360);
+            }}
+          />
+        </Form.Item>
+        <Typography.Text type="secondary" style={{ fontSize: 11 }}>
+          0° = East, 90° = North, {thetaDeg.toFixed(1)}° currently
+        </Typography.Text>
+      </Form>
+    </Card>
+  );
+}
+
+function ChargingNodeInspector({ node }: { node: GraphNode }) {
+  const updateGraphNode = useMapStore((s) => s.updateGraphNode);
+  const removeGraphNode = useMapStore((s) => s.removeGraphNode);
+  const [localX, setLocalX] = useState(node.x);
+  const [localY, setLocalY] = useState(node.y);
+
+  useEffect(() => {
+    setLocalX(node.x);
+    setLocalY(node.y);
+  }, [node.x, node.y, node.id]);
+
+  return (
+    <Card title="Charging Station" className="panel-card" extra={
+      <Button danger size="small" icon={<Trash2 size={14} />} onClick={() => removeGraphNode(node.id)}>Delete</Button>
+    }>
+      <Form layout="vertical">
+        <div className="property-grid">
+          <Form.Item label="X (m)" style={{ marginBottom: 8 }}>
+            <InputNumber
+              className="full-width-control"
+              value={localX}
+              step={0.1}
+              onChange={(val) => { if (val !== null) { setLocalX(val); updateGraphNode(node.id, { x: val }); } }}
+            />
+          </Form.Item>
+          <Form.Item label="Y (m)" style={{ marginBottom: 8 }}>
+            <InputNumber
+              className="full-width-control"
+              value={localY}
+              step={0.1}
+              onChange={(val) => { if (val !== null) { setLocalY(val); updateGraphNode(node.id, { y: val }); } }}
+            />
+          </Form.Item>
+        </div>
+      </Form>
+    </Card>
+  );
+}
+
+function GraphNodeInspector({ node }: { node: GraphNode }) {
+  const updateGraphNode = useMapStore((s) => s.updateGraphNode);
+  const removeGraphNode = useMapStore((s) => s.removeGraphNode);
+  const [localX, setLocalX] = useState(node.x);
+  const [localY, setLocalY] = useState(node.y);
+  const [localName, setLocalName] = useState(node.name);
+
+  useEffect(() => {
+    setLocalX(node.x);
+    setLocalY(node.y);
+    setLocalName(node.name);
+  }, [node.x, node.y, node.name, node.id]);
+
+  const typeLabel: Record<string, string> = {
+    waypoint: 'Waypoint',
+    delivery: 'Delivery Point',
+    kitchen: 'Kitchen',
+    charging: 'Charging Station',
+    robotStart: 'Start Position',
+  };
+
+  return (
+    <Card
+      title={typeLabel[node.type] ?? node.type}
+      className="panel-card"
+      extra={
+        <Button danger size="small" icon={<Trash2 size={14} />} onClick={() => removeGraphNode(node.id)}>
+          Delete
+        </Button>
+      }
+    >
+      <Form layout="vertical">
+        <Form.Item label="Name" style={{ marginBottom: 8 }}>
+          <Input
+            value={localName}
+            onChange={(e) => { setLocalName(e.target.value); updateGraphNode(node.id, { name: e.target.value }); }}
+          />
+        </Form.Item>
+        <div className="property-grid">
+          <Form.Item label="X (m)" style={{ marginBottom: 8 }}>
+            <InputNumber
+              className="full-width-control"
+              value={localX}
+              step={0.1}
+              onChange={(val) => { if (val !== null) { setLocalX(val); updateGraphNode(node.id, { x: val }); } }}
+            />
+          </Form.Item>
+          <Form.Item label="Y (m)" style={{ marginBottom: 8 }}>
+            <InputNumber
+              className="full-width-control"
+              value={localY}
+              step={0.1}
+              onChange={(val) => { if (val !== null) { setLocalY(val); updateGraphNode(node.id, { y: val }); } }}
+            />
+          </Form.Item>
+        </div>
+      </Form>
+    </Card>
+  );
+}
+
 export function PropertyPanel() {
   const objects = useMapStore((s) => s.objects);
   const selectedObjectId = useMapStore((s) => s.selectedObjectId);
   const updateObject = useMapStore((s) => s.updateObject);
   const removeObject = useMapStore((s) => s.removeObject);
   const setSelectedObject = useMapStore((s) => s.setSelectedObject);
+  const graphNodes = useMapStore((s) => s.graphNodes);
+  const selectedGraphNodeId = useMapStore((s) => s.selectedGraphNodeId);
   const selectedObject = objects.find((o) => o.id === selectedObjectId);
+  const selectedGraphNode = graphNodes.find((n) => n.id === selectedGraphNodeId);
 
   const tabItems: TabsProps['items'] = [
     {
       key: 'inspector',
       label: 'Inspector',
-      children: <InspectorForm selectedObject={selectedObject} onUpdate={updateObject} onDelete={removeObject} />,
+      children: selectedGraphNode?.type === 'robotStart'
+        ? <StartNodeInspector node={selectedGraphNode} />
+        : selectedGraphNode?.type === 'charging'
+          ? <ChargingNodeInspector node={selectedGraphNode} />
+          : selectedGraphNode
+            ? <GraphNodeInspector node={selectedGraphNode} />
+            : <InspectorForm selectedObject={selectedObject} onUpdate={updateObject} onDelete={removeObject} />,
     },
     {
       key: 'console',

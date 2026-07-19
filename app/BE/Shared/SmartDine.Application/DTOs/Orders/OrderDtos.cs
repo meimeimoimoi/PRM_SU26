@@ -28,14 +28,18 @@ public class UpdateOrderStatusRequest
 public class OrderResponse
 {
     public int Id { get; set; }
+    public int SessionId { get; set; }
     public int? CustomerId { get; set; }
     public string? CustomerName { get; set; }
+    public int TableId { get; set; }
     public int TableNumber { get; set; }
     public List<OrderDetailResponse> Items { get; set; } = new();
     public decimal TotalAmount { get; set; }
     public decimal DiscountAmount { get; set; }
     public decimal FinalAmount { get; set; }
     public string Status { get; set; } = nameof(OrderStatus.PENDING);
+    /// <summary>ACTIVE | CHECKOUT | CLOSED — CHECKOUT = đang chờ thanh toán (vd. tiền mặt tại quầy).</summary>
+    public string SessionStatus { get; set; } = nameof(DiningSessionStatus.ACTIVE);
     public string? SpecialInstructions { get; set; }
     public DateTime CreatedAt { get; set; }
 }

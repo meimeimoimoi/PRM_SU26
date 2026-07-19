@@ -1,85 +1,46 @@
-import React, { useState, useMemo } from 'react';
-import { 
-  Table, 
-  Tag, 
-  Button, 
-  Space, 
-  Card, 
-  Input, 
-  Select, 
-  Modal, 
-  Form, 
-  message, 
+import React, { useEffect, useState, useMemo } from 'react';
+import {
+  Table,
+  Tag,
+  Button,
+  Space,
+  Card,
+  Input,
+  Select,
+  Modal,
+  Form,
+  message,
   Tooltip,
   Avatar
 } from 'antd';
-import { 
-  SearchOutlined, 
-  PlusOutlined, 
-  EditOutlined, 
-  DeleteOutlined, 
-  ReloadOutlined 
+import {
+  SearchOutlined,
+  PlusOutlined,
+  EditOutlined,
+  StopOutlined
 } from '@ant-design/icons';
 
-import { StaffMember } from '@/types/staff';
+import { StaffMember, StaffRole } from '@/types/staff';
+import { staffService } from '@/services/staffService';
+import { getErrorMessage } from '@/utils/apiError';
 
 const { Option } = Select;
 
+const ROLE_LABEL: Record<StaffRole, string> = {
+  MANAGER: 'Quản lý',
+  STAFF: 'Nhân viên'
+};
+
+const ROLE_COLOR: Record<StaffRole, { bg: string; text: string }> = {
+  MANAGER: { bg: '#f0f5ff', text: '#2f54eb' },
+  STAFF: { bg: '#e6f7ff', text: '#1890ff' }
+};
+
 const StaffManagementPage: React.FC = () => {
+  const [staffList, setStaffList] = useState<StaffMember[]>([]);
+  const [loading, setLoading] = useState<boolean>(false);
   const [searchText, setSearchText] = useState<string>('');
   const [roleFilter, setRoleFilter] = useState<string>('ALL');
-
-  // Initial staff list matching screenshot exactly!
-  const [staffList, setStaffList] = useState<StaffMember[]>([
-    {
-      id: 'S-101',
-      fullName: 'Alice Smith',
-      email: 'alice.s@smartdine.com',
-      phone: '+1 (555) 019-2831',
-      role: 'Admin',
-      isActive: true
-    },
-    {
-      id: 'S-102',
-      fullName: 'Robert Johnson',
-      email: 'robert.j@smartdine.com',
-      phone: '+1 (555) 837-1920',
-      role: 'Staff',
-      isActive: true
-    },
-    {
-      id: 'S-103',
-      fullName: 'Maria Garcia',
-      email: 'maria.g@smartdine.com',
-      phone: '+1 (555) 231-9045',
-      role: 'Staff',
-      isActive: true
-    },
-    {
-      id: 'S-104',
-      fullName: 'David Lee',
-      email: 'david.l@smartdine.com',
-      phone: '+1 (555) 765-4321',
-      role: 'Staff',
-      isActive: false
-    },
-    {
-      id: 'S-105',
-      fullName: 'Sarah Williams',
-      email: 'sarah.w@smartdine.com',
-      phone: '+1 (555) 112-2334',
-      role: 'Staff',
-      isActive: true
-    },
-    {
-      id: 'S-106',
-      fullName: 'Michael Brown',
-      email: 'michael.b@smartdine.com',
-      phone: '+1 (555) 998-8776',
-      role: 'Staff',
-      isActive: true
-    }
-  ]);
 
   // Modals
   const [isAddModalOpen, setIsAddModalOpen] = useState<boolean>(false);
@@ -89,78 +50,90 @@ const StaffManagementPage: React.FC = () => {
   const [addForm] = Form.useForm();
   const [editForm] = Form.useForm();
 
+  const fetchStaff = async () => {
+    setLoading(true);
+    try {
+      const data = await staffService.getAll();
+      setStaffList(data);
+    } catch (error: any) {
+      message.error(getErrorMessage(error, 'Không tải được danh sách nhân viên.'));
+      setStaffList([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchStaff();
+  }, []);
+
   // Search & Filter
   const filteredStaff = useMemo(() => {
     return staffList.filter((s) => {
-      const matchesSearch = 
+      const matchesSearch =
         s.fullName.toLowerCase().includes(searchText.toLowerCase()) ||
-        s.email.toLowerCase().includes(searchText.toLowerCase()) ||
-        s.phone.includes(searchText) ||
-        s.id.toLowerCase().includes(searchText.toLowerCase());
+        s.email.toLowerCase().includes(searchText.toLowerCase());
 
-      const matchesRole = 
-        roleFilter === 'ALL' || 
-        s.role === roleFilter;
+      const matchesRole = roleFilter === 'ALL' || s.role === roleFilter;
 
       return matchesSearch && matchesRole;
     });
   }, [staffList, searchText, roleFilter]);
 
   // Add staff member
-  const handleAddStaff = (values: any) => {
-    const nextNum = staffList.length > 0 
-      ? Math.max(...staffList.map((s) => parseInt(s.id.split('-')[1]))) + 1 
-      : 101;
-      
-    const newStaff: StaffMember = {
-      id: `S-${nextNum}`,
-      fullName: values.fullName,
-      email: values.email,
-      phone: values.phone,
-      role: values.role,
-      isActive: true
-    };
-
-    setStaffList((prev) => [...prev, newStaff]);
-    setIsAddModalOpen(false);
-    addForm.resetFields();
-    message.success(`Đã thêm thành viên ${values.fullName} thành công!`);
+  const handleAddStaff = async (values: any) => {
+    try {
+      const newStaff = await staffService.create({
+        fullName: values.fullName,
+        email: values.email,
+        password: values.password,
+        role: values.role
+      });
+      setStaffList((prev) => [...prev, newStaff]);
+      setIsAddModalOpen(false);
+      addForm.resetFields();
+      message.success(`Đã thêm nhân viên ${values.fullName} thành công!`);
+    } catch (error: any) {
+      message.error(getErrorMessage(error, 'Thêm nhân viên thất bại.'));
+    }
   };
 
   // Edit staff member
-  const handleEditStaff = (values: any) => {
+  const handleEditStaff = async (values: any) => {
     if (!selectedStaff) return;
-
-    setStaffList((prev) => prev.map((s) => s.id === selectedStaff.id ? {
-      ...s,
-      fullName: values.fullName,
-      email: values.email,
-      phone: values.phone,
-      role: values.role,
-      isActive: values.isActive
-    } : s));
-
-    setIsEditModalOpen(false);
-    setSelectedStaff(null);
-    message.success('Cập nhật thông tin nhân viên thành công!');
+    try {
+      const updated = await staffService.update(selectedStaff.id, {
+        fullName: values.fullName,
+        email: values.email,
+        role: values.role,
+        isActive: values.isActive
+      });
+      setStaffList((prev) => prev.map((s) => (s.id === selectedStaff.id ? updated : s)));
+      setIsEditModalOpen(false);
+      setSelectedStaff(null);
+      message.success('Cập nhật thông tin nhân viên thành công!');
+    } catch (error: any) {
+      message.error(getErrorMessage(error, 'Cập nhật nhân viên thất bại.'));
+    }
   };
 
-  // Reset password
-  const handleResetPassword = (name: string) => {
-    message.success(`Đã đặt lại mật khẩu và gửi email khôi phục cho ${name}!`);
-  };
-
-  // Delete staff member
-  const handleDeleteStaff = (id: string, name: string) => {
+  // Deactivate staff member (BE chỉ soft-deactivate, không xóa vĩnh viễn — và Manager
+  // không thể tự vô hiệu hóa chính mình, BE sẽ trả lỗi STAFF_CANNOT_DEACTIVATE_SELF).
+  const handleDeactivateStaff = (id: number, name: string) => {
     Modal.confirm({
-      title: 'Xóa nhân viên',
-      content: `Bạn chắc chắn muốn xóa nhân viên ${name} (${id})?`,
-      okText: 'Xóa',
+      title: 'Vô hiệu hóa nhân viên',
+      content: `Bạn chắc chắn muốn vô hiệu hóa tài khoản của ${name}? Nhân viên sẽ không thể đăng nhập nhưng dữ liệu vẫn được giữ lại.`,
+      okText: 'Vô hiệu hóa',
       okType: 'danger',
       cancelText: 'Hủy',
-      onOk: () => {
-        setStaffList((prev) => prev.filter((s) => s.id !== id));
-        message.success('Đã xóa nhân viên thành công!');
+      onOk: async () => {
+        try {
+          await staffService.deactivate(id);
+          setStaffList((prev) => prev.map((s) => (s.id === id ? { ...s, isActive: false } : s)));
+          message.success('Đã vô hiệu hóa nhân viên thành công!');
+        } catch (error: any) {
+          message.error(getErrorMessage(error, 'Vô hiệu hóa nhân viên thất bại.'));
+        }
       }
     });
   };
@@ -176,7 +149,7 @@ const StaffManagementPage: React.FC = () => {
       title: 'STAFF ID',
       dataIndex: 'id',
       key: 'id',
-      render: (id: string) => <span style={{ fontWeight: 600, color: '#4a5568' }}>{id}</span>,
+      render: (id: number) => <span style={{ fontWeight: 600, color: '#4a5568' }}>#{id}</span>,
     },
     {
       title: 'FULL NAME',
@@ -186,10 +159,10 @@ const StaffManagementPage: React.FC = () => {
         const initials = getInitials(fullName);
         return (
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <Avatar 
-              style={{ 
-                backgroundColor: '#e6f7ff', 
-                color: '#1890ff', 
+            <Avatar
+              style={{
+                backgroundColor: '#e6f7ff',
+                color: '#1890ff',
                 fontWeight: 600,
                 border: '1px solid #1890ff'
               }}
@@ -202,38 +175,29 @@ const StaffManagementPage: React.FC = () => {
       },
     },
     {
-      title: 'CONTACT',
-      key: 'contact',
-      render: (_: any, record: StaffMember) => (
-        <div>
-          <div style={{ color: '#4a5568', fontSize: '13px' }}>{record.email}</div>
-          <div style={{ color: '#a0aec0', fontSize: '12px' }}>{record.phone}</div>
-        </div>
-      ),
+      title: 'EMAIL',
+      dataIndex: 'email',
+      key: 'email',
+      render: (email: string) => <span style={{ color: '#4a5568', fontSize: '13px' }}>{email}</span>,
     },
     {
       title: 'ROLE',
       dataIndex: 'role',
       key: 'role',
-      render: (role: string) => {
-        let color = '#e6f7ff';
-        let textColor = '#1890ff';
-        if (role === 'Admin') {
-          color = '#f0f5ff';
-          textColor = '#2f54eb';
-        }
+      render: (role: StaffRole) => {
+        const { bg, text } = ROLE_COLOR[role] || ROLE_COLOR.STAFF;
         return (
-          <Tag 
-            style={{ 
-              borderRadius: 12, 
-              padding: '2px 12px', 
+          <Tag
+            style={{
+              borderRadius: 12,
+              padding: '2px 12px',
               fontWeight: 500,
-              backgroundColor: color,
-              color: textColor,
+              backgroundColor: bg,
+              color: text,
               border: 'none'
             }}
           >
-            {role}
+            {ROLE_LABEL[role] || role}
           </Tag>
         );
       },
@@ -244,14 +208,14 @@ const StaffManagementPage: React.FC = () => {
       key: 'status',
       render: (isActive: boolean) => (
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span 
-            style={{ 
-              width: 8, 
-              height: 8, 
-              borderRadius: '50%', 
+          <span
+            style={{
+              width: 8,
+              height: 8,
+              borderRadius: '50%',
               backgroundColor: isActive ? '#1890ff' : '#bfbfbf',
               display: 'inline-block'
-            }} 
+            }}
           />
           <span style={{ color: isActive ? '#1890ff' : '#718096', fontSize: '13px', fontWeight: 500 }}>
             {isActive ? 'Active' : 'Inactive'}
@@ -265,9 +229,9 @@ const StaffManagementPage: React.FC = () => {
       render: (_: any, record: StaffMember) => (
         <Space size="middle">
           <Tooltip title="Chỉnh sửa nhân viên">
-            <Button 
-              type="text" 
-              icon={<EditOutlined style={{ color: '#4a5568' }} />} 
+            <Button
+              type="text"
+              icon={<EditOutlined style={{ color: '#4a5568' }} />}
               onClick={() => {
                 setSelectedStaff(record);
                 editForm.setFieldsValue(record);
@@ -275,19 +239,13 @@ const StaffManagementPage: React.FC = () => {
               }}
             />
           </Tooltip>
-          <Tooltip title="Reset mật khẩu">
-            <Button 
-              type="text" 
-              icon={<ReloadOutlined style={{ color: '#4a5568' }} />} 
-              onClick={() => handleResetPassword(record.fullName)}
-            />
-          </Tooltip>
-          <Tooltip title="Xóa nhân viên">
-            <Button 
-              type="text" 
+          <Tooltip title="Vô hiệu hóa nhân viên">
+            <Button
+              type="text"
               danger
-              icon={<DeleteOutlined />} 
-              onClick={() => handleDeleteStaff(record.id, record.fullName)}
+              disabled={!record.isActive}
+              icon={<StopOutlined />}
+              onClick={() => handleDeactivateStaff(record.id, record.fullName)}
             />
           </Tooltip>
         </Space>
@@ -303,13 +261,13 @@ const StaffManagementPage: React.FC = () => {
           <h2 style={{ margin: 0, fontSize: '28px', fontWeight: 700, color: '#1a202c' }}>Staff Management</h2>
           <p style={{ margin: 0, color: '#718096', fontSize: '14px' }}>Manage employee access, roles, and details.</p>
         </div>
-        <Button 
-          type="primary" 
+        <Button
+          type="primary"
           icon={<PlusOutlined />}
           onClick={() => setIsAddModalOpen(true)}
-          style={{ 
-            backgroundColor: '#1890ff', 
-            borderRadius: 6, 
+          style={{
+            backgroundColor: '#1890ff',
+            borderRadius: 6,
             height: 38,
             fontWeight: 500
           }}
@@ -319,7 +277,7 @@ const StaffManagementPage: React.FC = () => {
       </div>
 
       {/* Filter Toolbar */}
-      <Card 
+      <Card
         bordered={false}
         style={{
           borderRadius: 8,
@@ -329,7 +287,7 @@ const StaffManagementPage: React.FC = () => {
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
           <Input
-            placeholder="Search staff by name, email, phone..."
+            placeholder="Search staff by name, email..."
             prefix={<SearchOutlined style={{ color: '#bfbfbf' }} />}
             value={searchText}
             onChange={(e) => setSearchText(e.target.value)}
@@ -345,8 +303,8 @@ const StaffManagementPage: React.FC = () => {
               style={{ width: 150, height: 38 }}
             >
               <Option value="ALL">All Roles</Option>
-              <Option value="Admin">Admin</Option>
-              <Option value="Staff">Staff</Option>
+              <Option value="MANAGER">Quản lý</Option>
+              <Option value="STAFF">Nhân viên</Option>
             </Select>
           </div>
         </div>
@@ -360,14 +318,16 @@ const StaffManagementPage: React.FC = () => {
           boxShadow: '0 1px 3px 0 rgba(0,0,0,0.1), 0 1px 2px 0 rgba(0,0,0,0.06)'
         }}
       >
-        <Table 
-          columns={columns} 
-          dataSource={filteredStaff} 
+        <Table
+          columns={columns}
+          dataSource={filteredStaff}
           rowKey="id"
+          loading={loading}
           pagination={{
             pageSize: 6,
             showTotal: (total, range) => `Showing ${range[0]} to ${range[1]} of ${total} results`
           }}
+          locale={{ emptyText: 'Không có nhân viên nào' }}
         />
       </Card>
 
@@ -383,7 +343,7 @@ const StaffManagementPage: React.FC = () => {
           form={addForm}
           layout="vertical"
           onFinish={handleAddStaff}
-          initialValues={{ role: 'Staff' }}
+          initialValues={{ role: 'STAFF' }}
           style={{ marginTop: 16 }}
         >
           <Form.Item
@@ -391,26 +351,29 @@ const StaffManagementPage: React.FC = () => {
             label="Họ và Tên"
             rules={[{ required: true, message: 'Vui lòng nhập họ tên nhân viên!' }]}
           >
-            <Input placeholder="Ví dụ: Alice Smith" />
+            <Input placeholder="Ví dụ: Nguyễn Văn A" />
           </Form.Item>
 
           <Form.Item
             name="email"
-            label="Email liên hệ"
+            label="Email đăng nhập"
             rules={[
               { required: true, message: 'Vui lòng nhập email!' },
               { type: 'email', message: 'Vui lòng nhập đúng định dạng email!' }
             ]}
           >
-            <Input placeholder="Ví dụ: alice.s@smartdine.com" />
+            <Input placeholder="Ví dụ: nhanvien@smartdine.com" />
           </Form.Item>
 
           <Form.Item
-            name="phone"
-            label="Số điện thoại"
-            rules={[{ required: true, message: 'Vui lòng nhập số điện thoại!' }]}
+            name="password"
+            label="Mật khẩu"
+            rules={[
+              { required: true, message: 'Vui lòng nhập mật khẩu!' },
+              { min: 6, message: 'Mật khẩu phải có ít nhất 6 ký tự!' }
+            ]}
           >
-            <Input placeholder="Ví dụ: +1 (555) 019-2831" />
+            <Input.Password placeholder="Đặt mật khẩu ban đầu cho nhân viên" />
           </Form.Item>
 
           <Form.Item
@@ -419,8 +382,8 @@ const StaffManagementPage: React.FC = () => {
             rules={[{ required: true }]}
           >
             <Select>
-              <Option value="Admin">Admin (Quản trị viên)</Option>
-              <Option value="Staff">Staff (Nhân viên phục vụ)</Option>
+              <Option value="MANAGER">Quản lý</Option>
+              <Option value="STAFF">Nhân viên</Option>
             </Select>
           </Form.Item>
 
@@ -457,19 +420,11 @@ const StaffManagementPage: React.FC = () => {
 
           <Form.Item
             name="email"
-            label="Email liên hệ"
+            label="Email đăng nhập"
             rules={[
               { required: true, message: 'Vui lòng nhập email!' },
               { type: 'email', message: 'Vui lòng nhập đúng định dạng email!' }
             ]}
-          >
-            <Input />
-          </Form.Item>
-
-          <Form.Item
-            name="phone"
-            label="Số điện thoại"
-            rules={[{ required: true, message: 'Vui lòng nhập số điện thoại!' }]}
           >
             <Input />
           </Form.Item>
@@ -480,15 +435,14 @@ const StaffManagementPage: React.FC = () => {
             rules={[{ required: true }]}
           >
             <Select>
-              <Option value="Admin">Admin</Option>
-              <Option value="Staff">Staff</Option>
+              <Option value="MANAGER">Quản lý</Option>
+              <Option value="STAFF">Nhân viên</Option>
             </Select>
           </Form.Item>
 
           <Form.Item
             name="isActive"
             label="Trạng thái hoạt động"
-            valuePropName="checked"
           >
             <Select>
               <Option value={true}>Active (Đang làm việc)</Option>

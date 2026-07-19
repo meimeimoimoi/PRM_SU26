@@ -62,7 +62,7 @@ public class ExceptionHandlingMiddleware
             await context.Response.WriteAsJsonAsync(new
             {
                 success = false,
-                errors = new[] { "Internal server error" },
+                errors = new[] { ex.ToString() },
                 timestamp = DateTime.UtcNow
             });
         }

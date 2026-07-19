@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Configuration;
 using SmartDine.Application.Constants;
 using SmartDine.Application.DTOs.Tables;
 using SmartDine.Domain.Entities;
@@ -23,11 +24,19 @@ namespace SmartDine.Application.Services;
 public class TableService
 {
     private readonly IUnitOfWork _uow;
+    private readonly IConfiguration? _configuration;
 
-    public TableService(IUnitOfWork uow)
+    public TableService(IUnitOfWork uow, IConfiguration? configuration = null)
     {
         _uow = uow;
+        _configuration = configuration;
     }
+
+    // URL trang đặt món web (Flutter Web build của customer-mobile) — khách quét QR bằng
+    // camera điện thoại thường (không cần cài app) sẽ mở thẳng trang này với ?table={number},
+    // kích hoạt auto-login guest có sẵn ở main.dart (_tryAutoLoginFromUrl).
+    private string CustomerWebBaseUrl =>
+        _configuration?["CustomerWeb:BaseUrl"]?.TrimEnd('/') ?? "https://smartdine.app";
 
     // ═══════════════════════════════════════════════════════════════
     // API 1: GET /api/v1/tables?status=AVAILABLE&capacity=4
@@ -185,7 +194,7 @@ public class TableService
     ///   - Status không hợp lệ → BusinessRuleViolationException (422).
     ///   - Chuyển từ MAINTENANCE → OCCUPIED → BusinessRuleViolationException (422).
     /// </summary>
-    public async Task<UpdateTableStatusResponse> UpdateStatusAsync(int id, string status)
+    public async Task<TableResponse> UpdateStatusAsync(int id, string status)
     {
         var table = await _uow.Tables.GetByIdAsync(id)
             ?? throw new EntityNotFoundException("Table", id);
@@ -215,12 +224,9 @@ public class TableService
         table.Status = newStatus;
         await _uow.SaveChangesAsync();
 
-        return new UpdateTableStatusResponse
-        {
-            TableId = table.Id,
-            Status = table.Status.ToString(),
-            UpdatedAt = table.UpdatedAt ?? DateTime.UtcNow
-        };
+        // Trả về TableResponse đầy đủ (không phải DTO rút gọn) — FE render lại nguyên hàng
+        // trong danh sách bàn từ response này, thiếu field (vd TableNumber) sẽ làm crash render.
+        return MapToResponse(table);
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -415,7 +421,9 @@ public class TableService
     /// Luồng xử lý:
     ///   1. Validate Capacity > 0.
     ///   2. Kiểm tra TableNumber chưa tồn tại (unique).
-    ///   3. Tạo bàn với Status = AVAILABLE, QrCode theo quy ước smartdine://table/{number}.
+    ///   3. Tạo bàn với Status = AVAILABLE, QrCode là URL trang đặt món web kèm ?table={number}
+    ///      (không dùng custom URI scheme — camera điện thoại thường phải mở thẳng được, không
+    ///      yêu cầu khách đã cài app).
     ///   4. SaveChanges → trả về TableResponse.
     ///
     /// Error cases:
@@ -437,8 +445,15 @@ public class TableService
             TableNumber = request.TableNumber,
             Capacity = request.Capacity,
             Status = TableStatus.AVAILABLE,
-            QrCode = $"smartdine://table/{request.TableNumber}"
+            QrCode = $"{CustomerWebBaseUrl}/?table={request.TableNumber}"
         };
+
+        if (request.LocationId.HasValue)
+        {
+            table.Location = await _uow.Locations.GetByIdAsync(request.LocationId.Value)
+                ?? throw new EntityNotFoundException("Location", request.LocationId.Value);
+            table.LocationId = request.LocationId.Value;
+        }
 
         await _uow.Tables.AddAsync(table);
         await _uow.SaveChangesAsync();
@@ -488,6 +503,65 @@ public class TableService
         TableNumber = table.TableNumber,
         Capacity = table.Capacity,
         Status = table.Status.ToString(),
-        QrCode = table.QrCode
+        QrCode = table.QrCode,
+        LocationId = table.LocationId,
+        LocationName = table.Location?.Name
     };
+
+    // ═══════════════════════════════════════════════════════════════
+    // PATCH /api/v1/tables/{id} (Manager)
+    // ═══════════════════════════════════════════════════════════════
+    /// <summary>
+    /// Cập nhật thông tin cơ bản của bàn — chỉ Capacity và Location (partial update).
+    /// Không cho sửa TableNumber: mã QR đã in mã hóa theo số bàn, đổi số sẽ làm QR sai/hỏng.
+    /// Muốn đổi số bàn: xóa bàn cũ, tạo bàn mới (QR sinh lại đúng).
+    ///
+    /// Error cases:
+    ///   - Bàn không tồn tại → EntityNotFoundException (404).
+    ///   - Capacity ≤ 0 (nếu có gửi) → BusinessRuleViolationException (422).
+    ///   - LocationId không tồn tại (nếu có gửi) → EntityNotFoundException (404).
+    /// </summary>
+    public async Task<TableResponse> UpdateAsync(int id, UpdateTableRequest request)
+    {
+        var table = await _uow.Tables.GetByIdAsync(id)
+            ?? throw new EntityNotFoundException("Table", id);
+
+        if (request.Capacity.HasValue)
+        {
+            if (request.Capacity.Value <= 0)
+                throw new BusinessRuleViolationException(ValidationMessages.TABLE_CAPACITY_INVALID);
+            table.Capacity = request.Capacity.Value;
+        }
+
+        if (request.LocationId.HasValue)
+        {
+            table.Location = await _uow.Locations.GetByIdAsync(request.LocationId.Value)
+                ?? throw new EntityNotFoundException("Location", request.LocationId.Value);
+            table.LocationId = request.LocationId.Value;
+        }
+
+        await _uow.SaveChangesAsync();
+        return MapToResponse(table);
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // GET / POST /api/v1/locations (Manager)
+    // ═══════════════════════════════════════════════════════════════
+    public async Task<List<LocationResponse>> GetAllLocationsAsync()
+    {
+        var locations = await _uow.Locations.GetAllAsync();
+        return locations.Select(l => new LocationResponse { Id = l.Id, Name = l.Name }).ToList();
+    }
+
+    public async Task<LocationResponse> CreateLocationAsync(CreateLocationRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.Name))
+            throw new BusinessRuleViolationException(ValidationMessages.LOCATION_NAME_REQUIRED);
+
+        var location = new Location { Name = request.Name.Trim() };
+        await _uow.Locations.AddAsync(location);
+        await _uow.SaveChangesAsync();
+
+        return new LocationResponse { Id = location.Id, Name = location.Name };
+    }
 }

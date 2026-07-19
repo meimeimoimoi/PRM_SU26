@@ -20,118 +20,50 @@ export interface OrderResponse {
   discountAmount: number;
   finalAmount: number;
   status: string;
+  /** ACTIVE | CHECKOUT | CLOSED — CHECKOUT = đang chờ thanh toán (tiền mặt). */
+  sessionStatus?: string;
   createdAt: string;
   items: OrderDetailItem[];
 }
 
-// Global variable to hold local mock state for simulator and offline operations
-let mockActiveOrders: OrderResponse[] = [
-  {
-    id: 8921,
-    tableNumber: 5,
-    customerName: 'Anh Tuấn',
-    totalAmount: 180000,
-    discountAmount: 0,
-    finalAmount: 180000,
-    status: 'PENDING',
-    createdAt: new Date(Date.now() - 12 * 60 * 1000).toISOString(),
-    items: [
-      {
-        id: 1001,
-        menuItemId: 1,
-        name: 'Phở Bò Đặc Biệt',
-        unitPrice: 65000,
-        quantity: 2,
-        notes: 'Không hành, nhiều bánh phở',
-        status: 'WAITING'
-      },
-      {
-        id: 1002,
-        menuItemId: 2,
-        name: 'Gỏi Cuốn Tôm Thịt',
-        unitPrice: 15000,
-        quantity: 3,
-        notes: 'Nước chấm tương đen',
-        status: 'WAITING'
-      }
-    ]
-  },
-  {
-    id: 8922,
-    tableNumber: 12,
-    customerName: 'Chị Vy',
-    totalAmount: 135000,
-    discountAmount: 15000,
-    finalAmount: 120000,
-    status: 'PREPARING',
-    createdAt: new Date(Date.now() - 20 * 60 * 1000).toISOString(),
-    items: [
-      {
-        id: 1003,
-        menuItemId: 3,
-        name: 'Bánh Mì Thịt Nướng',
-        unitPrice: 35000,
-        quantity: 3,
-        notes: 'Cắt đôi bánh mì',
-        status: 'DOING'
-      },
-      {
-        id: 1004,
-        menuItemId: 4,
-        name: 'Cà Phê Sữa Đá',
-        unitPrice: 30000,
-        quantity: 1,
-        status: 'DONE'
-      }
-    ]
-  },
-  {
-    id: 8923,
-    tableNumber: 3,
-    customerName: 'Minh Hoàng',
-    totalAmount: 45000,
-    discountAmount: 0,
-    finalAmount: 45000,
-    status: 'PENDING',
-    createdAt: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
-    items: [
-      {
-        id: 1005,
-        menuItemId: 5,
-        name: 'Trà Đào Đá Xay',
-        unitPrice: 45000,
-        quantity: 1,
-        notes: 'Nhiều đào',
-        status: 'WAITING'
-      }
-    ]
-  }
-];
+export interface ChartPoint {
+  label: string;
+  value: number;
+}
+
+export type ChartPeriod = 'day' | 'week' | 'month';
 
 export const orderService = {
-  // Lấy toàn bộ đơn hàng đang hoạt động từ backend
-  getActiveOrders: async (): Promise<OrderResponse[]> => {
-    try {
-      const response = await apiClient.get<any>('/orders/active');
-      const data = response.data.data || response.data;
-      if (data && Array.isArray(data) && data.length > 0) {
-        return data;
-      }
-      return mockActiveOrders;
-    } catch (error) {
-      console.warn('API /orders/active lỗi hoặc chưa khởi chạy. Sử dụng dữ liệu offline.');
-      return mockActiveOrders;
-    }
+  // Doanh số theo đơn hàng (không lọc thanh toán) — cho chart "Doanh số đơn hàng" ở Dashboard.
+  getOrderChart: async (period: ChartPeriod): Promise<ChartPoint[]> => {
+    const response = await apiClient.get<any>('/orders/chart', { params: { period } });
+    return response.data.data || response.data || [];
   },
 
-  // Lấy các món ăn cần chế biến cho bếp bằng cách làm phẳng (flatten) các Order
+  // Doanh thu thực nhận (chỉ payment SUCCESS) — cho chart "Doanh thu thực nhận" ở Dashboard.
+  getRevenueChart: async (period: ChartPeriod): Promise<ChartPoint[]> => {
+    const response = await apiClient.get<any>('/payments/chart', { params: { period } });
+    return response.data.data || response.data || [];
+  },
+
+  getActiveOrders: async (): Promise<OrderResponse[]> => {
+    const response = await apiClient.get<any>('/orders/active');
+    const data = response.data.data || response.data;
+    return Array.isArray(data) ? data : [];
+  },
+
+  getTodayOrders: async (): Promise<OrderResponse[]> => {
+    const response = await apiClient.get<any>('/orders/today');
+    const data = response.data.data || response.data;
+    return Array.isArray(data) ? data : [];
+  },
+
   getKitchenItems: async (): Promise<KitchenItem[]> => {
     const orders = await orderService.getActiveOrders();
     const items: KitchenItem[] = [];
 
     orders.forEach((order) => {
       order.items.forEach((item) => {
-        // Chỉ hiện thị các món chưa giao (SERVED) hoặc đã hủy (CANCELLED)
         if (item.status !== 'SERVED' && item.status !== 'CANCELLED') {
           const orderedTime = new Date(order.createdAt).getTime();
           const elapsed = Math.floor((Date.now() - orderedTime) / 1000);
@@ -150,105 +82,56 @@ export const orderService = {
       });
     });
 
-    // Sắp xếp thời gian cũ hơn lên đầu (FIFO)
     return items.sort((a, b) => new Date(a.orderedAt).getTime() - new Date(b.orderedAt).getTime());
   },
 
-  // Cập nhật trạng thái của món ăn
   updateItemStatus: async (itemId: number, newStatus: KitchenItemStatus): Promise<boolean> => {
-    try {
-      // Gọi API cập nhật trạng thái món ăn nếu backend hỗ trợ
-      await apiClient.patch(`/kitchen/items/${itemId}/status`, { status: newStatus });
-    } catch (e) {
-      // Fallback: Cập nhật trong mockActiveOrders local để simulator chạy đồng bộ
-      mockActiveOrders = mockActiveOrders.map((order) => {
-        const updatedItems = order.items.map((item) => {
-          if (item.id === itemId) {
-            return { ...item, status: newStatus };
-          }
-          return item;
-        });
-        return { ...order, items: updatedItems };
-      });
-    }
+    await apiClient.patch(`/orders/items/${itemId}/status`, { status: newStatus });
     return true;
   },
 
-  // Giả lập khách hàng đặt món mới
-  simulateNewOrder: (tableNo?: number): KitchenItem[] => {
-    const randomDishes = [
-      { name: 'Phở Bò Đặc Biệt', price: 65000, notes: 'Nước béo, nhiều hành' },
-      { name: 'Gỏi Cuốn Tôm Thịt', price: 15000, notes: 'Không hành hẹ' },
-      { name: 'Bánh Mì Thịt Nướng', price: 35000, notes: 'Không ớt' },
-      { name: 'Cà Phê Sữa Đá', price: 30000, notes: 'Ít sữa nhiều đá' },
-      { name: 'Trà Đào Đá Xay', price: 45000, notes: 'Thêm thạch đào' },
-      { name: 'Phở Gà Trứng Non', price: 60000, notes: 'Không da gà' }
-    ];
-
-    const randomTable = tableNo || Math.floor(1 + Math.random() * 15);
-    const orderId = Math.floor(1000 + Math.random() * 9000);
-    
-    // Chọn ngẫu nhiên 1-3 món
-    const itemsCount = Math.floor(1 + Math.random() * 3);
-    const items: OrderDetailItem[] = [];
-    const kitchenItems: KitchenItem[] = [];
-
-    let total = 0;
-    for (let i = 0; i < itemsCount; i++) {
-      const dish = randomDishes[Math.floor(Math.random() * randomDishes.length)];
-      const itemId = Math.floor(10000 + Math.random() * 90000);
-      const qty = Math.floor(1 + Math.random() * 2);
-      
-      items.push({
-        id: itemId,
-        menuItemId: i + 1,
-        name: dish.name,
-        unitPrice: dish.price,
-        quantity: qty,
-        notes: Math.random() > 0.4 ? dish.notes : undefined,
-        status: 'WAITING'
-      });
-
-      kitchenItems.push({
-        id: itemId,
-        orderId: orderId,
-        tableNumber: randomTable,
-        name: dish.name,
-        quantity: qty,
-        notes: Math.random() > 0.4 ? dish.notes : undefined,
-        status: 'WAITING',
-        orderedAt: new Date().toISOString(),
-        elapsedSeconds: 0
-      });
-
-      total += dish.price * qty;
-    }
-
-    const newOrder: OrderResponse = {
-      id: orderId,
-      tableNumber: randomTable,
-      customerName: `Khách Bàn ${randomTable}`,
-      totalAmount: total,
-      discountAmount: 0,
-      finalAmount: total,
-      status: 'PENDING',
-      createdAt: new Date().toISOString(),
-      items: items
-    };
-
-    mockActiveOrders = [newOrder, ...mockActiveOrders];
-    return kitchenItems;
+  /** Cập nhật trạng thái tất cả món trong cùng một lượt order (1 lần bấm). */
+  updateOrderItemsStatus: async (itemIds: number[], newStatus: KitchenItemStatus): Promise<boolean> => {
+    await Promise.all(itemIds.map((id) => apiClient.patch(`/orders/items/${id}/status`, { status: newStatus })));
+    return true;
   },
 
-  // In hóa đơn món ăn cho bếp chế biến
   printKitchenTicket: (item: { orderId: number; tableNumber: number; name: string; quantity: number; notes?: string; orderedAt: string }) => {
+    orderService.printKitchenOrderTicket({
+      orderId: item.orderId,
+      tableNumber: item.tableNumber,
+      orderedAt: item.orderedAt,
+      items: [{ name: item.name, quantity: item.quantity, notes: item.notes }],
+    });
+  },
+
+  /** In 1 phiếu cho cả lượt order (nhiều món trên cùng phiếu). Chỉ mở 1 cửa sổ in. */
+  printKitchenOrderTicket: (order: {
+    orderId: number;
+    tableNumber: number;
+    orderedAt: string;
+    items: { name: string; quantity: number; notes?: string }[];
+  }) => {
     const printWindow = window.open('', '_blank');
     if (!printWindow) return;
+
+    const dishesHtml = order.items
+      .map(
+        (item) => `
+          <div class="dish-card">
+            <div class="info-row">
+              <span class="dish-name bold">${item.name}</span>
+              <span class="bold" style="font-size: 20px;">SL: ${item.quantity}</span>
+            </div>
+            ${item.notes ? `<div class="notes bold">📝 Chú thích: ${item.notes}</div>` : ''}
+          </div>`
+      )
+      .join('');
 
     printWindow.document.write(`
       <html>
         <head>
-          <title>Phiếu Chế Biến - Bàn ${item.tableNumber}</title>
+          <title>Phiếu Chế Biến - Bàn ${order.tableNumber} · Đơn #${order.orderId}</title>
           <style>
             @page { size: 80mm auto; margin: 0; }
             body {
@@ -271,7 +154,7 @@ export const orderService = {
               margin: 3mm 0;
               border-radius: 4px;
             }
-            .dish-name { font-size: 18px; text-transform: uppercase; }
+            .dish-name { font-size: 16px; text-transform: uppercase; }
             .notes {
               background: #f2f2f2;
               border-left: 3px solid #000;
@@ -285,24 +168,18 @@ export const orderService = {
         <body>
           <div class="header center">
             <div class="title bold">PHIẾU CHẾ BIẾN BẾP</div>
-            <div style="font-size: 11px; margin-top: 1mm;">Mã Order: #${item.orderId}</div>
+            <div style="font-size: 11px; margin-top: 1mm;">Mã Order: #${order.orderId} · ${order.items.length} món</div>
           </div>
           
           <div class="info-row">
-            <span class="bold" style="font-size: 16px;">BÀN: ${item.tableNumber}</span>
-            <span>Giờ: ${new Date(item.orderedAt).toLocaleTimeString('vi-VN')}</span>
+            <span class="bold" style="font-size: 16px;">BÀN: ${order.tableNumber}</span>
+            <span>Giờ: ${new Date(order.orderedAt).toLocaleTimeString('vi-VN')}</span>
           </div>
           <div class="info-row" style="font-size: 11px; color: #555; margin-bottom: 3mm;">
-            <span>Ngày: ${new Date(item.orderedAt).toLocaleDateString('vi-VN')}</span>
+            <span>Ngày: ${new Date(order.orderedAt).toLocaleDateString('vi-VN')}</span>
           </div>
 
-          <div class="dish-card">
-            <div class="info-row">
-              <span class="dish-name bold">${item.name}</span>
-              <span class="bold" style="font-size: 20px;">SL: ${item.quantity}</span>
-            </div>
-            ${item.notes ? `<div class="notes bold">📝 Chú thích: ${item.notes}</div>` : ''}
-          </div>
+          ${dishesHtml}
 
           <div class="footer center">
             <div>SmartDine - In lúc: ${new Date().toLocaleTimeString('vi-VN')}</div>
@@ -312,8 +189,11 @@ export const orderService = {
           <script>
             window.onload = function() {
               window.print();
+            };
+            // Chỉ đóng khi người dùng xác nhận hoặc hủy hộp thoại in (không in ngầm sau Cancel)
+            window.onafterprint = function() {
               window.close();
-            }
+            };
           </script>
         </body>
       </html>
@@ -462,5 +342,27 @@ export const orderService = {
       </html>
     `);
     printWindow.document.close();
+  },
+
+  completePaymentByTable: async (tableNumber: number): Promise<boolean> => {
+    await apiClient.post(`/payments/complete-by-table/${tableNumber}`);
+    return true;
+  },
+
+  /** Bàn đang chờ thu tiền mặt (PENDING + CASH). */
+  getPendingCashPayments: async (): Promise<PendingCashPayment[]> => {
+    const response = await apiClient.get<any>('/payments/pending-cash');
+    const data = response.data.data || response.data;
+    return Array.isArray(data) ? data : [];
   }
 };
+
+export interface PendingCashPayment {
+  paymentId: number;
+  invoiceId: string;
+  sessionId: number;
+  tableId: number;
+  tableNumber: number;
+  amount: number;
+  createdAt: string;
+}

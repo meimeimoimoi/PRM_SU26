@@ -31,6 +31,11 @@ public interface IPaymentRepository : IRepository<Payment>
     Task<Payment?> GetBySessionIdAsync(int sessionId);
 
     /// <summary>
+    /// Payment PENDING tiền mặt — staffboard hiển thị bàn chờ thu tại quầy.
+    /// </summary>
+    Task<IReadOnlyList<Payment>> GetPendingCashAsync();
+
+    /// <summary>
     /// Tìm thanh toán qua mã tham chiếu cổng thanh toán (PayOS orderCode).
     /// Dùng trong webhook handler để map giao dịch về đúng Payment record.
     /// </summary>

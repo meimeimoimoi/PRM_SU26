@@ -24,8 +24,10 @@ public class Table : BaseEntity
     public int Capacity { get; set; }
     public string? QrCode { get; set; }
     public TableStatus Status { get; set; } = TableStatus.AVAILABLE;
+    public int? LocationId { get; set; }
 
     // Navigation
+    public Location? Location { get; set; }
     public List<DiningSession> DiningSessions { get; set; } = new();
     public List<TableReservation> Reservations { get; set; } = new();
     public List<RobotDeliveryBatch> DeliveryBatches { get; set; } = new();

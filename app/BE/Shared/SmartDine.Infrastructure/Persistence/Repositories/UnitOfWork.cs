@@ -8,6 +8,7 @@ public class UnitOfWork : IUnitOfWork
     private readonly SmartDineDbContext _context;
 
     public IOrderRepository Orders { get; }
+    public IRepository<OrderDetail> OrderDetails { get; }
     public IMenuItemRepository MenuItems { get; }
     public IUserRepository Users { get; }
     public ICustomerRepository Customers { get; }
@@ -27,12 +28,14 @@ public class UnitOfWork : IUnitOfWork
     public ICouponRepository Coupons { get; }
     public IRepository<LoyaltyTransaction> LoyaltyTransactions { get; }
     public IRepository<MenuCategory> MenuCategories { get; }
+    public IRepository<Location> Locations { get; }
     public ISettingsRepository Settings { get; }
 
     public UnitOfWork(SmartDineDbContext context)
     {
         _context = context;
         Orders = new OrderRepository(context);
+        OrderDetails = new GenericRepository<OrderDetail>(context);
         MenuItems = new MenuItemRepository(context);
         Users = new UserRepository(context);
         Customers = new CustomerRepository(context);
@@ -51,6 +54,7 @@ public class UnitOfWork : IUnitOfWork
         Coupons = new CouponRepository(context);
         LoyaltyTransactions = new GenericRepository<LoyaltyTransaction>(context);
         MenuCategories = new GenericRepository<MenuCategory>(context);
+        Locations = new GenericRepository<Location>(context);
         Settings = new SettingsRepository(context);
     }
 

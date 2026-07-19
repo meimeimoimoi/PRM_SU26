@@ -32,10 +32,16 @@ public class OrderRepository : GenericRepository<Order>, IOrderRepository
     }
 
     public async Task<IReadOnlyList<Order>> GetActiveOrdersAsync() =>
+        // Bao gồm cả order COMPLETED khi session còn ACTIVE/CHECKOUT:
+        // khách thường thanh toán sau khi món đã giao xong — nếu loại COMPLETED thì
+        // tab Thanh toán & Hóa đơn của staff sẽ trống dù phiên vẫn mở.
         await _dbSet.Include(o => o.OrderDetails).ThenInclude(d => d.MenuItem)
                     .Include(o => o.Session).ThenInclude(s => s.Table)
                     .Include(o => o.Session).ThenInclude(s => s.Customer)
-                    .Where(o => o.Status != OrderStatus.COMPLETED && o.Status != OrderStatus.CANCELLED)
+                    .Where(o =>
+                        o.Status != OrderStatus.CANCELLED &&
+                        (o.Session.Status == DiningSessionStatus.ACTIVE ||
+                         o.Session.Status == DiningSessionStatus.CHECKOUT))
                     .OrderBy(o => o.CreatedAt)
                     .ToListAsync();
 
@@ -43,6 +49,7 @@ public class OrderRepository : GenericRepository<Order>, IOrderRepository
     {
         var today = DateTime.UtcNow.Date;
         return await _dbSet.Include(o => o.OrderDetails).ThenInclude(d => d.MenuItem)
+                           .Include(o => o.Session).ThenInclude(s => s.Table)
                            .Where(o => o.CreatedAt >= today)
                            .OrderByDescending(o => o.CreatedAt)
                            .ToListAsync();
@@ -50,7 +57,23 @@ public class OrderRepository : GenericRepository<Order>, IOrderRepository
 
     public async Task<IReadOnlyList<Order>> GetByDiningSessionIdAsync(int sessionId) =>
         await _dbSet.Include(o => o.OrderDetails).ThenInclude(d => d.MenuItem)
+                    .Include(o => o.Session).ThenInclude(s => s.Table)
+                    .Include(o => o.Session).ThenInclude(s => s.Customer)
                     .Where(o => o.SessionId == sessionId)
+                    .OrderBy(o => o.CreatedAt)
+                    .ToListAsync();
+
+    public async Task<IReadOnlyList<Order>> GetByGuestSessionIdAsync(string guestSessionId, int page, int pageSize) =>
+        await _dbSet.Include(o => o.OrderDetails).ThenInclude(d => d.MenuItem)
+                    .Include(o => o.Session).ThenInclude(s => s.Table)
+                .Where(o => o.Session.Participants.Any(p =>
+                    p.GuestSessionId == guestSessionId && p.LeftAt == null))
+                    .OrderByDescending(o => o.CreatedAt)
+                    .Skip((page - 1) * pageSize).Take(pageSize)
+                    .ToListAsync();
+
+    public async Task<IReadOnlyList<Order>> GetByDateRangeAsync(DateTime start, DateTime end) =>
+        await _dbSet.Where(o => o.CreatedAt >= start && o.CreatedAt <= end)
                     .OrderBy(o => o.CreatedAt)
                     .ToListAsync();
 

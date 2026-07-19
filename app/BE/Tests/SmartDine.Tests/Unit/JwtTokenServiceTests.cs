@@ -8,20 +8,6 @@ using SmartDine.Infrastructure.Security;
 
 namespace SmartDine.Tests.Unit;
 
-// In-memory RSA key stub — no PEM files needed
-public class FakeRsaKeyProvider : IRsaKeyProvider
-{
-    public RSAParameters PrivateKeyParameters { get; }
-    public RSAParameters PublicKeyParameters  { get; }
-
-    public FakeRsaKeyProvider()
-    {
-        using var rsa = RSA.Create(2048);
-        PrivateKeyParameters = rsa.ExportParameters(true);
-        PublicKeyParameters  = rsa.ExportParameters(false);
-    }
-}
-
 public class JwtTokenServiceTests
 {
     private readonly JwtTokenService _sut;
@@ -46,21 +32,19 @@ public class JwtTokenServiceTests
         _sut = new JwtTokenService(_config, _keyProvider);
     }
 
-    // ── GenerateAccessToken ────────────────────────────────────────────────
-
     [Fact]
-    public void GenerateAccessToken_ReturnsNonEmptyString()
+    public void GenerateAccessToken_ReturnsNonEmptyToken()
     {
-        var token = _sut.GenerateAccessToken(1, "user@test.com", "Test User", "CUSTOMER");
+        var (token, jwtId) = _sut.GenerateAccessToken(1, "user@test.com", "Test User", "CUSTOMER");
 
-        Assert.NotNull(token);
         Assert.NotEmpty(token);
+        Assert.NotEmpty(jwtId);
     }
 
     [Fact]
     public void GenerateAccessToken_UsesRS256Algorithm()
     {
-        var token = _sut.GenerateAccessToken(1, "user@test.com", "Test User", "CUSTOMER");
+        var (token, _) = _sut.GenerateAccessToken(1, "user@test.com", "Test User", "CUSTOMER");
 
         var jwt = new JwtSecurityTokenHandler().ReadJwtToken(token);
         Assert.Equal(SecurityAlgorithms.RsaSha256, jwt.Header.Alg);
@@ -69,7 +53,7 @@ public class JwtTokenServiceTests
     [Fact]
     public void GenerateAccessToken_ContainsCorrectClaims()
     {
-        var token = _sut.GenerateAccessToken(42, "user@test.com", "Test User", "MANAGER");
+        var (token, _) = _sut.GenerateAccessToken(42, "user@test.com", "Test User", "MANAGER");
 
         var jwt = new JwtSecurityTokenHandler().ReadJwtToken(token);
 
@@ -82,7 +66,7 @@ public class JwtTokenServiceTests
     [Fact]
     public void GenerateAccessToken_HasCorrectIssuerAndAudience()
     {
-        var token = _sut.GenerateAccessToken(1, "user@test.com", "Test User", "STAFF");
+        var (token, _) = _sut.GenerateAccessToken(1, "user@test.com", "Test User", "STAFF");
 
         var jwt = new JwtSecurityTokenHandler().ReadJwtToken(token);
         Assert.Equal(Issuer,   jwt.Issuer);
@@ -93,7 +77,7 @@ public class JwtTokenServiceTests
     public void GenerateAccessToken_ExpiresIn60Minutes()
     {
         var before = DateTime.UtcNow;
-        var token  = _sut.GenerateAccessToken(1, "user@test.com", "Test User", "CUSTOMER");
+        var (token, _) = _sut.GenerateAccessToken(1, "user@test.com", "Test User", "CUSTOMER");
         var after  = DateTime.UtcNow;
 
         var jwt = new JwtSecurityTokenHandler().ReadJwtToken(token);
@@ -105,7 +89,7 @@ public class JwtTokenServiceTests
     [Fact]
     public void GenerateAccessToken_IsVerifiableWithPublicKey()
     {
-        var token = _sut.GenerateAccessToken(1, "user@test.com", "Test User", "CUSTOMER");
+        var (token, _) = _sut.GenerateAccessToken(1, "user@test.com", "Test User", "CUSTOMER");
 
         var rsa = RSA.Create();
         rsa.ImportParameters(_keyProvider.PublicKeyParameters);
@@ -128,15 +112,13 @@ public class JwtTokenServiceTests
         Assert.NotNull(principal);
     }
 
-    // ── GenerateRefreshToken ───────────────────────────────────────────────
-
     [Fact]
     public void GenerateRefreshToken_ReturnsBase64String()
     {
         var refreshToken = _sut.GenerateRefreshToken();
 
         Assert.NotNull(refreshToken);
-        var bytes = Convert.FromBase64String(refreshToken); // throws if not valid base64
+        var bytes = Convert.FromBase64String(refreshToken);
         Assert.Equal(64, bytes.Length);
     }
 
@@ -149,12 +131,9 @@ public class JwtTokenServiceTests
         Assert.NotEqual(token1, token2);
     }
 
-    // ── GetPrincipalFromExpiredToken ───────────────────────────────────────
-
     [Fact]
     public void GetPrincipalFromExpiredToken_ReturnsClaimsForExpiredToken()
     {
-        // Generate a token that is already expired (expiry = -1 minute)
         var expiredConfig = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
@@ -164,7 +143,7 @@ public class JwtTokenServiceTests
             })
             .Build();
         var service      = new JwtTokenService(expiredConfig, _keyProvider);
-        var expiredToken = service.GenerateAccessToken(99, "expired@test.com", "Expired User", "STAFF");
+        var (expiredToken, _) = service.GenerateAccessToken(99, "expired@test.com", "Expired User", "STAFF");
 
         var principal = _sut.GetPrincipalFromExpiredToken(expiredToken);
 
@@ -176,18 +155,16 @@ public class JwtTokenServiceTests
     [Fact]
     public void GetPrincipalFromExpiredToken_ThrowsForTamperedToken()
     {
-        var token    = _sut.GenerateAccessToken(1, "user@test.com", "Test", "CUSTOMER");
-        var tampered = token[..^5] + "XXXXX"; // corrupt the signature
+        var (token, _) = _sut.GenerateAccessToken(1, "user@test.com", "Test", "CUSTOMER");
+        var tampered = token[..^5] + "XXXXX";
 
-        // SecurityTokenInvalidSignatureException is a subclass of SecurityTokenException
         Assert.ThrowsAny<SecurityTokenException>(
             () => _sut.GetPrincipalFromExpiredToken(tampered));
     }
 
     [Fact]
-    public void GetPrincipalFromExpiredToken_ReturnsNullForHS256Token()
+    public void GetPrincipalFromExpiredToken_ThrowsForHS256Token()
     {
-        // Create a fake HS256 token (wrong algorithm)
         var hmacKey    = new SymmetricSecurityKey(new byte[32]);
         var hs256Creds = new SigningCredentials(hmacKey, SecurityAlgorithms.HmacSha256);
         var hs256Token = new JwtSecurityTokenHandler().WriteToken(
@@ -195,7 +172,15 @@ public class JwtTokenServiceTests
                 signingCredentials: hs256Creds,
                 expires: DateTime.UtcNow.AddHours(-1)));
 
-        // Must throw because the IssuerSigningKey does not match (RSA key != HMAC key)
         Assert.ThrowsAny<Exception>(() => _sut.GetPrincipalFromExpiredToken(hs256Token));
+    }
+
+    [Fact]
+    public void GenerateAccessToken_DifferentCallsProduceDifferentJwtIds()
+    {
+        var (_, jwtId1) = _sut.GenerateAccessToken(1, "user@test.com", "Test", "STAFF");
+        var (_, jwtId2) = _sut.GenerateAccessToken(1, "user@test.com", "Test", "STAFF");
+
+        Assert.NotEqual(jwtId1, jwtId2);
     }
 }

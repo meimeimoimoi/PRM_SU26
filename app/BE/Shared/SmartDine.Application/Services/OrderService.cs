@@ -1,5 +1,7 @@
 using SmartDine.Application.Constants;
+using SmartDine.Application.DTOs.Common;
 using SmartDine.Application.DTOs.Orders;
+using SmartDine.Application.Helper;
 using SmartDine.Domain.Entities;
 using SmartDine.Domain.Enums;
 using SmartDine.Domain.Exceptions;
@@ -162,6 +164,58 @@ public class OrderService
         return MapToResponse(order, menuItems);
     }
 
+    public async Task<bool> UpdateItemStatusAsync(int itemId, string newStatus)
+    {
+        var item = await _uow.OrderDetails.GetByIdAsync(itemId);
+        if (item == null)
+            throw new EntityNotFoundException("OrderDetail", itemId);
+
+        if (!Enum.TryParse<OrderDetailStatus>(newStatus, true, out var parsedStatus))
+            throw new BusinessRuleViolationException(ValidationMessages.ORDER_STATUS_INVALID);
+
+        item.Status = parsedStatus;
+        if (parsedStatus == OrderDetailStatus.DONE)
+        {
+            item.CompletedAt = DateTime.UtcNow;
+        }
+
+        var order = await _uow.Orders.GetByIdAsync(item.OrderId);
+        if (order != null)
+        {
+            var activeItems = order.OrderDetails.Where(d => d.Status != OrderDetailStatus.CANCELLED && d.Status != OrderDetailStatus.RETURNED).ToList();
+            if (activeItems.Any())
+            {
+                // Suy ra trạng thái đơn từ trạng thái các item, nhưng áp dụng qua cùng
+                // transition graph với UpdateStatusAsync (order.CanTransitionTo) để 2 luồng
+                // cập nhật (theo đơn / theo từng item) không bao giờ đưa Order vào trạng thái
+                // trái quy tắc state machine. Nếu bước suy ra không phải transition hợp lệ từ
+                // trạng thái hiện tại (vd item bị đánh dấu DONE trong khi đơn đang PENDING,
+                // bỏ qua COOKING), giữ nguyên order.Status thay vì ép trạng thái không hợp lệ.
+                OrderStatus? derivedStatus = activeItems.All(d => d.Status == OrderDetailStatus.SERVED)
+                    ? OrderStatus.COMPLETED
+                    : activeItems.All(d => d.Status == OrderDetailStatus.DONE || d.Status == OrderDetailStatus.SERVED)
+                        ? OrderStatus.READY
+                        : activeItems.Any(d => d.Status == OrderDetailStatus.DOING || d.Status == OrderDetailStatus.DONE || d.Status == OrderDetailStatus.SERVED)
+                            ? OrderStatus.COOKING
+                            : null;
+
+                if (derivedStatus.HasValue && order.CanTransitionTo(derivedStatus.Value))
+                {
+                    order.UpdateStatus(derivedStatus.Value);
+                }
+            }
+        }
+
+        await _uow.SaveChangesAsync();
+
+        if (order != null)
+        {
+            await _notificationService.NotifyOrderStatusChangedAsync(order.Id, order.Session.TableId, order.Status.ToString());
+        }
+
+        return true;
+    }
+
     public async Task<OrderResponse> GetByIdAsync(int orderId)
     {
         var order = await _uow.Orders.GetByIdAsync(orderId)
@@ -216,12 +270,49 @@ public class OrderService
             .ToList();
     }
 
+    /// <summary>
+    /// Chart doanh số theo đơn hàng (không lọc thanh toán) cho Dashboard Manager — "Order Sales".
+    /// period: day (theo giờ hôm nay) | week (7 ngày) | month (từ đầu tháng).
+    /// </summary>
+    public async Task<List<ChartPointResponse>> GetOrderChartAsync(string? period)
+    {
+        var (start, end) = ChartPeriodHelper.ResolveRange(period);
+        var orders = await _uow.Orders.GetByDateRangeAsync(start, end);
+        return ChartPeriodHelper.Bucket(orders.Select(o => (o.CreatedAt, o.FinalAmount)), period);
+    }
+
     public async Task<List<OrderResponse>> GetByCustomerIdAsync(int customerId, int page = 1, int pageSize = 20)
     {
         var customer = await _uow.Customers.GetByIdAsync(customerId);
         if (customer == null) return new List<OrderResponse>();
 
         var orders = await _uow.Orders.GetByCustomerIdAsync(customer.Id, page, pageSize);
+        return orders.Select(o => MapToResponse(o,
+            o.OrderDetails.Select(i => i.MenuItem).Where(m => m != null).ToList()!))
+            .ToList();
+    }
+
+    public async Task<List<OrderResponse>> GetByGuestSessionIdAsync(string guestSessionId, int page = 1, int pageSize = 20)
+    {
+        var orders = await _uow.Orders.GetByGuestSessionIdAsync(guestSessionId, page, pageSize);
+        return orders.Select(o => MapToResponse(o,
+            o.OrderDetails.Select(i => i.MenuItem).Where(m => m != null).ToList()!))
+            .ToList();
+    }
+
+    /// <summary>
+    /// GET /api/v1/orders/session/{sessionId} — Toàn bộ đơn hàng trong phiên ăn (mọi participant),
+    /// khác với GetByGuestSessionIdAsync vốn chỉ trả đơn của riêng lần đăng nhập GUEST hiện tại.
+    /// </summary>
+    public async Task<List<OrderResponse>> GetBySessionIdAsync(
+        int sessionId, int? callerCustomerId, string? callerGuestSessionId, bool isStaff)
+    {
+        var session = await _uow.DiningSessions.GetByIdWithParticipantsAsync(sessionId)
+            ?? throw new EntityNotFoundException("DiningSession", sessionId);
+
+        EnsureCallerIsParticipant(session.Participants, callerCustomerId, callerGuestSessionId, isStaff);
+
+        var orders = await _uow.Orders.GetByDiningSessionIdAsync(sessionId);
         return orders.Select(o => MapToResponse(o,
             o.OrderDetails.Select(i => i.MenuItem).Where(m => m != null).ToList()!))
             .ToList();
@@ -258,13 +349,16 @@ public class OrderService
         return new OrderResponse
         {
             Id = order.Id,
+            SessionId = order.SessionId,
             CustomerId = order.Session?.CustomerId,
             CustomerName = order.Session?.Customer?.FullName ?? order.Session?.GuestName,
+            TableId = order.Session?.TableId ?? 0,
             TableNumber = order.Session?.Table?.TableNumber ?? 0,
             TotalAmount = order.TotalAmount,
             DiscountAmount = order.DiscountAmount,
             FinalAmount = order.FinalAmount,
             Status = order.Status.ToString(),
+            SessionStatus = order.Session?.Status.ToString() ?? nameof(DiningSessionStatus.ACTIVE),
             CreatedAt = order.CreatedAt,
             Items = order.OrderDetails.Select(i =>
             {

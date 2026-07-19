@@ -110,7 +110,7 @@ public class PaymentConfiguration : IEntityTypeConfiguration<Payment>
                .IsRequired(false)
                .OnDelete(DeleteBehavior.Restrict);
 
-        builder.HasIndex(p => p.ExternalRef).IsUnique().HasFilter("external_ref IS NOT NULL");
+        builder.HasIndex(p => p.ExternalRef).IsUnique().HasFilter("\"ExternalRef\" IS NOT NULL");
         builder.HasIndex(p => p.InvoiceId).IsUnique();
     }
 }

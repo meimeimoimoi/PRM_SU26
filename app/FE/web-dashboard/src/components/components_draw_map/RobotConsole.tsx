@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Alert, Button, Card, Col, Row, Select, Space, Statistic, Tag, Typography } from 'antd';
 import {
   ArrowDown,
@@ -6,10 +6,13 @@ import {
   ArrowRight,
   ArrowUp,
   Circle,
+  Crosshair,
   Home,
   Navigation,
+  Utensils,
 } from 'lucide-react';
 import { useMapStore } from '../../store/mapStore';
+import { useSignalR } from '@/hooks/useSignalR';
 
 interface Telemetry {
   x: number;
@@ -24,7 +27,10 @@ export const RobotConsole: React.FC = () => {
   const graphNodes = useMapStore((state) => state.graphNodes);
   // Lấy delivery nodes từ graph thay vì objects — để target gửi cho robot khớp với graph.json
   const deliveryNodes = graphNodes.filter((node) => node.type === 'delivery');
+  const kitchenNodes = graphNodes.filter((node) => node.type === 'kitchen');
+  const kitchenNode = kitchenNodes[0];
 
+  const { invoke, on, connected } = useSignalR();
   const [selectedTable, setSelectedTable] = useState<string | undefined>(undefined);
   const [telemetry, setTelemetry] = useState<Telemetry>({
     x: 0,
@@ -35,32 +41,23 @@ export const RobotConsole: React.FC = () => {
     status: 'OFFLINE',
   });
 
-  // Polling robot state from server
   useEffect(() => {
-    const fetchStatus = async () => {
-      try {
-        const res = await fetch('http://localhost:3001/api/robot/status');
-        const data = await res.json();
+    if (!connected) return;
+    const cleanup = on('ReceiveRobotState', (...args: unknown[]) => {
+      const data = args[0] as Telemetry;
+      if (data && data.status !== 'OFFLINE') {
         setTelemetry(data);
-      } catch (err) {
+      } else {
         setTelemetry((prev) => ({ ...prev, status: 'OFFLINE' }));
       }
-    };
-
-    fetchStatus();
-    const interval = setInterval(fetchStatus, 150);
-    return () => clearInterval(interval);
-  }, []);
+    });
+    return cleanup;
+  }, [on, connected]);
 
   const sendControlCommand = async (command: string, target?: string, direction?: string) => {
     try {
-      await fetch('http://localhost:3001/api/robot/control', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ command, target, direction }),
-      });
-    } catch (error) {
-      console.error('Lỗi gửi lệnh điều khiển:', error);
+      await invoke('SendRobotCommand', command, target || 'NONE', direction || 'NONE');
+    } catch (_error) {
     }
   };
 
@@ -74,6 +71,12 @@ export const RobotConsole: React.FC = () => {
     sendControlCommand('NAV_TO_TABLE', 'robotStart');
   };
 
+  const handleReturnToKitchen = () => {
+    if (kitchenNode) {
+      sendControlCommand('NAV_TO_TABLE', kitchenNode.id);
+    }
+  };
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'IDLE':
@@ -84,6 +87,10 @@ export const RobotConsole: React.FC = () => {
         return 'orange';
       case 'RETURN_TO_KITCHEN':
         return 'gold';
+      case 'ARRIVED_TABLE':
+        return 'cyan';
+      case 'ARRIVED_KITCHEN':
+        return 'purple';
       case 'OFFLINE':
       default:
         return 'red';
@@ -93,15 +100,20 @@ export const RobotConsole: React.FC = () => {
   const getStatusLabel = (status: string) => {
     switch (status) {
       case 'IDLE': return '⏸️ Chờ lệnh';
-      case 'NAV_TO_TABLE': return '🚚 Giao hàng';
+      case 'NAV_TO_TABLE': return '🚚 Đang giao hàng';
       case 'MANUAL_MOVE': return '🕹️ Thủ công';
-      case 'RETURN_TO_KITCHEN': return '🔄 Calibrating...';
+      case 'RETURN_TO_KITCHEN': return '🔄 Đang về bếp';
+      case 'ARRIVED_TABLE': return '✅ Đã đến bàn';
+      case 'ARRIVED_KITCHEN': return '✅ Đã về bếp';
       case 'OFFLINE': return '🔴 Offline';
       default: return status;
     }
   };
 
   const isCalibrating = telemetry.status === 'RETURN_TO_KITCHEN';
+  const isNavigating = telemetry.status === 'NAV_TO_TABLE';
+  const isArrived = telemetry.status === 'ARRIVED_TABLE' || telemetry.status === 'ARRIVED_KITCHEN';
+  const isOffline = telemetry.status === 'OFFLINE';
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -156,7 +168,7 @@ export const RobotConsole: React.FC = () => {
             }))}
           />
           <Row gutter={8}>
-            <Col span={12}>
+            <Col span={8}>
               <Button
                 type="primary"
                 icon={<Navigation size={14} />}
@@ -167,14 +179,36 @@ export const RobotConsole: React.FC = () => {
                 Giao Hàng
               </Button>
             </Col>
-            <Col span={12}>
+            <Col span={8}>
               <Button
                 icon={<Home size={14} />}
                 onClick={handleReturnHome}
                 disabled={telemetry.status === 'OFFLINE'}
                 block
               >
-                Về Điểm Xuất Phát
+                Về XP
+              </Button>
+            </Col>
+            <Col span={8}>
+              <Button
+                icon={<Utensils size={14} />}
+                onClick={handleReturnToKitchen}
+                disabled={telemetry.status === 'OFFLINE' || !kitchenNode}
+                block
+              >
+                Về Bếp
+              </Button>
+            </Col>
+          </Row>
+          <Row gutter={8} style={{ marginTop: '8px' }}>
+            <Col span={24}>
+              <Button
+                icon={<Crosshair size={14} />}
+                onClick={() => sendControlCommand('CALIBRATE')}
+                disabled={telemetry.status === 'OFFLINE'}
+                block
+              >
+                Hiệu Chuẩn (Calibrate)
               </Button>
             </Col>
           </Row>

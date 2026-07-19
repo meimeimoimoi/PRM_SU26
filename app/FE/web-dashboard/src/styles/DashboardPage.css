@@ -22,7 +22,7 @@
 /* ===== Stat Cards Row ===== */
 .stat-cards-row {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 20px;
 }
 
@@ -157,6 +157,13 @@
 .dashboard-bottom-row {
   display: grid;
   grid-template-columns: 1fr 340px;
+  gap: 20px;
+}
+
+/* 2 chart doanh số đơn hàng + doanh thu thực nhận, cạnh nhau */
+.dashboard-charts-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: 20px;
 }
 
@@ -333,6 +340,14 @@
 @media (max-width: 1100px) {
   .dashboard-bottom-row {
     grid-template-columns: 1fr;
+  }
+
+  .dashboard-charts-row {
+    grid-template-columns: 1fr;
+  }
+
+  .stat-cards-row {
+    grid-template-columns: repeat(2, 1fr);
   }
 }
 

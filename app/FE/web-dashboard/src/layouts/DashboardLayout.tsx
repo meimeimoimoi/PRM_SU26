@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { Link, useLocation, Outlet } from 'react-router-dom';
-import { Layout, Menu, Typography, Avatar, Dropdown, Space, Input } from 'antd';
+import { Layout, Menu, Typography, Avatar, Dropdown, Space } from 'antd';
 import { 
   AppstoreOutlined, 
   TableOutlined, 
@@ -9,13 +9,13 @@ import {
   SettingOutlined, 
   LogoutOutlined,
   UserOutlined,
-  BellOutlined,
   HistoryOutlined,
-  SearchOutlined,
   FireOutlined
 } from '@ant-design/icons';
 import { useSelector, useDispatch } from 'react-redux';
 import { selectCurrentUser, logout } from '@/store/slices/authSlice';
+import NotificationBell from '@/components/NotificationBell';
+import ChatWidget from '@/components/ChatWidget';
 
 const { Header, Content, Sider } = Layout;
 const { Title } = Typography;
@@ -183,7 +183,8 @@ const DashboardLayout: React.FC = () => {
           </div>
           
           <div style={{ borderTop: '1px solid #f5f5f5', paddingTop: 8 }}>
-            {user && user.role !== 'CUSTOMER' && (
+            {/* BE SettingsController chỉ Manager truy cập được — STAFF không thấy link này. */}
+            {user && user.role === 'MANAGER' && (
               <Menu
                 theme="light"
                 mode="inline"
@@ -235,25 +236,14 @@ const DashboardLayout: React.FC = () => {
           borderBottom: '1px solid #e8e8e8',
           height: 64
         }}>
-          {isTransactions ? (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 16, width: '100%', justifyContent: 'space-between' }}>
-              <Title level={4} style={{ margin: 0, fontWeight: 600, color: '#1a202c' }}>
-                RestoAdmin Dashboard
-              </Title>
-              <Input
-                placeholder="Search orders, tables..."
-                prefix={<SearchOutlined style={{ color: '#bfbfbf' }} />}
-                style={{ borderRadius: 20, maxWidth: 300, height: 36 }}
-              />
-            </div>
-          ) : (
-            <Title level={4} style={{ margin: 0, fontWeight: 600, color: '#1a202c' }}>
-              {getPageTitle()}
-            </Title>
-          )}
+          {/* "Search orders, tables..." decorative box đã bỏ — không nối vào đâu, trong khi
+              trang Transactions đã có ô tìm kiếm thật riêng (searchText) ở toolbar của trang. */}
+          <Title level={4} style={{ margin: 0, fontWeight: 600, color: '#1a202c' }}>
+            {isTransactions ? 'RestoAdmin Dashboard' : getPageTitle()}
+          </Title>
 
           <Space size={16} style={{ marginLeft: 16 }}>
-            <BellOutlined style={{ fontSize: 18, color: '#4a5568', cursor: 'pointer' }} />
+            {user && (user.role === 'MANAGER' || user.role === 'STAFF') && <NotificationBell />}
             <Dropdown menu={{ items: userMenuItems }} placement="bottomRight" trigger={['click']}>
               <Space style={{ cursor: 'pointer' }}>
                 <span style={{ color: '#4a5568', fontWeight: 500 }}>
@@ -273,6 +263,9 @@ const DashboardLayout: React.FC = () => {
           <Outlet />
         </Content>
       </Layout>
+
+      {/* Trợ lý AI — chỉ MANAGER thấy vì AiController.Query yêu cầu role Manager */}
+      {user && user.role === 'MANAGER' && <ChatWidget />}
     </Layout>
   );
 };

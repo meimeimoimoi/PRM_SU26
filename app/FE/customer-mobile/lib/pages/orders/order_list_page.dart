@@ -1,8 +1,12 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../viewmodels/order_viewmodel.dart';
+import '../../viewmodels/auth_viewmodel.dart';
+import '../../services/socket/socket_service.dart';
+import '../../widgets/customer_bottom_nav.dart';
 
 
 class _AppColors {
@@ -24,11 +28,53 @@ class _AppColors {
   static const Color onPrimary = Color(0xFFffffff);
 }
 
-class OrderListPage extends ConsumerWidget {
+class OrderListPage extends ConsumerStatefulWidget {
   const OrderListPage({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<OrderListPage> createState() => _OrderListPageState();
+}
+
+class _OrderListPageState extends ConsumerState<OrderListPage> {
+  Timer? _pollingTimer;
+  final SocketService _socketService = SocketService();
+
+  @override
+  void initState() {
+    super.initState();
+    _pollingTimer = Timer.periodic(const Duration(seconds: 5), (timer) {
+      if (mounted) {
+        ref.invalidate(orderListProvider);
+      }
+    });
+
+    final tableId = ref.read(authViewModelProvider).guestSession?.tableId;
+    if (tableId != null) {
+      _socketService.connect(tableId);
+    }
+    _socketService.subscribeToEvent('ReceiveOrderStatusUpdate', (data) {
+      if (mounted) ref.invalidate(orderListProvider);
+    });
+    _socketService.subscribeToEvent('ReceiveNewOrder', (data) {
+      if (mounted) ref.invalidate(orderListProvider);
+    });
+  }
+
+  @override
+  void dispose() {
+    _pollingTimer?.cancel();
+    _socketService.unsubscribeFromEvent('ReceiveOrderStatusUpdate');
+    _socketService.unsubscribeFromEvent('ReceiveNewOrder');
+    _socketService.disconnect();
+    super.dispose();
+  }
+
+  // Thanh toán đã có 1 điểm vào duy nhất: nút "Thanh toán" ở trang Thực đơn →
+  // /invoice (OrderHistoryPage, hóa đơn tạm tính đầy đủ + chọn phương thức + trạng
+  // thái ReceivePaymentSuccess). Trang này chỉ còn là danh sách lịch sử đơn thuần túy.
+
+  @override
+  Widget build(BuildContext context) {
     final ordersAsync = ref.watch(orderListProvider);
 
     return Scaffold(
@@ -39,7 +85,8 @@ class OrderListPage extends ConsumerWidget {
         scrolledUnderElevation: 2,
         leading: IconButton(
           icon: Icon(Icons.arrow_back, color: _AppColors.primary),
-          onPressed: () => context.pop(),
+          // Đơn hàng luôn được vào qua tab bottom-nav (context.go, không push).
+          onPressed: () => context.canPop() ? context.pop() : context.go('/home'),
         ),
         title: Text(
           'Lịch sử đơn hàng',
@@ -51,43 +98,43 @@ class OrderListPage extends ConsumerWidget {
           ),
         ),
         centerTitle: true,
-        actions: [
-          SizedBox(width: 48.w), // Spacer for centering
-        ],
       ),
       body: ordersAsync.when(
         data: (orders) {
           if (orders.isEmpty) {
             return const Center(child: Text('Chưa có đơn hàng nào.'));
           }
+          
+          final now = DateTime.now();
+          final today = <dynamic>[];
+          final older = <dynamic>[];
+          for (final order in orders) {
+            if (order.createdAt != null && 
+                order.createdAt!.year == now.year && 
+                order.createdAt!.month == now.month && 
+                order.createdAt!.day == now.day) {
+              today.add(order);
+            } else {
+              older.add(order);
+            }
+          }
+
           return SingleChildScrollView(
             padding: EdgeInsets.symmetric(horizontal: 20.w, vertical: 16.h),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                _buildDateHeader('Hôm nay'),
-                SizedBox(height: 12.h),
-                ...orders.map((order) => Padding(
-                  padding: EdgeInsets.only(bottom: 16.h),
-                  child: _buildOrderCard(
-                    orderId: '#SD-${order.id}',
-                    time: 'Hôm nay', // Use real date formatting in production
-                    status: order.status,
-                    statusColor: order.status == 'COMPLETED' ? _AppColors.tertiary : _AppColors.onSecondaryContainer,
-                    statusBg: order.status == 'COMPLETED' ? _AppColors.tertiary.withOpacity(0.1) : _AppColors.secondaryContainer,
-                    title: 'Đơn hàng Bàn ${order.tableNumber}',
-                    price: '${order.finalAmount}đ',
-                    imageUrl: 'https://lh3.googleusercontent.com/aida-public/AB6AXuCpE9ks-DpSB-h-XPKXxfApM8GyL70J_M50Akj2rBg69d7PWwYhxg1wc6PzeKQQyJBmcoa0Q-2U5TExraScWtNvpMxNmMkWYoIFV3bHuBjUrFLbbsmU0Yb4wNb6LHd_vCGInZ9M_bitKcLH285R91uJE9vbBITEp239VfLuq36fBPyBqr71tRxUCuFoKo7IcmdJnkBs8EQ6kU1vxLKlhg2MJUpDQFV3gHBwd5v00Ri6SOtr4uhF-rfC-NlruMvOqlh4580tsxkecMTj',
-                    actions: [
-                      _buildActionButton(
-                        text: 'Chi tiết',
-                        textColor: _AppColors.primary,
-                        bgColor: _AppColors.primary.withOpacity(0.1),
-                        onTap: () => context.push('/order-tracking'), // Navigate to tracking
-                      ),
-                    ],
-                  ),
-                )).toList(),
+                if (today.isNotEmpty) ...[
+                  _buildDateHeader('Hôm nay'),
+                  SizedBox(height: 12.h),
+                  ...today.map((order) => _buildOrderItem(context, order)),
+                ],
+                if (older.isNotEmpty) ...[
+                  if (today.isNotEmpty) SizedBox(height: 24.h),
+                  _buildDateHeader('Trước đó'),
+                  SizedBox(height: 12.h),
+                  ...older.map((order) => _buildOrderItem(context, order)),
+                ],
                 SizedBox(height: 48.h),
               ],
             ),
@@ -97,33 +144,7 @@ class OrderListPage extends ConsumerWidget {
         error: (err, stack) => Center(child: Text('Lỗi tải danh sách: $err')),
       ),
       
-      // Bottom Navigation Bar
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          color: _AppColors.surface,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.04),
-              blurRadius: 20,
-              offset: const Offset(0, -4),
-            ),
-          ],
-        ),
-        child: SafeArea(
-          child: Padding(
-            padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 8.h),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                _buildNavItem(Icons.menu_book, 'Thực đơn', false, () => context.go('/home')),
-                _buildNavItem(Icons.receipt_long, 'Đơn hàng', true, () {}),
-                _buildNavItem(Icons.person, 'Tài khoản', false, () => context.push('/profile')),
-                _buildNavItem(Icons.settings, 'Cài đặt', false, () => context.push('/settings')),
-              ],
-            ),
-          ),
-        ),
-      ),
+      bottomNavigationBar: const CustomerBottomNav(activeTab: CustomerNavTab.orders),
     );
   }
 
@@ -139,6 +160,41 @@ class OrderListPage extends ConsumerWidget {
     );
   }
 
+  Widget _buildOrderItem(BuildContext context, dynamic order) {
+    final statusColor = order.status == 'COMPLETED' ? _AppColors.tertiary : _AppColors.onSecondaryContainer;
+    final statusBg = order.status == 'COMPLETED' ? _AppColors.tertiary.withOpacity(0.1) : _AppColors.secondaryContainer;
+    final statusLabel = _getStatusLabel(order.status);
+    final timeStr = order.createdAt != null
+        ? '${order.createdAt!.hour.toString().padLeft(2, '0')}:${order.createdAt!.minute.toString().padLeft(2, '0')}'
+        : '';
+    
+    return Padding(
+      padding: EdgeInsets.only(bottom: 16.h),
+      child: _buildOrderCard(
+        orderId: '#SD-${order.id}',
+        time: timeStr,
+        status: statusLabel,
+        statusColor: statusColor,
+        statusBg: statusBg,
+        title: 'Đơn hàng Bàn ${order.tableNumber}',
+        price: '${order.finalAmount}đ',
+        onTap: () => context.push('/order_tracking/${order.id}'),
+      ),
+    );
+  }
+
+  String _getStatusLabel(String status) {
+    switch (status) {
+      case 'PENDING': return 'Chờ xác nhận';
+      case 'CONFIRMED': return 'Đã xác nhận';
+      case 'COOKING': return 'Đang nấu';
+      case 'READY': return 'Sẵn sàng';
+      case 'COMPLETED': return 'Hoàn thành';
+      case 'CANCELLED': return 'Đã hủy';
+      default: return status;
+    }
+  }
+
   Widget _buildOrderCard({
     required String orderId,
     required String time,
@@ -147,10 +203,7 @@ class OrderListPage extends ConsumerWidget {
     required Color statusBg,
     required String title,
     required String price,
-    required String imageUrl,
-    List<Widget>? actions,
-    Widget? customFooter,
-    bool isGrayscale = false,
+    required VoidCallback onTap,
     double opacity = 1.0,
   }) {
     return Opacity(
@@ -171,7 +224,6 @@ class OrderListPage extends ConsumerWidget {
         ),
         child: Column(
           children: [
-            // Header: Order ID + Status
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -182,8 +234,9 @@ class OrderListPage extends ConsumerWidget {
                     Text(
                       orderId,
                       style: TextStyle(
-                        color: _AppColors.onSurfaceVariant,
-                        fontSize: 14.sp,
+                        color: _AppColors.onSurface,
+                        fontSize: 16.sp,
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
                     SizedBox(height: 2.h),
@@ -204,7 +257,7 @@ class OrderListPage extends ConsumerWidget {
                     borderRadius: BorderRadius.circular(100.r),
                   ),
                   child: Text(
-                    status.toUpperCase(),
+                    status,
                     style: TextStyle(
                       color: statusColor,
                       fontSize: 10.sp,
@@ -214,67 +267,28 @@ class OrderListPage extends ConsumerWidget {
                 ),
               ],
             ),
-            SizedBox(height: 16.h),
-            
-            // Content: Image + Details
+            SizedBox(height: 12.h),
             Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(8.r),
-                  child: isGrayscale
-                      ? ColorFiltered(
-                          colorFilter: const ColorFilter.matrix([
-                            0.2126, 0.7152, 0.0722, 0, 0,
-                            0.2126, 0.7152, 0.0722, 0, 0,
-                            0.2126, 0.7152, 0.0722, 0, 0,
-                            0,      0,      0,      1, 0,
-                          ]),
-                          child: Image.network(
-                            imageUrl,
-                            width: 64.r,
-                            height: 64.r,
-                            fit: BoxFit.cover,
-                          ),
-                        )
-                      : Image.network(
-                          imageUrl,
-                          width: 64.r,
-                          height: 64.r,
-                          fit: BoxFit.cover,
-                        ),
+                Text(
+                  title,
+                  style: TextStyle(
+                    color: _AppColors.onSurfaceVariant,
+                    fontSize: 14.sp,
+                  ),
                 ),
-                SizedBox(width: 16.w),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: _AppColors.onSurface,
-                          fontSize: 16.sp,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      SizedBox(height: 4.h),
-                      Text(
-                        price,
-                        style: TextStyle(
-                          color: _AppColors.primary,
-                          fontSize: 18.sp,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
+                Text(
+                  price,
+                  style: TextStyle(
+                    color: _AppColors.primary,
+                    fontSize: 16.sp,
+                    fontWeight: FontWeight.bold,
                   ),
                 ),
               ],
             ),
-            SizedBox(height: 16.h),
-            
-            // Footer: Actions
+            SizedBox(height: 12.h),
             Container(
               padding: EdgeInsets.only(top: 12.h),
               decoration: BoxDecoration(
@@ -282,9 +296,16 @@ class OrderListPage extends ConsumerWidget {
                   top: BorderSide(color: _AppColors.outlineVariant.withOpacity(0.2)),
                 ),
               ),
-              child: customFooter ?? Row(
+              child: Row(
                 mainAxisAlignment: MainAxisAlignment.end,
-                children: actions ?? [],
+                children: [
+                  _buildActionButton(
+                    text: 'Chi tiết',
+                    textColor: _AppColors.primary,
+                    bgColor: _AppColors.primary.withOpacity(0.1),
+                    onTap: onTap,
+                  ),
+                ],
               ),
             ),
           ],
@@ -322,35 +343,4 @@ class OrderListPage extends ConsumerWidget {
     );
   }
 
-  Widget _buildNavItem(IconData icon, String label, bool isActive, VoidCallback onTap) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 8.h),
-        decoration: BoxDecoration(
-          color: isActive ? _AppColors.primaryContainer.withOpacity(0.1) : Colors.transparent,
-          borderRadius: BorderRadius.circular(12.r),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              icon,
-              color: isActive ? _AppColors.primary : _AppColors.onSurfaceVariant,
-              size: 24.sp,
-            ),
-            SizedBox(height: 4.h),
-            Text(
-              label,
-              style: TextStyle(
-                color: isActive ? _AppColors.primary : _AppColors.onSurfaceVariant,
-                fontSize: 12.sp,
-                fontWeight: isActive ? FontWeight.bold : FontWeight.w500,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 }

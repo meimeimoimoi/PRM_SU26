@@ -1,5 +1,6 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
+using Microsoft.IdentityModel.Tokens;
 using SmartDine.Application.Constants;
 using SmartDine.Application.DTOs.Auth;
 using SmartDine.Domain.Entities;
@@ -78,7 +79,7 @@ public class AuthService
             if (customer.PasswordHash == null || !_passwordHasher.VerifyPassword(request.Password, customer.PasswordHash))
                 throw new BusinessRuleViolationException(ValidationMessages.EMAIL_OR_PASSSWORD_INVALID);
 
-            return await GenerateTokenResponseAsync(customer.Id, customer.Email ?? string.Empty, customer.FullName ?? "Customer", UserRole.CUSTOMER.ToString(), UserType.CUSTOMER);
+            return await GenerateTokenResponseAsync(customer.Id, customer.Email ?? string.Empty, customer.FullName ?? "Customer", UserRole.CUSTOMER.ToString(), UserType.CUSTOMER, customer.Phone, customer.LoyaltyPoints, customer.MembershipLevel.ToString());
         }
 
         // Không tìm thấy → trả lỗi chung (chống enumeration)
@@ -126,7 +127,7 @@ public class AuthService
         await _uow.SaveChangesAsync();
 
         // Tự động login: tạo token ngay sau register
-        return await GenerateTokenResponseAsync(customer.Id, customer.Email, customer.FullName, UserRole.CUSTOMER.ToString(), UserType.CUSTOMER);
+        return await GenerateTokenResponseAsync(customer.Id, customer.Email, customer.FullName, UserRole.CUSTOMER.ToString(), UserType.CUSTOMER, customer.Phone, customer.LoyaltyPoints, customer.MembershipLevel.ToString());
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -155,8 +156,16 @@ public class AuthService
     public async Task<TokenResponse> RefreshTokenAsync(RefreshTokenRequest request)
     {
         // Bước 1-2: Parse expired token, lấy jti
-        var principal = _jwtService.GetPrincipalFromExpiredToken(request.AccessToken)
-            ?? throw new BusinessRuleViolationException(ValidationMessages.ACCESS_TOKEN_INVALID);
+        ClaimsPrincipal principal;
+        try
+        {
+            principal = _jwtService.GetPrincipalFromExpiredToken(request.AccessToken)
+                ?? throw new BusinessRuleViolationException(ValidationMessages.ACCESS_TOKEN_INVALID);
+        }
+        catch (SecurityTokenException)
+        {
+            throw new BusinessRuleViolationException(ValidationMessages.ACCESS_TOKEN_INVALID);
+        }
 
         var jwtId = principal.FindFirst(JwtRegisteredClaimNames.Jti)?.Value
             ?? throw new BusinessRuleViolationException(ValidationMessages.ACCESS_TOKEN_INVALID);
@@ -364,7 +373,10 @@ public class AuthService
                     Id = customer.Id,
                     FullName = customer.FullName ?? "Customer",
                     Email = customer.Email ?? string.Empty,
-                    Role = UserRole.CUSTOMER.ToString()
+                    Role = UserRole.CUSTOMER.ToString(),
+                    PhoneNumber = customer.Phone,
+                    LoyaltyPoints = customer.LoyaltyPoints,
+                    MembershipLevel = customer.MembershipLevel.ToString()
                 };
             }
         }
@@ -417,10 +429,21 @@ public class AuthService
     /// </summary>
     public async Task<GuestLoginResponse> LoginGuestAsync(GuestLoginRequest request)
     {
-        var table = await _uow.Tables.GetByIdAsync(request.TableId)
+        // request.TableId thực chất là Số Bàn (TableNumber) — QR code + form "Số Bàn" +
+        // qr_scan_page.dart đều gửi số bàn in trên bàn, không phải khóa chính Id trong DB.
+        // Số bàn ổn định (khách/nhân viên nhìn thấy), còn Id sẽ đổi bất cứ khi nào bàn bị
+        // xóa rồi tạo lại — tra theo Id sẽ gãy đăng nhập cho những bàn đó dù số bàn không đổi.
+        var table = await _uow.Tables.GetByTableNumberAsync(request.TableId)
             ?? throw new EntityNotFoundException("Table", request.TableId);
 
-        var existingSession = await _uow.DiningSessions.GetActiveByTableIdAsync(request.TableId);
+        if (table.Status == TableStatus.MAINTENANCE)
+            throw new BusinessRuleViolationException(
+                string.Format(ValidationMessages.TABLE_MAINTENANCE_CANNOT_SERVE, table.TableNumber));
+        if (table.Status == TableStatus.RESERVED)
+            throw new BusinessRuleViolationException(
+                string.Format(ValidationMessages.TABLE_RESERVED, table.TableNumber));
+
+        var existingSession = await _uow.DiningSessions.GetActiveByTableIdAsync(table.Id);
         DiningSession session;
 
         var guestName = request.GuestName ?? "Guest";
@@ -509,7 +532,7 @@ public class AuthService
     ///   3. Lưu RefreshToken vào DB kèm JwtId (liên kết cặp token), ExpiresAt = 7 ngày.
     ///   4. Trả TokenResponse cho client.
     /// </summary>
-    private async Task<TokenResponse> GenerateTokenResponseAsync(int id, string email, string fullName, string role, UserType userType)
+    private async Task<TokenResponse> GenerateTokenResponseAsync(int id, string email, string fullName, string role, UserType userType, string? phone = null, int? loyaltyPoints = null, string? membershipLevel = null)
     {
         var (accessToken, jwtId) = _jwtService.GenerateAccessToken(id, email, fullName, role);
         var refreshToken = _jwtService.GenerateRefreshToken();
@@ -536,7 +559,10 @@ public class AuthService
                 Id = id,
                 FullName = fullName,
                 Email = email,
-                Role = role
+                Role = role,
+                PhoneNumber = phone,
+                LoyaltyPoints = loyaltyPoints,
+                MembershipLevel = membershipLevel
             }
         };
     }

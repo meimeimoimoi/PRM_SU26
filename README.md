@@ -121,7 +121,15 @@ flutter pub run build_runner build --delete-conflicting-outputs
 
 # Khởi chạy ứng dụng (trên máy ảo hoặc thiết bị thật)
 flutter run
+
+# Chạy trên web (Chrome) — PHẢI cố định port 8090, vì mã QR do Table.API sinh ra
+# trỏ cứng tới http://localhost:8090 (xem CustomerWeb:BaseUrl trong
+# appsettings.Development.json của Table.API). Nếu không truyền --web-port, Flutter
+# sẽ tự chọn 1 port ngẫu nhiên mỗi lần chạy và mã QR quét vào sẽ sai/không mở được.
+flutter run -d chrome --web-port=8090
 ```
+*Nếu chạy bằng nút Run/F5 của VS Code, dùng sẵn config "customer-mobile (Web, port 8090)"
+trong `.vscode/launch.json` — đã cố định port 8090 tương tự.*
 
 ---
 

@@ -103,9 +103,6 @@ using (var scope = app.Services.CreateScope())
         {
             await context.Database.EnsureCreatedAsync();
         }
-
-        var seeder = services.GetRequiredService<DbSeeder>();
-        await seeder.SeedAsync();
     }
     catch (Exception ex)
     {
@@ -125,6 +122,9 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+
+// Phục vụ ảnh món ăn upload tại wwwroot/uploads/ qua route /uploads/{filename} (public, không cần auth).
+app.UseStaticFiles();
 
 app.UseAuthentication();
 app.UseAuthorization();

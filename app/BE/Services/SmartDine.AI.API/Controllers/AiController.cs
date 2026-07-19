@@ -63,6 +63,14 @@ public class MenuItemDto
     public string ImageUrl { get; set; } = string.Empty;
 }
 
+public class RevenueSummaryDto
+{
+    [JsonPropertyName("todayRevenue")]
+    public decimal TodayRevenue { get; set; }
+    [JsonPropertyName("monthRevenue")]
+    public decimal MonthRevenue { get; set; }
+}
+
 [ApiController]
 [Route("api/v1/ai")]
 [Authorize]
@@ -73,6 +81,7 @@ public class AiController : ControllerBase
     private readonly string _ollamaModel;
     private readonly string _tableApiUrl;
     private readonly string _menuApiUrl;
+    private readonly string _orderApiUrl;
     private readonly ILogger<AiController> _logger;
 
     public AiController(
@@ -85,6 +94,7 @@ public class AiController : ControllerBase
         _ollamaModel = configuration["Services:OllamaModel"] ?? "qwen2.5:1.5b";
         _tableApiUrl = configuration["Services:TableApi"] ?? "http://localhost:5004";
         _menuApiUrl = configuration["Services:MenuApi"] ?? "http://localhost:5002";
+        _orderApiUrl = configuration["Services:OrderApi"] ?? "http://localhost:5003";
         _logger = logger;
     }
 
@@ -128,6 +138,14 @@ public class AiController : ControllerBase
                 contextData = $"[Danh sách các món ăn phổ biến/bán chạy nhất hiện tại:\n{itemsText}]";
             }
         }
+        else if (intent.Action == "get_revenue")
+        {
+            var revenue = await FetchDataAsync<RevenueSummaryDto>($"{_orderApiUrl}/api/v1/payments/revenue-summary", authHeader);
+            if (revenue != null)
+            {
+                contextData = $"[Dữ liệu doanh thu thực tế từ hệ thống (chỉ tính thanh toán đã thành công): Doanh thu hôm nay={revenue.TodayRevenue:N0} VNĐ, Doanh thu tháng này={revenue.MonthRevenue:N0} VNĐ]";
+            }
+        }
 
         // 3. Xây dựng prompt sinh câu trả lời cuối cùng
         if (!string.IsNullOrEmpty(contextData))
@@ -142,11 +160,12 @@ public class AiController : ControllerBase
     private async Task<IntentResult> ClassifyIntentAsync(string userPrompt)
     {
         var systemInstruction = @"Bạn là một AI phân loại ý định người dùng cho nhà hàng SmartDine.
-Hãy đọc câu hỏi của người dùng và chọn một trong bốn hành động (action) sau đây:
+Hãy đọc câu hỏi của người dùng và chọn một trong năm hành động (action) sau đây:
 1. ""get_occupied_tables"" - Nếu người dùng muốn biết số lượng bàn đang có khách, danh sách bàn bận, hoặc bàn nào đang có người ngồi.
 2. ""get_available_tables"" - Nếu người dùng hỏi về bàn trống, còn bàn trống không, hoặc những bàn nào đang rảnh.
 3. ""get_popular_items"" - Nếu người dùng hỏi về món ăn bán chạy nhất, món ăn phổ biến, món ăn ưa thích, nên chọn món nào.
-4. ""general_chat"" - Chào hỏi hoặc câu hỏi khác.
+4. ""get_revenue"" - Nếu người dùng hỏi về doanh thu, doanh số, thu nhập hôm nay/tháng này, hoặc nhà hàng kiếm được bao nhiêu tiền.
+5. ""general_chat"" - Chào hỏi hoặc câu hỏi khác.
 
 Chỉ trả về chuỗi JSON đại diện cho hành động, tuyệt đối không trả thêm văn bản giải thích. Định dạng:
 { ""action"": ""tên_hành_động"" }";

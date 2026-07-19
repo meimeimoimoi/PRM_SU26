@@ -18,6 +18,7 @@ public class SmartDineDbContext : DbContext
     public DbSet<Order> Orders => Set<Order>();
     public DbSet<OrderDetail> OrderDetails => Set<OrderDetail>();
     public DbSet<Table> Tables => Set<Table>();
+    public DbSet<Location> Locations => Set<Location>();
     public DbSet<DiningSession> DiningSessions => Set<DiningSession>();
     public DbSet<Payment> Payments => Set<Payment>();
     public DbSet<Review> Reviews => Set<Review>();
@@ -60,6 +61,7 @@ public class SmartDineDbContext : DbContext
         modelBuilder.Entity<Order>().HasQueryFilter(e => !e.IsDeleted);
         modelBuilder.Entity<OrderDetail>().HasQueryFilter(e => !e.IsDeleted);
         modelBuilder.Entity<Table>().HasQueryFilter(e => !e.IsDeleted);
+        modelBuilder.Entity<Location>().HasQueryFilter(e => !e.IsDeleted);
         modelBuilder.Entity<DiningSession>().HasQueryFilter(e => !e.IsDeleted);
         modelBuilder.Entity<Payment>().HasQueryFilter(e => !e.IsDeleted);
         modelBuilder.Entity<Review>().HasQueryFilter(e => !e.IsDeleted);

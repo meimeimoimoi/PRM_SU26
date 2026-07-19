@@ -1,5 +1,8 @@
+using Microsoft.Extensions.Configuration;
 using SmartDine.Application.Constants;
+using SmartDine.Application.DTOs.Common;
 using SmartDine.Application.DTOs.Payments;
+using SmartDine.Application.Helper;
 using SmartDine.Domain.Entities;
 using SmartDine.Domain.Enums;
 using SmartDine.Domain.Exceptions;
@@ -15,23 +18,43 @@ namespace SmartDine.Application.Services;
 ///   2. HandleWebhookAsync: xác minh chữ ký PayOS → cập nhật trạng thái → cộng điểm loyalty
 ///
 /// Ai dùng: PaymentsController (Order.API).
-/// Dependency: IUnitOfWork (DB), IPaymentGateway (PayOS/VNPay/Momo).
+/// Dependency: IUnitOfWork (DB), IPaymentGateway (PayOS/VNPay/Momo), IConfiguration (Payment:ReturnUrl/CancelUrl).
 /// </summary>
 public class PaymentService
 {
     private readonly IUnitOfWork _uow;
     private readonly IPaymentGateway _gateway;
     private readonly IOrderNotificationService _notificationService;
+    private readonly IConfiguration? _configuration;
 
     // Tỷ lệ tích điểm: 1 điểm / 1.000 VND — cân nhắc chuyển sang config nếu nhà hàng muốn điều chỉnh.
     private const int PointsPerThousandVnd = 1;
 
-    public PaymentService(IUnitOfWork uow, IPaymentGateway gateway, IOrderNotificationService notificationService)
+    // orderCode PayOS luôn dùng khi merchant bấm "xác nhận Webhook URL" trên dashboard — không
+    // gắn với Payment thật nào trong hệ thống. Phải trả 200 ngay, nếu không PayOS sẽ báo webhook lỗi.
+    private const long PayOsWebhookVerificationOrderCode = 123;
+
+    public PaymentService(
+        IUnitOfWork uow,
+        IPaymentGateway gateway,
+        IOrderNotificationService notificationService,
+        IConfiguration? configuration = null)
     {
         _uow = uow;
         _gateway = gateway;
         _notificationService = notificationService;
+        _configuration = configuration;
     }
+
+    /// <summary>URL khách được redirect sau thanh toán online thành công (PayOS).</summary>
+    private string PaymentReturnUrl =>
+        _configuration?["Payment:ReturnUrl"]?.Trim()
+        ?? "https://smartdine.app/payment/success";
+
+    /// <summary>URL khách được redirect khi hủy thanh toán online (PayOS).</summary>
+    private string PaymentCancelUrl =>
+        _configuration?["Payment:CancelUrl"]?.Trim()
+        ?? "https://smartdine.app/payment/cancel";
 
     // ═══════════════════════════════════════════════════════════════
     // POST /api/v1/payments/create-intent
@@ -58,16 +81,7 @@ public class PaymentService
         var session = await _uow.DiningSessions.GetByIdWithParticipantsAndOrdersAsync(request.SessionId)
             ?? throw new EntityNotFoundException("Dining Session", request.SessionId);
 
-        // 2. Kiểm tra trạng thái session
-        if (session.Status == DiningSessionStatus.CHECKOUT)
-            throw new BusinessRuleViolationException(ValidationMessages.PAYMENT_SESSION_CHECKOUT_IN_PROGRESS);
-        if (session.Status != DiningSessionStatus.ACTIVE)
-            throw new BusinessRuleViolationException(ValidationMessages.PAYMENT_SESSION_CLOSED);
-
-        // 3. Ownership check — STAFF bỏ qua; CUSTOMER/GUEST phải là participant đang active
-        EnsureCallerCanPay(session.Participants, callerCustomerId, callerGuestSessionId, isStaff);
-
-        // 4. Guard trùng thanh toán: kiểm tra đã có payment PENDING/SUCCESS chưa
+        // 2. Guard trùng thanh toán sớm — chặn nếu đã có payment PENDING/SUCCESS cho session
         var existing = await _uow.Payments.GetBySessionIdAsync(request.SessionId);
         if (existing != null)
         {
@@ -75,13 +89,26 @@ public class PaymentService
                 throw new BusinessRuleViolationException(ValidationMessages.PAYMENT_ALREADY_PENDING);
             if (existing.PaymentStatus == PaymentStatus.SUCCESS)
                 throw new BusinessRuleViolationException(ValidationMessages.PAYMENT_ALREADY_COMPLETED);
-            // FAILED → cho phép tạo lại (existing sẽ bị ghi đè trạng thái bởi webhook sau)
+            // FAILED → cho phép tạo lại
         }
 
-        // 5. Tính tổng hóa đơn — sum FinalAmount của tất cả Order trong session
-        var totalPayable = session.Orders.Sum(o => o.FinalAmount);
-        if (totalPayable <= 0)
+        // 3. Kiểm tra trạng thái session
+        if (session.Status == DiningSessionStatus.CHECKOUT)
+            throw new BusinessRuleViolationException(ValidationMessages.PAYMENT_SESSION_CHECKOUT_IN_PROGRESS);
+        if (session.Status != DiningSessionStatus.ACTIVE)
+            throw new BusinessRuleViolationException(ValidationMessages.PAYMENT_SESSION_CLOSED);
+
+        // 4. Ownership check — STAFF bỏ qua; CUSTOMER/GUEST phải là participant đang active
+        EnsureCallerCanPay(session.Participants, callerCustomerId, callerGuestSessionId, isStaff);
+
+        // 5. Tính tổng hóa đơn — FinalAmount + phí DV + VAT theo RestaurantSettings (Manager chỉnh)
+        var subTotal = session.Orders.Sum(o => o.FinalAmount);
+        if (subTotal <= 0)
             throw new BusinessRuleViolationException(ValidationMessages.PAYMENT_NO_ORDERS);
+
+        var settings = await _uow.Settings.GetSingletonAsync();
+        var (_, _, totalPayable) = BillingCalculator.Compute(
+            subTotal, settings.TaxRate, settings.ServiceChargeRate);
 
         // 6. Parse payment method — unknown method fallback về VNPAY (không lỗi, tránh UX xấu)
         var paymentMethod = Enum.TryParse<PaymentMethod>(request.PaymentMethod, true, out var pm)
@@ -92,16 +119,27 @@ public class PaymentService
         var orderCode = await _uow.Payments.GetNextOrderCodeAsync();
         var invoiceId = GenerateInvoiceId(orderCode);
 
-        // 8. Gọi PayOS tạo link thanh toán
-        var gatewayResult = await _gateway.CreatePaymentLinkAsync(
-            orderCode: orderCode,
-            amount: (int)totalPayable,
-            description: $"Thanh toan {invoiceId}",
-            returnUrl: "https://smartdine.app/payment/success",
-            cancelUrl: "https://smartdine.app/payment/cancel");
+        // 8. Gọi cổng thanh toán (CASH bỏ qua gateway)
+        string? qrUrl = null;
+        string? deeplink = null;
+        string? externalRef = orderCode.ToString();
 
-        if (!gatewayResult.Success)
-            throw new BusinessRuleViolationException(ValidationMessages.PAYMENT_GATEWAY_ERROR);
+        if (paymentMethod != PaymentMethod.CASH)
+        {
+            var gatewayResult = await _gateway.CreatePaymentLinkAsync(
+                orderCode: orderCode,
+                amount: (int)totalPayable,
+                description: $"Thanh toan {invoiceId}",
+                returnUrl: PaymentReturnUrl,
+                cancelUrl: PaymentCancelUrl);
+
+            if (!gatewayResult.Success)
+                throw new BusinessRuleViolationException(ValidationMessages.PAYMENT_GATEWAY_ERROR);
+
+            qrUrl = gatewayResult.QrCode;
+            deeplink = gatewayResult.CheckoutUrl;
+            externalRef = gatewayResult.OrderCode.ToString();
+        }
 
         // 9. Lưu Payment record với trạng thái PENDING
         var payment = new Payment
@@ -111,9 +149,9 @@ public class PaymentService
             Amount = totalPayable,
             PaymentMethod = paymentMethod,
             PaymentStatus = PaymentStatus.PENDING,
-            QrUrl = gatewayResult.QrCode,
-            Deeplink = gatewayResult.CheckoutUrl,
-            ExternalRef = gatewayResult.OrderCode.ToString(),
+            QrUrl = qrUrl,
+            Deeplink = deeplink,
+            ExternalRef = externalRef,
             SplitCount = request.SplitCount > 0 ? request.SplitCount : 1
         };
         await _uow.Payments.AddAsync(payment);
@@ -124,13 +162,74 @@ public class PaymentService
 
         await _uow.SaveChangesAsync();
 
+        // Tiền mặt: báo staffboard tab Thanh toán & Hóa đơn để thu tiền tại quầy
+        if (paymentMethod == PaymentMethod.CASH)
+        {
+            var tableNumber = session.Table?.TableNumber ?? 0;
+            if (tableNumber == 0)
+            {
+                var table = await _uow.Tables.GetByIdAsync(session.TableId);
+                tableNumber = table?.TableNumber ?? 0;
+            }
+
+            await _notificationService.NotifyCashPaymentPendingAsync(
+                session.TableId,
+                tableNumber,
+                invoiceId,
+                totalPayable);
+        }
+
         return new CreatePaymentIntentResponse
         {
             InvoiceId = invoiceId,
             TotalPayable = totalPayable,
-            QrUrl = gatewayResult.CheckoutUrl ?? gatewayResult.QrCode,
-            Deeplink = gatewayResult.CheckoutUrl
+            QrUrl = qrUrl ?? deeplink,
+            Deeplink = deeplink
         };
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // POST /api/v1/payments/cancel-intent
+    // ═══════════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// Khách chủ động hủy giao dịch đang chờ (đóng dialog QR mà không quét, đổi ý...).
+    ///
+    /// Trước đây không có API này: đóng dialog ở FE chỉ ẩn UI, payment vẫn PENDING và
+    /// session vẫn khóa CHECKOUT tới khi PaymentExpiryJob tự dọn sau tối đa 30 phút —
+    /// trong lúc đó khách không gọi thêm món/thanh toán lại được. Gọi API này để mở khóa
+    /// ngay lập tức thay vì bắt khách chờ.
+    ///
+    /// Đánh Payment → FAILED (cho phép tạo lại ngay, theo đúng luồng CreateIntentAsync đã
+    /// cho phép retry khi FAILED) + session → ACTIVE nếu đang CHECKOUT.
+    ///
+    /// Ai dùng: PaymentsController.CancelIntent — DINER, GUEST, STAFF (cùng quyền với create-intent).
+    /// </summary>
+    public async Task CancelIntentAsync(
+        int? callerCustomerId,
+        string? callerGuestSessionId,
+        bool isStaff,
+        int sessionId)
+    {
+        var session = await _uow.DiningSessions.GetByIdWithParticipantsAndOrdersAsync(sessionId)
+            ?? throw new EntityNotFoundException("Dining Session", sessionId);
+
+        EnsureCallerCanPay(session.Participants, callerCustomerId, callerGuestSessionId, isStaff);
+
+        var existing = await _uow.Payments.GetBySessionIdAsync(sessionId);
+        if (existing == null || existing.PaymentStatus != PaymentStatus.PENDING)
+            throw new BusinessRuleViolationException(ValidationMessages.PAYMENT_NO_PENDING_TO_CANCEL);
+
+        existing.PaymentStatus = PaymentStatus.FAILED;
+        await _uow.Payments.UpdateAsync(existing);
+
+        if (session.Status == DiningSessionStatus.CHECKOUT)
+        {
+            session.Status = DiningSessionStatus.ACTIVE;
+            await _uow.DiningSessions.UpdateAsync(session);
+        }
+
+        await _uow.SaveChangesAsync();
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -157,8 +256,14 @@ public class PaymentService
             throw new BusinessRuleViolationException(ValidationMessages.PAYMENT_WEBHOOK_INVALID_SIGNATURE);
 
         // 2. Tìm Payment theo ExternalRef
-        var payment = await _uow.Payments.GetByExternalRefAsync(webhookData.OrderCode.ToString())
-            ?? throw new EntityNotFoundException("Payment", webhookData.OrderCode.ToString());
+        var payment = await _uow.Payments.GetByExternalRefAsync(webhookData.OrderCode.ToString());
+        if (payment == null)
+        {
+            if (webhookData.OrderCode == PayOsWebhookVerificationOrderCode)
+                return new PaymentWebhookResponse { RspCode = "00", Message = "Webhook URL verified" };
+
+            throw new EntityNotFoundException("Payment", webhookData.OrderCode.ToString());
+        }
 
         // 3. Idempotency: đã xử lý thành công rồi → không làm gì thêm
         if (payment.PaymentStatus == PaymentStatus.SUCCESS)
@@ -180,11 +285,12 @@ public class PaymentService
             session.TotalSpent = payment.Amount;
             await _uow.DiningSessions.UpdateAsync(session);
 
-            // Giải phóng bàn — khách khác có thể ngồi vào
+            // Sau thanh toán: bàn sang MAINTENANCE để nhân viên dọn dẹp,
+            // rồi staff chuyển lại AVAILABLE khi dọn xong.
             var table = await _uow.Tables.GetByIdAsync(session.TableId);
             if (table != null)
             {
-                table.Status = TableStatus.AVAILABLE;
+                table.Status = TableStatus.MAINTENANCE;
                 await _uow.Tables.UpdateAsync(table);
             }
 
@@ -193,7 +299,7 @@ public class PaymentService
 
             // Thông báo realtime về bàn ăn — client ẩn QR, hiện màn hình "Cảm ơn"
             await _notificationService.NotifyPaymentSuccessAsync(
-                session.TableId, payment.InvoiceId, payment.Amount);
+                session.TableId, table?.TableNumber ?? 0, payment.InvoiceId, payment.Amount);
         }
         else
         {
@@ -311,6 +417,24 @@ public class PaymentService
         return (items.Select(MapToHistoryResponse).ToList(), totalCount, totalPages);
     }
 
+    /// <summary>
+    /// Danh sách thanh toán tiền mặt đang PENDING — staffboard tab Thanh toán & Hóa đơn.
+    /// </summary>
+    public async Task<List<PendingCashPaymentResponse>> GetPendingCashAsync()
+    {
+        var payments = await _uow.Payments.GetPendingCashAsync();
+        return payments.Select(p => new PendingCashPaymentResponse
+        {
+            PaymentId = p.Id,
+            InvoiceId = p.InvoiceId,
+            SessionId = p.SessionId,
+            TableId = p.Session.TableId,
+            TableNumber = p.Session.Table?.TableNumber ?? 0,
+            Amount = p.Amount,
+            CreatedAt = p.CreatedAt
+        }).ToList();
+    }
+
     private static PaymentHistoryResponse MapToHistoryResponse(Payment payment) => new()
     {
         Id = payment.Id,
@@ -326,4 +450,113 @@ public class PaymentService
         PaidAt = payment.PaidAt,
         CreatedAt = payment.CreatedAt
     };
+
+    // ═══════════════════════════════════════════════════════════════
+    // GET /api/v1/payments/revenue-summary (Manager) — Doanh thu tổng quan cho dashboard
+    // ═══════════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// Doanh thu hôm nay + tháng này — chỉ tính payment đã PaymentStatus = SUCCESS
+    /// (GetByDateRangeAsync lọc theo PaidAt, field chỉ được set khi thanh toán thành công,
+    /// nên PENDING/FAILED/EXPIRED tự động bị loại, không cần filter status thủ công).
+    /// </summary>
+    public async Task<RevenueSummaryResponse> GetRevenueSummaryAsync()
+    {
+        var now = DateTime.UtcNow;
+        var todayStart = now.Date;
+        var monthStart = new DateTime(now.Year, now.Month, 1, 0, 0, 0, DateTimeKind.Utc);
+
+        var monthPayments = await _uow.Payments.GetByDateRangeAsync(monthStart, now);
+
+        return new RevenueSummaryResponse
+        {
+            TodayRevenue = monthPayments.Where(p => p.PaidAt >= todayStart).Sum(p => p.Amount),
+            MonthRevenue = monthPayments.Sum(p => p.Amount)
+        };
+    }
+
+    /// <summary>
+    /// Chart doanh thu thực nhận (chỉ payment SUCCESS) cho Dashboard Manager — "Actual Revenue".
+    /// period: day (theo giờ hôm nay) | week (7 ngày) | month (từ đầu tháng).
+    /// GetByDateRangeAsync lọc theo PaidAt (chỉ set khi SUCCESS) nên không cần lọc status thủ công.
+    /// </summary>
+    public async Task<List<ChartPointResponse>> GetRevenueChartAsync(string? period)
+    {
+        var (start, end) = ChartPeriodHelper.ResolveRange(period);
+        var payments = await _uow.Payments.GetByDateRangeAsync(start, end);
+        return ChartPeriodHelper.Bucket(payments.Select(p => (p.PaidAt!.Value, p.Amount)), period);
+    }
+
+    public async Task<bool> CompletePaymentAsync(int paymentId)
+    {
+        var payment = await _uow.Payments.GetByIdAsync(paymentId)
+            ?? throw new EntityNotFoundException("Payment", paymentId);
+
+        if (payment.PaymentStatus == PaymentStatus.SUCCESS)
+            return true;
+
+        payment.PaymentStatus = PaymentStatus.SUCCESS;
+        payment.PaidAt = DateTime.UtcNow;
+        await _uow.Payments.UpdateAsync(payment);
+
+        var session = await _uow.DiningSessions.GetByIdWithParticipantsAndOrdersAsync(payment.SessionId)
+            ?? throw new EntityNotFoundException("Dining Session", payment.SessionId);
+
+        session.Status = DiningSessionStatus.CLOSED;
+        session.EndedAt = DateTime.UtcNow;
+        session.TotalSpent = payment.Amount;
+        await _uow.DiningSessions.UpdateAsync(session);
+
+        // MAINTENANCE: nhân viên dọn bàn rồi mới chuyển AVAILABLE trên Table Management
+        var table = await _uow.Tables.GetByIdAsync(session.TableId);
+        if (table != null)
+        {
+            table.Status = TableStatus.MAINTENANCE;
+            await _uow.Tables.UpdateAsync(table);
+        }
+
+        await AwardLoyaltyPointsAsync(session, payment.Amount);
+
+        await _notificationService.NotifyPaymentSuccessAsync(
+            session.TableId, table?.TableNumber ?? 0, payment.InvoiceId, payment.Amount);
+
+        await _uow.SaveChangesAsync();
+        return true;
+    }
+
+    public async Task<bool> CompletePaymentByTableAsync(int tableNumber)
+    {
+        var tableObj = await _uow.Tables.GetByTableNumberAsync(tableNumber)
+            ?? throw new EntityNotFoundException("Table", tableNumber);
+
+        // ACTIVE (staff thu trước) hoặc CHECKOUT (khách đã tạo intent tiền mặt)
+        var session = await _uow.DiningSessions.GetPayableByTableIdAsync(tableObj.Id)
+            ?? throw new EntityNotFoundException("Active Dining Session for Table", tableNumber);
+
+        var payment = await _uow.Payments.GetBySessionIdAsync(session.Id);
+        if (payment == null)
+        {
+            var subTotal = session.Orders.Sum(o => o.FinalAmount);
+            var settings = await _uow.Settings.GetSingletonAsync();
+            var (_, _, totalPayable) = BillingCalculator.Compute(
+                subTotal, settings.TaxRate, settings.ServiceChargeRate);
+            var orderCode = await _uow.Payments.GetNextOrderCodeAsync();
+            var invoiceId = GenerateInvoiceId(orderCode);
+
+            payment = new Payment
+            {
+                SessionId = session.Id,
+                InvoiceId = invoiceId,
+                Amount = totalPayable,
+                PaymentMethod = PaymentMethod.CASH,
+                PaymentStatus = PaymentStatus.PENDING,
+                ExternalRef = orderCode.ToString(),
+                SplitCount = 1
+            };
+            await _uow.Payments.AddAsync(payment);
+            await _uow.SaveChangesAsync();
+        }
+
+        return await CompletePaymentAsync(payment.Id);
+    }
 }

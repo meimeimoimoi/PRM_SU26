@@ -62,6 +62,39 @@ public class PaymentsController : ControllerBase
     }
 
     // ═══════════════════════════════════════════════════════════════
+    // GET /api/v1/payments/revenue-summary
+    // ═══════════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// Doanh thu hôm nay + tháng này cho dashboard tổng quan — chỉ tính payment đã thanh toán
+    /// thành công (SUCCESS), không tính đơn PENDING/CANCELLED.
+    /// Roles: MANAGER.
+    /// </summary>
+    [HttpGet("revenue-summary")]
+    [Authorize(Roles = Roles.Manager)]
+    public async Task<IActionResult> GetRevenueSummary()
+    {
+        var result = await _paymentService.GetRevenueSummaryAsync();
+        return Ok(ApiResponse<RevenueSummaryResponse>.Ok(result));
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // GET /api/v1/payments/chart
+    // ═══════════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// Doanh thu thực nhận (chỉ payment SUCCESS) theo giờ/tuần/tháng cho Dashboard Manager.
+    /// Roles: MANAGER.
+    /// </summary>
+    [HttpGet("chart")]
+    [Authorize(Roles = Roles.Manager)]
+    public async Task<IActionResult> GetRevenueChart([FromQuery] string period = "day")
+    {
+        var result = await _paymentService.GetRevenueChartAsync(period);
+        return Ok(ApiResponse<List<ChartPointResponse>>.Ok(result));
+    }
+
+    // ═══════════════════════════════════════════════════════════════
     // POST /api/v1/payments/create-intent
     // ═══════════════════════════════════════════════════════════════
 
@@ -86,6 +119,26 @@ public class PaymentsController : ControllerBase
 
         var result = await _paymentService.CreateIntentAsync(customerId, guestSessionId, isStaff, request);
         return Ok(ApiResponse<CreatePaymentIntentResponse>.Ok(result, ValidationMessages.PAYMENT_INTENT_CREATED));
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // POST /api/v1/payments/cancel-intent
+    // ═══════════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// Hủy giao dịch đang chờ (khách đổi ý ở dialog QR/tiền mặt) — mở khóa session ngay
+    /// thay vì đợi PaymentExpiryJob tự dọn sau tối đa 30 phút.
+    /// Roles: DINER, GUEST, STAFF.
+    /// </summary>
+    [HttpPost("cancel-intent")]
+    [Authorize(Roles = Roles.AllExceptChef)]
+    public async Task<IActionResult> CancelIntent([FromBody] CancelPaymentIntentRequest request)
+    {
+        var (customerId, guestSessionId) = ExtractIdentity();
+        var isStaff = IsStaff();
+
+        await _paymentService.CancelIntentAsync(customerId, guestSessionId, isStaff, request.SessionId);
+        return Ok(ApiResponse<bool>.Ok(true, ValidationMessages.PAYMENT_CANCELLED));
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -120,6 +173,42 @@ public class PaymentsController : ControllerBase
 
         var result = await _paymentService.HandleWebhookAsync(rawBody, signature);
         return Ok(result);
+    }
+
+    /// <summary>
+    /// GET /api/v1/payments/pending-cash — Bàn đang chờ thu tiền mặt.
+    /// Roles: STAFF, MANAGER.
+    /// </summary>
+    [HttpGet("pending-cash")]
+    [Authorize(Roles = Roles.StaffAndManager)]
+    public async Task<IActionResult> GetPendingCash()
+    {
+        var result = await _paymentService.GetPendingCashAsync();
+        return Ok(ApiResponse<List<PendingCashPaymentResponse>>.Ok(result));
+    }
+
+    /// <summary>
+    /// POST /api/v1/payments/{id}/complete — Hoàn tất thanh toán thủ công (CASH hoặc xử lý sự cố).
+    /// Roles: STAFF, MANAGER.
+    /// </summary>
+    [HttpPost("{id:int}/complete")]
+    [Authorize(Roles = Roles.StaffAndManager)]
+    public async Task<IActionResult> CompletePayment(int id)
+    {
+        var success = await _paymentService.CompletePaymentAsync(id);
+        return Ok(ApiResponse<bool>.Ok(success, "Thanh toán đã được xác nhận thành công."));
+    }
+
+    /// <summary>
+    /// POST /api/v1/payments/complete-by-table/{tableNumber} — Hoàn tất thanh toán thủ công cho bàn.
+    /// Roles: STAFF, MANAGER.
+    /// </summary>
+    [HttpPost("complete-by-table/{tableNumber:int}")]
+    [Authorize(Roles = Roles.StaffAndManager)]
+    public async Task<IActionResult> CompletePaymentByTable(int tableNumber)
+    {
+        var success = await _paymentService.CompletePaymentByTableAsync(tableNumber);
+        return Ok(ApiResponse<bool>.Ok(success, "Thanh toán đã được xác nhận thành công."));
     }
 
     // ═══════════════════════════════════════════════════════════════

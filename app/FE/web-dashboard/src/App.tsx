@@ -113,7 +113,8 @@ const App: React.FC = () => {
             <Route
               path="settings"
               element={
-                <RoleProtectedRoute allowedRoles={['MANAGER', 'STAFF']}>
+                // BE SettingsController chỉ [Authorize(Roles = Roles.Manager)] — STAFF gọi sẽ bị 403.
+                <RoleProtectedRoute allowedRoles={['MANAGER']}>
                   <SettingsPage />
                 </RoleProtectedRoute>
               }

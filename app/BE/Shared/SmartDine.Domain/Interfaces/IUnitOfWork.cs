@@ -5,6 +5,7 @@ namespace SmartDine.Domain.Interfaces;
 public interface IUnitOfWork : IDisposable
 {
     IOrderRepository Orders { get; }
+    IRepository<OrderDetail> OrderDetails { get; }
     IMenuItemRepository MenuItems { get; }
     IUserRepository Users { get; }
     ICustomerRepository Customers { get; }
@@ -24,6 +25,7 @@ public interface IUnitOfWork : IDisposable
     ICouponRepository Coupons { get; }
     IRepository<LoyaltyTransaction> LoyaltyTransactions { get; }
     IRepository<MenuCategory> MenuCategories { get; }
+    IRepository<Location> Locations { get; }
     ISettingsRepository Settings { get; }
 
     Task<int> SaveChangesAsync(CancellationToken ct = default);

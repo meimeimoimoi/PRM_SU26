@@ -1,5 +1,6 @@
 using SmartDine.Application.Constants;
 using SmartDine.Application.DTOs.DiningSessions;
+using SmartDine.Application.Helper;
 using SmartDine.Domain.Entities;
 using SmartDine.Domain.Enums;
 using SmartDine.Domain.Exceptions;
@@ -18,8 +19,6 @@ namespace SmartDine.Application.Services;
 /// </summary>
 public class DiningSessionService
 {
-    private const decimal TaxRate = 0.10m;
-
     private readonly IUnitOfWork _uow;
 
     public DiningSessionService(IUnitOfWork uow)
@@ -147,8 +146,8 @@ public class DiningSessionService
     ///   2. Kiểm tra quyền xem (giống API 1).
     ///   3. Lấy tất cả orders của session (không tính CANCELLED).
     ///   4. sub_total = tổng FinalAmount.
-    ///   5. tax = sub_total * 10% (VAT).
-    ///   6. estimated_total = sub_total + tax.
+    ///   5. service + tax theo RestaurantSettings (Manager chỉnh được).
+    ///   6. estimated_total = sub_total + service + tax.
     ///
     /// Error cases:
     ///   - Session không tồn tại → 404.
@@ -168,14 +167,19 @@ public class DiningSessionService
             .Where(o => o.Status != OrderStatus.CANCELLED)
             .Sum(o => o.FinalAmount);
 
-        var tax = Math.Round(subTotal * TaxRate, 2);
+        var settings = await _uow.Settings.GetSingletonAsync();
+        var (serviceCharge, tax, estimatedTotal) = BillingCalculator.Compute(
+            subTotal, settings.TaxRate, settings.ServiceChargeRate);
 
         return new BillSummaryResponse
         {
             SessionId = sessionId,
             SubTotal = subTotal,
+            ServiceCharge = serviceCharge,
             Tax = tax,
-            EstimatedTotal = subTotal + tax
+            EstimatedTotal = estimatedTotal,
+            TaxRate = settings.TaxRate,
+            ServiceChargeRate = settings.ServiceChargeRate
         };
     }
 

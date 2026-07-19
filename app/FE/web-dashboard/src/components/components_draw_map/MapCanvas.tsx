@@ -15,6 +15,7 @@ import type { MapObject, MapObjectType, MapTool } from '@/types/map';
 import { useMapStore } from '@/store/mapStore';
 import { Toolbox } from './Toolbox';
 import { getMapPixels, pixelToWorld, worldToPixel } from '@/utils/coordinateUtils';
+import { useSignalR } from '@/hooks/useSignalR';
 
 const MIN_ZOOM = 0.25;
 const MAX_ZOOM = 3;
@@ -27,6 +28,8 @@ const toolLabels: Record<MapTool, string> = {
   table: 'Table',
   wall: 'Wall',
   robotStart: 'Start Position',
+  chargingStation: 'Charging Station',
+  kitchen: 'Kitchen',
   waypoint: 'Waypoint',
   edge: 'Connect Edge',
 };
@@ -168,6 +171,31 @@ function MapObjectShape({
             onResizeStart(e, object.id, 'delivery');
           }}
           title="Điểm giao hàng"
+        />
+      )}
+
+      {/* Điểm bếp (Kitchen Point) cho kitchen */}
+      {object.type === 'kitchen' && (
+        <div
+          className="delivery-point-handle"
+          style={{
+            position: 'absolute',
+            width: '16px',
+            height: '16px',
+            background: '#e17055', // cam
+            border: '2px solid white',
+            borderRadius: '50%',
+            left: `calc(50% - 8px + ${object.deliveryOffsetX || 0}px)`,
+            top: `calc(50% - 8px + ${object.deliveryOffsetY || 0}px)`,
+            cursor: 'grab',
+            zIndex: 30,
+            boxShadow: '0 2px 6px rgba(0,0,0,0.5)',
+          }}
+          onPointerDown={(e) => {
+            e.stopPropagation();
+            onResizeStart(e, object.id, 'delivery');
+          }}
+          title="Điểm bếp"
         />
       )}
 
@@ -425,9 +453,12 @@ export function MapCanvas() {
   const updateGraphNode = useMapStore((s) => s.updateGraphNode);
   const addGraphEdge = useMapStore((s) => s.addGraphEdge);
   const removeGraphNode = useMapStore((s) => s.removeGraphNode);
+  const removeGraphEdge = useMapStore((s) => s.removeGraphEdge);
 
+  const { on, connected } = useSignalR();
   const [robotState, setRobotState] = useState<{ x: number; y: number; theta: number; status: string } | null>(null);
   const [robotPath, setRobotPath] = useState<{ x: number; y: number }[]>([]);
+  const prevStatusRef = useRef<string>('OFFLINE');
 
   // Determine navigation phase based on robot status and path length
   // Phase1: Path calculation (path received but robot not yet moving)
@@ -436,63 +467,52 @@ export function MapCanvas() {
   const navPhase = (() => {
     if (!robotState) return 'Idle';
     const status = robotState.status;
-    if (status === 'ARRIVED' || status === 'IDLE') return 'Phase3';
+    if (status === 'ARRIVED_TABLE' || status === 'ARRIVED_KITCHEN' || status === 'IDLE') return 'Phase3';
     if (status === 'NAV_TO_TABLE') {
       if (robotPath.length <= 2) return 'Phase1';
       return 'Phase2';
     }
-    // Fallback for other statuses (e.g., RETURN_TO_KITCHEN)
+    if (status === 'RETURN_TO_KITCHEN') return 'Phase2';
     return 'Idle';
   })();
   const [mouseCanvasPos, setMouseCanvasPos] = useState<{ x: number; y: number } | null>(null);
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
 
-  // Poll robot position + path
+  // Listen to robot state + path via SignalR (replaces HTTP polling)
   useEffect(() => {
-    // ---------------------------------------------------------------
-    // Poll robot live status + path (unchanged)
-    // ---------------------------------------------------------------
-    const fetchRobotStatus = async () => {
-      try {
-        const res = await fetch('http://localhost:3001/api/robot/status');
-        const data = await res.json();
-        if (data && data.status !== 'OFFLINE') {
-          setRobotState(data);
-        } else {
-          setRobotState(null);
+    if (!connected) return;
+    const cleanupState = on('ReceiveRobotState', (...args: unknown[]) => {
+      const data = args[0] as { x: number; y: number; theta: number; status: string };
+      if (data && data.status !== 'OFFLINE') {
+        setRobotState(data);
+        const prevStatus = prevStatusRef.current;
+        if (prevStatus !== data.status) {
+          if (data.status === 'ARRIVED_TABLE') {
+            message.success('Robot đã đến bàn giao hàng thành công.');
+          } else if (data.status === 'ARRIVED_KITCHEN') {
+            message.success('Robot đã quay lại bếp thành công.');
+          }
         }
-      } catch (err) {
-        setRobotState(null);
+        prevStatusRef.current = data.status;
       }
-    };
-    const fetchRobotPath = async () => {
-      try {
-        const res = await fetch('http://localhost:3001/api/robot/path');
-        const data = await res.json();
-        setRobotPath(data.path || []);
-      } catch (err) {
-        setRobotPath([]);
-      }
-    };
-    fetchRobotStatus();
-    fetchRobotPath();
-    const statusInterval = setInterval(fetchRobotStatus, 150);
-    const pathInterval = setInterval(fetchRobotPath, 500);
+    });
+    const cleanupPath = on('ReceiveRobotPath', (...args: unknown[]) => {
+      const data = args[0] as { path: { x: number; y: number }[] };
+      setRobotPath(data?.path || []);
+    });
+    return () => { cleanupState(); cleanupPath(); };
+  }, [on, connected]);
 
-    // ---------------------------------------------------------------
-    // Ensure a robotStart graph node exists when map meta provides one.
-    // This runs once per component mount and adds the node only if missing.
-    // ---------------------------------------------------------------
+  // Ensure a robotStart graph node exists when map meta provides one.
+  useEffect(() => {
     const ensureRobotStartNode = async () => {
-      // If a robotStart node already exists, nothing to do.
       if (graphNodes.some((n) => n.type === 'robotStart')) return;
 
       let nodeCreated = false;
 
-      // ① Try persisted selectedMapId first.
       if (selectedMapId) {
         try {
-          const metaRes = await fetch(`http://localhost:3001/api/maps/${selectedMapId}`);
+          const metaRes = await fetch(`/api/v1/maps/${selectedMapId}`);
           const meta = await metaRes.json();
           if (meta && typeof meta.robotStart?.x === 'number' && typeof meta.robotStart?.y === 'number') {
             addGraphNode({
@@ -511,16 +531,14 @@ export function MapCanvas() {
         }
       }
 
-      // ② Fallback: fetch the list of maps, pick the first one and persist its ID.
       if (!nodeCreated) {
         try {
-          const listRes = await fetch('http://localhost:3001/api/maps');
+          const listRes = await fetch('/api/v1/maps');
           const list = await listRes.json();
           if (!Array.isArray(list) || list.length === 0) return;
           const mapId = list[0].id;
-          // Persist the chosen map ID for future mounts.
           setSelectedMapId(mapId);
-          const metaRes = await fetch(`http://localhost:3001/api/maps/${mapId}`);
+          const metaRes = await fetch(`/api/v1/maps/${mapId}`);
           const meta = await metaRes.json();
           if (meta && typeof meta.robotStart?.x === 'number' && typeof meta.robotStart?.y === 'number') {
             addGraphNode({
@@ -539,31 +557,21 @@ export function MapCanvas() {
         }
       }
 
-      // ③ Final fallback: use live robot position if meta is missing.
-      if (!nodeCreated) {
-        try {
-          const statusRes = await fetch('http://localhost:3001/api/robot/status');
-          const status = await statusRes.json();
-          if (status && status.status !== 'OFFLINE' && typeof status.x === 'number' && typeof status.y === 'number') {
-            addGraphNode({
-              id: `robotStart-${Date.now()}`,
-              type: 'robotStart',
-              name: 'Start',
-              x: status.x,
-              y: status.y,
-              theta: 0,
-            });
-            message.info('ℹ️ Created start node from live robot position (meta missing)');
-          }
-        } catch (e) {
-          console.warn('Failed to fallback to robot status for start node', e);
-        }
+      if (!nodeCreated && robotState && robotState.status !== 'OFFLINE'
+          && typeof robotState.x === 'number' && typeof robotState.y === 'number') {
+        addGraphNode({
+          id: `robotStart-${Date.now()}`,
+          type: 'robotStart',
+          name: 'Start',
+          x: robotState.x,
+          y: robotState.y,
+          theta: 0,
+        });
+        message.info('Created start node from live robot position (meta missing)');
       }
     };
     ensureRobotStartNode();
-
-    return () => { clearInterval(statusInterval); clearInterval(pathInterval); };
-  }, [graphNodes, addGraphNode, selectedMapId]);
+  }, [graphNodes, addGraphNode, selectedMapId, setSelectedMapId, robotState]);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const [pan, setPan] = useState({ x: 0, y: 0 });
@@ -606,7 +614,10 @@ export function MapCanvas() {
     startDeliveryOffsetY?: number;
     nodeStartX?: number;
     nodeStartY?: number;
-    kind: 'object' | 'node' | null;
+    nodeStartTheta?: number;
+    startObjX?: number;
+    startObjY?: number;
+    kind: 'object' | 'node' | 'theta' | null;
   }>({
     id: null,
     offsetX: 0,
@@ -622,6 +633,7 @@ export function MapCanvas() {
     startDeliveryOffsetY: 0,
     nodeStartX: 0,
     nodeStartY: 0,
+    nodeStartTheta: 0,
     kind: null,
   });
 
@@ -779,6 +791,44 @@ export function MapCanvas() {
             }
           }
 
+          // Sync kitchen node offset back to the parent kitchen object
+          if (node.type === 'kitchen') {
+            const objectId = node.id.replace('kitchen-', '');
+            const parentObj = objects.find((o) => o.id === objectId);
+            if (parentObj) {
+              const kitchenCenterWorld = pixelToWorld(
+                parentObj.x + parentObj.width / 2,
+                parentObj.y + parentObj.height / 2,
+                floorSize,
+                resolution,
+              );
+              const offsetWorldX = nextX - kitchenCenterWorld.x;
+              const offsetWorldY = kitchenCenterWorld.y - nextY;
+              const offsetPxX = offsetWorldX / resolution;
+              const offsetPxY = offsetWorldY / resolution;
+              updateObject(parentObj.id, {
+                deliveryOffsetX: offsetPxX,
+                deliveryOffsetY: offsetPxY,
+              });
+            }
+          }
+
+          return;
+        }
+
+        if (dragState.kind === 'theta') {
+          const thetaNode = graphNodes.find(n => n.id === dragState.id);
+          if (!thetaNode) return;
+          const px = worldToPixel(thetaNode.x, thetaNode.y, floorSize, resolution);
+          const dx = canvasX - px.x;
+          const dy = canvasY - px.y;
+          let theta = -Math.atan2(dy, dx);
+          theta = ((theta % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+          if (e.shiftKey) {
+            const step = Math.PI / 12;
+            theta = Math.round(theta / step) * step;
+          }
+          updateGraphNode(dragState.id, { theta });
           return;
         }
 
@@ -822,8 +872,8 @@ export function MapCanvas() {
           const dy = canvasY - dragState.startY;
           let newWidth = dragState.startWidth;
           let newHeight = dragState.startHeight;
-          let newX = obj.x;
-          let newY = obj.y;
+          let newX = dragState.startObjX ?? obj.x;
+          let newY = dragState.startObjY ?? obj.y;
 
           switch (dragState.handle) {
             case 'br':
@@ -833,29 +883,29 @@ export function MapCanvas() {
             case 'tl':
               newWidth = Math.max(10, dragState.startWidth - dx);
               newHeight = Math.max(10, dragState.startHeight - dy);
-              newX = obj.x + (dragState.startWidth - newWidth);
-              newY = obj.y + (dragState.startHeight - newHeight);
+              newX = (dragState.startObjX ?? obj.x) + (dragState.startWidth - newWidth);
+              newY = (dragState.startObjY ?? obj.y) + (dragState.startHeight - newHeight);
               break;
             case 'tr':
               newWidth = Math.max(10, dragState.startWidth + dx);
               newHeight = Math.max(10, dragState.startHeight - dy);
-              newY = obj.y + (dragState.startHeight - newHeight);
+              newY = (dragState.startObjY ?? obj.y) + (dragState.startHeight - newHeight);
               break;
             case 'bl':
               newWidth = Math.max(10, dragState.startWidth - dx);
               newHeight = Math.max(10, dragState.startHeight + dy);
-              newX = obj.x + (dragState.startWidth - newWidth);
+              newX = (dragState.startObjX ?? obj.x) + (dragState.startWidth - newWidth);
               break;
             case 'top':
               newHeight = Math.max(10, dragState.startHeight - dy);
-              newY = obj.y + (dragState.startHeight - newHeight);
+              newY = (dragState.startObjY ?? obj.y) + (dragState.startHeight - newHeight);
               break;
             case 'bottom':
               newHeight = Math.max(10, dragState.startHeight + dy);
               break;
             case 'left':
               newWidth = Math.max(10, dragState.startWidth - dx);
-              newX = obj.x + (dragState.startWidth - newWidth);
+              newX = (dragState.startObjX ?? obj.x) + (dragState.startWidth - newWidth);
               break;
             case 'right':
               newWidth = Math.max(10, dragState.startWidth + dx);
@@ -897,7 +947,7 @@ export function MapCanvas() {
       const dy = e.clientY - panStart.current.y;
       setPan({ x: panStart.current.panX + dx, y: panStart.current.panY + dy });
     },
-    [dragState, objects, pan, zoom, updateObject, applySnap],
+    [dragState, objects, pan, zoom, updateObject, applySnap, updateGraphNode],
   );
 
   const handlePointerUp = useCallback(() => {
@@ -917,6 +967,7 @@ export function MapCanvas() {
       startDeliveryOffsetY: 0,
       nodeStartX: 0,
       nodeStartY: 0,
+      nodeStartTheta: 0,
       kind: null,
     });
   }, []);
@@ -936,8 +987,14 @@ export function MapCanvas() {
       if (e.code === 'Delete' || e.code === 'Backspace') {
         const active = document.activeElement;
         if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA')) return;
-        const selId = useMapStore.getState().selectedObjectId;
-        if (selId) removeObject(selId);
+        const st = useMapStore.getState();
+        if (st.selectedGraphEdgeId) {
+          removeGraphEdge(st.selectedGraphEdgeId);
+        } else if (st.selectedGraphNodeId) {
+          removeGraphNode(st.selectedGraphNodeId);
+        } else if (st.selectedObjectId) {
+          removeObject(st.selectedObjectId);
+        }
       }
     };
     const up = (e: KeyboardEvent) => {
@@ -949,7 +1006,7 @@ export function MapCanvas() {
       window.removeEventListener('keydown', down);
       window.removeEventListener('keyup', up);
     };
-  }, [removeObject, setEdgeDraftFromNodeId, setSelectedObject, setSelectedGraphNode, setSelectedGraphEdge]);
+  }, [removeObject, removeGraphNode, removeGraphEdge, setEdgeDraftFromNodeId, setSelectedObject, setSelectedGraphNode, setSelectedGraphEdge]);
 
   useEffect(() => {
     graphNodeCounter = Math.max(graphNodeCounter, graphNodes.length + 1);
@@ -978,7 +1035,7 @@ export function MapCanvas() {
       }
 
       const tool = selectedTool as MapObjectType;
-      if (tool !== 'robotStart' && tool !== 'waypoint' && objectPhysicalSizes[tool]) {
+      if (tool !== 'robotStart' && tool !== 'waypoint' && tool !== 'kitchen' && objectPhysicalSizes[tool]) {
         objectCounter++;
         const defaultSize = objectPhysicalSizes[tool];
         const widthPx = Math.round(defaultSize.width / resolution);
@@ -1032,6 +1089,43 @@ export function MapCanvas() {
           x: worldPoint.x,
           y: worldPoint.y,
           theta: 0,
+        });
+        return;
+      }
+
+      if (selectedTool === 'chargingStation') {
+        graphNodeCounter++;
+        const nodeId = `charging-${graphNodeCounter}`;
+        addGraphNode({
+          id: nodeId,
+          type: 'charging',
+          name: `Charging ${graphNodeCounter}`,
+          x: worldPoint.x,
+          y: worldPoint.y,
+          theta: 0,
+        });
+        return;
+      }
+
+      if (selectedTool === 'kitchen') {
+        objectCounter++;
+        const defaultSize = objectPhysicalSizes['kitchen']!;
+        const widthPx = Math.round(defaultSize.width / resolution);
+        const heightPx = Math.round(defaultSize.height / resolution);
+        const mapSize = getMapPixels(floorSize, resolution);
+        const clampedX = Math.max(0, Math.min(mapSize - widthPx, Math.round(gridLocalX - widthPx / 2)));
+        const clampedY = Math.max(0, Math.min(mapSize - heightPx, Math.round(gridLocalY - heightPx / 2)));
+        addObject({
+          id: `kitchen-${objectCounter}`,
+          type: 'kitchen',
+          name: `Kitchen ${objectCounter}`,
+          x: clampedX,
+          y: clampedY,
+          width: widthPx,
+          height: heightPx,
+          rotation: 0,
+          deliveryOffsetX: 0,
+          deliveryOffsetY: 0,
         });
         return;
       }
@@ -1165,6 +1259,8 @@ export function MapCanvas() {
         startAngle: 0,
         startDeliveryOffsetX: obj.deliveryOffsetX || 0,
         startDeliveryOffsetY: obj.deliveryOffsetY || 0,
+        startObjX: obj.x,
+        startObjY: obj.y,
         kind: 'object',
       });
       (e.target as HTMLElement).setPointerCapture(e.pointerId);
@@ -1245,6 +1341,23 @@ export function MapCanvas() {
                     <path d="M0,0 L0,6 L8,3 z" fill={isSelected ? '#52c41a' : '#666'} />
                   </marker>
                 </defs>
+                {/* Invisible wider click target */}
+                <line
+                  x1={fromPx.x} y1={fromPx.y}
+                  x2={toPx.x} y2={toPx.y}
+                  stroke="transparent"
+                  strokeWidth={20}
+                  style={{ cursor: isSelected ? 'default' : 'pointer', pointerEvents: 'auto' }}
+                  onClick={(ev) => {
+                    ev.stopPropagation();
+                    setSelectedGraphEdge(edge.id);
+                  }}
+                  onContextMenu={(ev) => {
+                    ev.preventDefault();
+                    ev.stopPropagation();
+                    removeGraphEdge(edge.id);
+                  }}
+                />
                 <line
                   x1={fromPx.x}
                   y1={fromPx.y}
@@ -1255,6 +1368,7 @@ export function MapCanvas() {
                   strokeDasharray={edge.bidirectional ? '0' : '8 5'}
                   markerEnd={edge.bidirectional ? undefined : 'url(#arrowhead)'}
                   opacity={0.85}
+                  style={{ pointerEvents: 'none' }}
                 />
               </svg>
             );
@@ -1330,6 +1444,209 @@ export function MapCanvas() {
                         ? <BatteryCharging size={12} color="white" />
                         : <Route size={12} color="white" />;
 
+            if (node.type === 'robotStart') {
+              const thetaRad = node.theta ?? 0;
+              const thetaDeg = -(thetaRad * 180) / Math.PI;
+              const headingRad = -thetaRad;
+              const rayLen = 50;
+              const rayEndX = pos.x + rayLen * Math.cos(headingRad);
+              const rayEndY = pos.y + rayLen * Math.sin(headingRad);
+              const ringR = 24;
+              const hdlAngle = headingRad;
+              const hdlX = pos.x + ringR * Math.cos(hdlAngle);
+              const hdlY = pos.y + ringR * Math.sin(hdlAngle);
+              return (
+                <React.Fragment key={node.id}>
+                  {/* Projection ray */}
+                  {(isSelected || hoveredNodeId === node.id) && (
+                    <svg
+                      style={{
+                        position: 'absolute', left: 0, top: 0,
+                        width: '100%', height: '100%',
+                        pointerEvents: 'none', zIndex: 80,
+                        overflow: 'visible',
+                      }}
+                    >
+                      <line
+                        x1={pos.x} y1={pos.y}
+                        x2={rayEndX} y2={rayEndY}
+                        stroke="#52c41a" strokeWidth={2}
+                        strokeDasharray="5 4" opacity={0.5}
+                        strokeLinecap="round"
+                      />
+                      <circle cx={rayEndX} cy={rayEndY} r={3} fill="#52c41a" opacity={0.35} />
+                    </svg>
+                  )}
+                  {/* Rotation ring */}
+                  {isSelected && (
+                    <div
+                      style={{
+                        position: 'absolute',
+                        left: pos.x - ringR,
+                        top: pos.y - ringR,
+                        width: ringR * 2,
+                        height: ringR * 2,
+                        borderRadius: '50%',
+                        border: '2px dashed #52c41a66',
+                        pointerEvents: 'none',
+                        zIndex: 88,
+                      }}
+                    />
+                  )}
+                  {/* Rotation handle */}
+                  {isSelected && (
+                    <div
+                      onPointerDown={(ev) => {
+                        if (ev.button !== 0) return;
+                        ev.stopPropagation();
+                        ev.preventDefault();
+                        setDragState({
+                          id: node.id,
+                          offsetX: 0, offsetY: 0,
+                          startX: 0, startY: 0,
+                          startWidth: 0, startHeight: 0,
+                          handle: null,
+                          initialRotation: 0, startAngle: 0,
+                          startDeliveryOffsetX: 0, startDeliveryOffsetY: 0,
+                          nodeStartX: 0, nodeStartY: 0,
+                          nodeStartTheta: thetaRad,
+                          kind: 'theta',
+                        });
+                        (ev.currentTarget as HTMLElement).setPointerCapture(ev.pointerId);
+                      }}
+                      style={{
+                        position: 'absolute',
+                        left: hdlX - 7,
+                        top: hdlY - 7,
+                        width: 14,
+                        height: 14,
+                        borderRadius: '50%',
+                        background: '#52c41a',
+                        border: '2.5px solid white',
+                        cursor: 'grab',
+                        zIndex: 95,
+                        boxShadow: '0 2px 6px rgba(0,0,0,0.3)',
+                        transition: 'transform 0.12s ease',
+                      }}
+                      title="Drag to rotate start heading"
+                    />
+                  )}
+                  {/* Robot icon */}
+                  <div
+                    onMouseEnter={() => setHoveredNodeId(node.id)}
+                    onMouseLeave={() => setHoveredNodeId(null)}
+                    onClick={(ev) => {
+                      ev.stopPropagation();
+                      if (selectedTool === 'edge') {
+                        if (!edgeDraftFromNodeId) {
+                          setEdgeDraftFromNodeId(node.id);
+                          setSelectedGraphNode(node.id);
+                        } else if (edgeDraftFromNodeId !== node.id) {
+                          graphEdgeCounter++;
+                          const from = graphNodes.find((n) => n.id === edgeDraftFromNodeId);
+                          const weight = from ? Math.hypot(node.x - from.x, node.y - from.y) : 1;
+                          addGraphEdge({
+                            id: `edge-${graphEdgeCounter}`,
+                            from: edgeDraftFromNodeId,
+                            to: node.id,
+                            bidirectional: true,
+                            weight,
+                          });
+                          setEdgeDraftFromNodeId(null);
+                        } else {
+                          setEdgeDraftFromNodeId(null);
+                        }
+                        return;
+                      }
+                      setSelectedGraphNode(node.id);
+                      setSelectedObject(null);
+                    }}
+                    onPointerDown={(ev) => {
+                      if (ev.button !== 0) return;
+                      if (selectedTool === 'edge') return;
+                      ev.stopPropagation();
+                      const rect = containerRef.current?.getBoundingClientRect();
+                      if (!rect) return;
+                      const canvasX = (ev.clientX - rect.left - pan.x) / zoom;
+                      const canvasY = (ev.clientY - rect.top - pan.y) / zoom;
+                      const pointerWorld = pixelToWorld(canvasX, canvasY, floorSize, resolution);
+                      setDragState({
+                        id: node.id,
+                        offsetX: pointerWorld.x - node.x,
+                        offsetY: pointerWorld.y - node.y,
+                        startX: canvasX,
+                        startY: canvasY,
+                        startWidth: 0,
+                        startHeight: 0,
+                        handle: null,
+                        initialRotation: 0,
+                        startAngle: 0,
+                        startDeliveryOffsetX: 0,
+                        startDeliveryOffsetY: 0,
+                        nodeStartX: node.x,
+                        nodeStartY: node.y,
+                        kind: 'node',
+                      });
+                      setSelectedGraphNode(node.id);
+                      setSelectedObject(null);
+                      (ev.currentTarget as HTMLElement).setPointerCapture(ev.pointerId);
+                    }}
+                    onContextMenu={(ev) => {
+                      ev.preventDefault();
+                      ev.stopPropagation();
+                      removeGraphNode(node.id);
+                    }}
+                    style={{
+                      position: 'absolute',
+                      left: pos.x - 10,
+                      top: pos.y - 10,
+                      width: 20,
+                      height: 20,
+                      zIndex: 90,
+                      transform: `rotate(${thetaDeg}deg)`,
+                      transformOrigin: 'center center',
+                      cursor: 'pointer',
+                      filter: isSelected
+                        ? 'drop-shadow(0 0 5px #52c41a88)'
+                        : hoveredNodeId === node.id
+                          ? 'drop-shadow(0 0 3px #52c41a55)'
+                          : undefined,
+                      transition: 'filter 0.15s ease-out',
+                    }}
+                    title={`Start (θ=${(thetaRad * 180 / Math.PI).toFixed(1)}°)`}
+                  >
+                    <svg width="20" height="20" viewBox="0 0 20 20">
+                      <circle cx="10" cy="10" r="10" fill="#52c41a" />
+                      <path
+                        d="M 14 10 L 6 14 L 8 10 L 6 6 Z"
+                        fill="white" opacity="0.9"
+                      />
+                    </svg>
+                  </div>
+                  {/* Label */}
+                  <span
+                    style={{
+                      position: 'absolute',
+                      top: pos.y + 20,
+                      left: pos.x,
+                      transform: 'translateX(-50%)',
+                      fontSize: '10px',
+                      fontWeight: 700,
+                      color: '#1f1f1f',
+                      whiteSpace: 'nowrap',
+                      background: 'rgba(255,255,255,0.9)',
+                      padding: '0 4px',
+                      borderRadius: '4px',
+                      pointerEvents: 'none',
+                      zIndex: 90,
+                    }}
+                  >
+                    Start
+                  </span>
+                </React.Fragment>
+              );
+            }
+
             return (
               <div
                 key={node.id}
@@ -1354,7 +1671,6 @@ export function MapCanvas() {
                       });
                       setEdgeDraftFromNodeId(null);
                     } else {
-                      // Click lại chính node đang chọn → huỷ draft
                       setEdgeDraftFromNodeId(null);
                     }
                     return;
@@ -1364,7 +1680,6 @@ export function MapCanvas() {
                 }}
                 onPointerDown={(ev) => {
                   if (ev.button !== 0) return;
-                  // Khi đang ở chế độ edge, không bắt drag – để onClick xử lý kết nối
                   if (selectedTool === 'edge') return;
                   ev.stopPropagation();
                   const rect = containerRef.current?.getBoundingClientRect();
@@ -1439,17 +1754,15 @@ export function MapCanvas() {
                     pointerEvents: 'none',
                   }}
                 >
-                  {node.type === 'robotStart'
-                    ? 'Start'
-                    : node.type === 'table'
-                      ? node.name
-                      : node.type === 'delivery'
-                        ? 'Delivery'
-                        : node.type === 'kitchen'
-                          ? 'Kitchen'
-                          : node.type === 'charging'
-                            ? 'Charging'
-                            : 'Waypoint'}
+                  {node.type === 'table'
+                    ? node.name
+                    : node.type === 'delivery'
+                      ? 'Delivery'
+                      : node.type === 'kitchen'
+                        ? 'Kitchen'
+                        : node.type === 'charging'
+                          ? 'Charging'
+                          : 'Waypoint'}
                 </span>
               </div>
             );
@@ -1543,6 +1856,7 @@ export function MapCanvas() {
                   left: pos.x - 16,
                   top: pos.y - 16,
                   zIndex: 100,
+                  pointerEvents: 'none',
                   transform: `rotate(${-((robotState.theta || 0) * 180) / Math.PI}deg)`,
                   transformOrigin: 'center center',
                   display: 'flex',

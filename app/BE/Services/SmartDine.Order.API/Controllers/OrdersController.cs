@@ -60,13 +60,25 @@ public class OrdersController : ControllerBase
         return Ok(ApiResponse<List<OrderResponse>>.Ok(result));
     }
 
-    /// <summary>GET /api/v1/orders/today — Tất cả đơn hôm nay (cho manager)</summary>
+    /// <summary>GET /api/v1/orders/today — Tất cả đơn hôm nay (cho staff/manager)</summary>
     [HttpGet("today")]
-    [Authorize(Roles = Roles.Manager)]
+    [Authorize(Roles = Roles.KitchenStaff)]
     public async Task<IActionResult> GetTodayOrders()
     {
         var result = await _orderService.GetTodayOrdersAsync();
         return Ok(ApiResponse<List<OrderResponse>>.Ok(result));
+    }
+
+    /// <summary>
+    /// GET /api/v1/orders/chart?period=day|week|month — Doanh số theo đơn hàng cho Dashboard Manager.
+    /// Không lọc theo thanh toán (khác /payments/chart) — dùng để xem mức độ hoạt động/đơn đặt.
+    /// </summary>
+    [HttpGet("chart")]
+    [Authorize(Roles = Roles.Manager)]
+    public async Task<IActionResult> GetOrderChart([FromQuery] string period = "day")
+    {
+        var result = await _orderService.GetOrderChartAsync(period);
+        return Ok(ApiResponse<List<ChartPointResponse>>.Ok(result));
     }
 
     /// <summary>PATCH /api/v1/orders/{id}/status — Cập nhật trạng thái đơn hàng</summary>
@@ -78,6 +90,15 @@ public class OrdersController : ControllerBase
         return Ok(ApiResponse<OrderResponse>.Ok(result, ValidationMessages.ORDER_STATUS_UPDATED_SUCCESS));
     }
 
+    /// <summary>PATCH /api/v1/orders/items/{itemId}/status — Cập nhật trạng thái món ăn trong đơn hàng</summary>
+    [HttpPatch("items/{itemId:int}/status")]
+    [Authorize(Roles = Roles.KitchenStaff)]
+    public async Task<IActionResult> UpdateItemStatus(int itemId, [FromBody] UpdateOrderStatusRequest request)
+    {
+        var result = await _orderService.UpdateItemStatusAsync(itemId, request.Status);
+        return Ok(ApiResponse<bool>.Ok(result, ValidationMessages.ORDER_STATUS_UPDATED_SUCCESS));
+    }
+
     /// <summary>GET /api/v1/orders/my — Lịch sử đơn hàng của customer</summary>
     [HttpGet("my")]
     [Authorize(Roles = Roles.Customer)]
@@ -85,6 +106,38 @@ public class OrdersController : ControllerBase
     {
         var customerId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
         var result = await _orderService.GetByCustomerIdAsync(customerId, page, pageSize);
+        return Ok(ApiResponse<List<OrderResponse>>.Ok(result));
+    }
+
+    /// <summary>GET /api/v1/orders/session — Lịch sử đơn hàng của CUSTOMER hoặc GUEST (dựa trên JWT)</summary>
+    [HttpGet("session")]
+    [Authorize(Roles = Roles.AllDinersAndStaff)]
+    public async Task<IActionResult> GetSessionOrders([FromQuery] int page = 1, [FromQuery] int pageSize = 20)
+    {
+        var (customerId, guestSessionId) = ExtractIdentity();
+
+        if (customerId.HasValue)
+        {
+            var result = await _orderService.GetByCustomerIdAsync(customerId.Value, page, pageSize);
+            return Ok(ApiResponse<List<OrderResponse>>.Ok(result));
+        }
+
+        if (!string.IsNullOrEmpty(guestSessionId))
+        {
+            var result = await _orderService.GetByGuestSessionIdAsync(guestSessionId, page, pageSize);
+            return Ok(ApiResponse<List<OrderResponse>>.Ok(result));
+        }
+
+        return Ok(ApiResponse<List<OrderResponse>>.Ok(new List<OrderResponse>()));
+    }
+
+    /// <summary>GET /api/v1/orders/session/{sessionId} — Toàn bộ đơn hàng trong phiên ăn (mọi participant cùng bàn)</summary>
+    [HttpGet("session/{sessionId:int}")]
+    [Authorize(Roles = Roles.AllDinersAndStaff)]
+    public async Task<IActionResult> GetOrdersBySession(int sessionId)
+    {
+        var (customerId, guestSessionId) = ExtractIdentity();
+        var result = await _orderService.GetBySessionIdAsync(sessionId, customerId, guestSessionId, IsStaff());
         return Ok(ApiResponse<List<OrderResponse>>.Ok(result));
     }
 

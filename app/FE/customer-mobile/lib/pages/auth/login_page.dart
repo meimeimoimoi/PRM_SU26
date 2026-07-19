@@ -3,6 +3,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../viewmodels/auth_viewmodel.dart';
+import '../../routes/app_routes.dart';
 
 class _AppColors {
   static const Color primary = Color(0xFFad2c00);
@@ -29,23 +30,32 @@ class LoginPage extends ConsumerStatefulWidget {
 class _LoginPageState extends ConsumerState<LoginPage> {
   final _nameController = TextEditingController();
   final _phoneController = TextEditingController();
+  final _tableIdController = TextEditingController(text: '1');
 
   @override
   void dispose() {
     _nameController.dispose();
     _phoneController.dispose();
+    _tableIdController.dispose();
     super.dispose();
   }
 
   void _handleGuestLogin() async {
     final name = _nameController.text.trim();
     final phone = _phoneController.text.trim();
-    
-    // In a real scenario, tableId would be scanned from QR code or retrieved from deep link
-    final success = await ref.read(authViewModelProvider.notifier).loginGuest(12, name, phone);
-    
+    final tableId = int.tryParse(_tableIdController.text.trim()) ?? 1;
+
+    final success = await ref.read(authViewModelProvider.notifier).loginGuest(tableId, name, phone);
+
     if (success && mounted) {
       context.go('/home');
+    }
+  }
+
+  Future<void> _handleScanQr() async {
+    final tableNumber = await context.push<int>(AppRoutes.qrScan);
+    if (tableNumber != null) {
+      _tableIdController.text = tableNumber.toString();
     }
   }
 
@@ -90,7 +100,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
               borderRadius: BorderRadius.circular(100.r),
             ),
             child: Text(
-              'Bàn 12',
+              'GUEST',
               style: TextStyle(
                 color: _AppColors.onPrimaryContainer,
                 fontSize: 12.sp,
@@ -161,57 +171,68 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                   ),
                 ],
               ),
-              child: Row(
-                children: [
-                  Container(
-                    width: 64.r,
-                    height: 64.r,
-                    decoration: BoxDecoration(
-                      color: _AppColors.primaryContainer,
-                      borderRadius: BorderRadius.circular(12.r),
-                    ),
-                    child: Center(
-                      child: Text(
-                        '12',
-                        style: TextStyle(
-                          color: _AppColors.onPrimaryContainer,
-                          fontSize: 20.sp,
-                          fontWeight: FontWeight.bold,
+              child: ValueListenableBuilder<TextEditingValue>(
+                // Hiện đúng số bàn khách đã nhập/quét — trước đây hardcode "12" và
+                // "Khu vực cửa sổ • 4 Chỗ ngồi" giả, không liên quan gì đến bàn thật
+                // (BE không có endpoint public trả vị trí/sức chứa bàn trước khi đăng nhập).
+                valueListenable: _tableIdController,
+                builder: (context, value, _) {
+                  final tableText = value.text.trim();
+                  return Row(
+                    children: [
+                      Container(
+                        width: 64.r,
+                        height: 64.r,
+                        decoration: BoxDecoration(
+                          color: _AppColors.primaryContainer,
+                          borderRadius: BorderRadius.circular(12.r),
                         ),
-                      ),
-                    ),
-                  ),
-                  SizedBox(width: 24.w),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Bàn số 12',
-                          style: TextStyle(
-                            color: _AppColors.onSurface,
-                            fontSize: 20.sp,
-                            fontWeight: FontWeight.w600,
+                        child: Center(
+                          child: Text(
+                            tableText.isEmpty ? '?' : tableText,
+                            style: TextStyle(
+                              color: _AppColors.onPrimaryContainer,
+                              fontSize: 20.sp,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                         ),
-                        SizedBox(height: 4.h),
-                        Row(
+                      ),
+                      SizedBox(width: 24.w),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Icon(Icons.groups, color: _AppColors.onSurfaceVariant, size: 16.sp),
-                            SizedBox(width: 4.w),
                             Text(
-                              'Khu vực cửa sổ • 4 Chỗ ngồi',
+                              tableText.isEmpty ? 'Bàn của bạn' : 'Bàn số $tableText',
                               style: TextStyle(
-                                color: _AppColors.onSurfaceVariant,
-                                fontSize: 14.sp,
+                                color: _AppColors.onSurface,
+                                fontSize: 20.sp,
+                                fontWeight: FontWeight.w600,
                               ),
+                            ),
+                            SizedBox(height: 4.h),
+                            Row(
+                              children: [
+                                Icon(Icons.info_outline, color: _AppColors.onSurfaceVariant, size: 16.sp),
+                                SizedBox(width: 4.w),
+                                Expanded(
+                                  child: Text(
+                                    'Kiểm tra đúng số bàn trước khi tiếp tục',
+                                    style: TextStyle(
+                                      color: _AppColors.onSurfaceVariant,
+                                      fontSize: 14.sp,
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
                           ],
                         ),
-                      ],
-                    ),
-                  ),
-                ],
+                      ),
+                    ],
+                  );
+                },
               ),
             ),
             SizedBox(height: 24.h),
@@ -233,6 +254,20 @@ class _LoginPageState extends ConsumerState<LoginPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  _buildLabel('Số Bàn', true),
+                  SizedBox(height: 8.h),
+                  _buildTextField(
+                    controller: _tableIdController,
+                    icon: Icons.table_restaurant,
+                    hintText: 'Nhập số bàn hoặc quét mã QR',
+                    keyboardType: TextInputType.number,
+                    suffixIcon: IconButton(
+                      icon: Icon(Icons.qr_code_scanner, color: _AppColors.primary),
+                      tooltip: 'Quét mã QR trên bàn',
+                      onPressed: _handleScanQr,
+                    ),
+                  ),
+                  SizedBox(height: 16.h),
                   _buildLabel('Tên của bạn', true),
                   SizedBox(height: 8.h),
                   _buildTextField(
@@ -273,13 +308,16 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                         : Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Text(
+                              Flexible(
+                                child: Text(
                                 'Tiếp tục làm khách vãng lai',
                                 style: TextStyle(
                                   fontSize: 16.sp,
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),
+                              ),
+                              
                               SizedBox(width: 8.w),
                               Icon(Icons.arrow_forward, size: 20.sp),
                             ],
@@ -328,14 +366,6 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                               fontWeight: FontWeight.w600,
                             ),
                           ),
-                          SizedBox(height: 4.h),
-                          Text(
-                            'Ưu đãi giảm 5% & tích điểm ngay',
-                            style: TextStyle(
-                              color: _AppColors.onSecondaryContainer.withOpacity(0.8),
-                              fontSize: 14.sp,
-                            ),
-                          ),
                         ],
                       ),
                     ),
@@ -346,53 +376,6 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                   ],
                 ),
               ),
-            ),
-            SizedBox(height: 32.h),
-
-            // Decorative Images Grid
-            Row(
-              children: [
-                Expanded(
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(12.r),
-                    child: ColorFiltered(
-                      colorFilter: const ColorFilter.matrix([
-                        0.2126, 0.7152, 0.0722, 0, 0,
-                        0.2126, 0.7152, 0.0722, 0, 0,
-                        0.2126, 0.7152, 0.0722, 0, 0,
-                        0,      0,      0,      0.4, 0, // opacity 40%
-                      ]),
-                      child: Image.network(
-                        'https://lh3.googleusercontent.com/aida-public/AB6AXuBX5tgS1X3Ax4IsSUEpahT_lvDfcgeW5OFqv_zUDUBBux-GBkGqONpoPTfBLc_Z7NeGUKaD2Qn3NFbXtV9d5xz6TM0azDkDN7F3v2bqmH-jrr4pGjL3EFIpTDCqU74fiI4wF59LroYjqk0sQ0ok_7k2be38u_PUToPjxoc7l3IccoUv1Gg6gGhLvNq1jA1PN1zuMKEsutU1oWMliGEZkpOk69-qwemyz1Vm1j4OJfagGxFvd3mlw6Ijibyfz7s-E0x4xKd4Aklep4At',
-                        height: 128.h,
-                        fit: BoxFit.cover,
-                      ),
-                    ),
-                  ),
-                ),
-                SizedBox(width: 16.w),
-                Expanded(
-                  child: Padding(
-                    padding: EdgeInsets.only(top: 32.h), // Offset for asymmetric look
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(12.r),
-                      child: ColorFiltered(
-                        colorFilter: const ColorFilter.matrix([
-                          0.2126, 0.7152, 0.0722, 0, 0,
-                          0.2126, 0.7152, 0.0722, 0, 0,
-                          0.2126, 0.7152, 0.0722, 0, 0,
-                          0,      0,      0,      0.4, 0, // opacity 40%
-                        ]),
-                        child: Image.network(
-                          'https://lh3.googleusercontent.com/aida-public/AB6AXuCiOxGv9fFWOrXdvFDbkKL--w7mbiAhQke_ZSqsHvcB-f1fNEGz4RGJA7iigO-Od5-X7xAE6sH3Ox9XUyY6hFbt89z1H8SXIeqf-fpp0pLEw51oiTU44NS3wMG9MVqs2Q1vMgdr-RbH4hEja2aujVxdRChCLw4fITVJPtc_16pzhSYbsggsn7HLrlJJ2NmflnjPRyufzLoAHHZRzQs2VcLI32JlvBFfUIh41Fa4R-aUCwtjXcgJWNGh2vw-2QSkMtDVJtd6-rw-Uj2W',
-                          height: 128.h,
-                          fit: BoxFit.cover,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
             ),
             SizedBox(height: 32.h),
 
@@ -453,6 +436,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     required IconData icon,
     required String hintText,
     TextInputType? keyboardType,
+    Widget? suffixIcon,
   }) {
     return TextField(
       controller: controller,
@@ -471,6 +455,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
           icon,
           color: _AppColors.outline,
         ),
+        suffixIcon: suffixIcon,
         filled: true,
         fillColor: _AppColors.background,
         contentPadding: EdgeInsets.symmetric(vertical: 16.h, horizontal: 16.w),

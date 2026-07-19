@@ -69,7 +69,7 @@ public class DiningSessionsController : ControllerBase
     /// <summary>
     /// Xem tổng chi tiêu tạm tính của phiên ăn (chưa áp coupon).
     /// sub_total = tổng FinalAmount các order không CANCELLED.
-    /// tax = sub_total * 10% (VAT).
+    /// tax / service theo RestaurantSettings (Manager chỉnh được).
     /// </summary>
     [HttpGet("{id:int}/bill-summary")]
     [Authorize(Roles = Roles.AllExceptChef)]

@@ -22,6 +22,7 @@ public class PaymentServiceTests
     private readonly Mock<ITableRepository> _tableRepoMock;
     private readonly Mock<ICustomerRepository> _customerRepoMock;
     private readonly Mock<IRepository<LoyaltyTransaction>> _loyaltyRepoMock;
+    private readonly Mock<ISettingsRepository> _settingsRepoMock;
     private readonly Mock<IPaymentGateway> _gatewayMock;
     private readonly Mock<IOrderNotificationService> _notificationMock;
     private readonly PaymentService _service;
@@ -34,6 +35,7 @@ public class PaymentServiceTests
         _tableRepoMock = new Mock<ITableRepository>();
         _customerRepoMock = new Mock<ICustomerRepository>();
         _loyaltyRepoMock = new Mock<IRepository<LoyaltyTransaction>>();
+        _settingsRepoMock = new Mock<ISettingsRepository>();
         _gatewayMock = new Mock<IPaymentGateway>();
         _notificationMock = new Mock<IOrderNotificationService>();
 
@@ -42,14 +44,25 @@ public class PaymentServiceTests
         _uowMock.Setup(u => u.Tables).Returns(_tableRepoMock.Object);
         _uowMock.Setup(u => u.Customers).Returns(_customerRepoMock.Object);
         _uowMock.Setup(u => u.LoyaltyTransactions).Returns(_loyaltyRepoMock.Object);
+        _uowMock.Setup(u => u.Settings).Returns(_settingsRepoMock.Object);
         _uowMock.Setup(u => u.SaveChangesAsync(default)).ReturnsAsync(1);
+
+        // Mặc định: VAT 8%, không phí DV — khớp seed cũ để assert ổn định
+        _settingsRepoMock.Setup(r => r.GetSingletonAsync()).ReturnsAsync(new RestaurantSettings
+        {
+            TaxRate = 8.00m,
+            ServiceChargeRate = 0m
+        });
 
         // DB sequence fallback trong InMemory — trả về số cố định để test dễ assert
         _paymentRepoMock.Setup(r => r.GetNextOrderCodeAsync()).ReturnsAsync(123456L);
 
         // Notification mock: không throw, chỉ cần verify được gọi hay không
         _notificationMock.Setup(n => n.NotifyPaymentSuccessAsync(
-            It.IsAny<int>(), It.IsAny<string>(), It.IsAny<decimal>()))
+            It.IsAny<int>(), It.IsAny<int>(), It.IsAny<string>(), It.IsAny<decimal>()))
+            .Returns(Task.CompletedTask);
+        _notificationMock.Setup(n => n.NotifyCashPaymentPendingAsync(
+            It.IsAny<int>(), It.IsAny<int>(), It.IsAny<string>(), It.IsAny<decimal>()))
             .Returns(Task.CompletedTask);
 
         _service = new PaymentService(_uowMock.Object, _gatewayMock.Object, _notificationMock.Object);
@@ -105,7 +118,7 @@ public class PaymentServiceTests
         _paymentRepoMock.Setup(r => r.GetBySessionIdAsync(1)).ReturnsAsync((Payment?)null);
         _paymentRepoMock.Setup(r => r.AddAsync(It.IsAny<Payment>())).ReturnsAsync((Payment p) => p);
         _gatewayMock.Setup(g => g.CreatePaymentLinkAsync(
-            It.IsAny<long>(), 200000, It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()))
+            It.IsAny<long>(), 216000, It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()))
             .ReturnsAsync(GatewayOk());
 
         var request = new CreatePaymentIntentRequest { SessionId = 1, PaymentMethod = "VNPAY", SplitCount = 1 };
@@ -113,7 +126,7 @@ public class PaymentServiceTests
 
         Assert.NotEmpty(result.InvoiceId);
         Assert.StartsWith("INV-", result.InvoiceId);
-        Assert.Equal(200_000m, result.TotalPayable);
+        Assert.Equal(216_000m, result.TotalPayable); // 200k + VAT 8%
         Assert.NotNull(result.QrUrl);
 
         // Session phải được đặt về CHECKOUT
@@ -147,7 +160,7 @@ public class PaymentServiceTests
             new CreatePaymentIntentRequest { SessionId = 1, PaymentMethod = "VNPAY" });
 
         Assert.NotEmpty(result.InvoiceId);
-        Assert.Equal(200_000m, result.TotalPayable);
+        Assert.Equal(216_000m, result.TotalPayable);
     }
 
     [Fact]
@@ -169,7 +182,11 @@ public class PaymentServiceTests
             new CreatePaymentIntentRequest { SessionId = 1, PaymentMethod = "CASH" });
 
         Assert.NotNull(result);
-        Assert.Equal(200_000m, result.TotalPayable);
+        Assert.Equal(216_000m, result.TotalPayable);
+        Assert.Equal(DiningSessionStatus.CHECKOUT, session.Status);
+        _gatewayMock.Verify(g => g.CreatePaymentLinkAsync(
+            It.IsAny<long>(), It.IsAny<int>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()), Times.Never);
+        _notificationMock.Verify(n => n.NotifyCashPaymentPendingAsync(5, 5, It.IsAny<string>(), 216_000m), Times.Once);
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -328,7 +345,7 @@ public class PaymentServiceTests
         Assert.Equal("00", result.RspCode);
         Assert.Equal(PaymentStatus.SUCCESS, payment.PaymentStatus);
         Assert.Equal(DiningSessionStatus.CLOSED, session.Status);
-        Assert.Equal(TableStatus.AVAILABLE, table.Status);
+        Assert.Equal(TableStatus.MAINTENANCE, table.Status);
 
         // 200.000 VND → 200 điểm (200.000 / 1.000 * 1)
         Assert.Equal(200, customer.LoyaltyPoints);
@@ -338,8 +355,8 @@ public class PaymentServiceTests
         _loyaltyRepoMock.Verify(r => r.AddAsync(It.Is<LoyaltyTransaction>(
             lt => lt.Points == 200 && lt.TransactionType == LoyaltyTransactionType.EARN)), Times.Once);
 
-        // WebSocket thông báo về bàn 5
-        _notificationMock.Verify(n => n.NotifyPaymentSuccessAsync(5, "INV-2026-123456", 200_000m), Times.Once);
+        // WebSocket thông báo về bàn 5 (TableNumber=0 vì test double không set field này)
+        _notificationMock.Verify(n => n.NotifyPaymentSuccessAsync(5, 0, "INV-2026-123456", 200_000m), Times.Once);
     }
 
     [Fact]
@@ -370,12 +387,12 @@ public class PaymentServiceTests
         var result = await _service.HandleWebhookAsync("{}", null);
 
         Assert.Equal("00", result.RspCode);
-        Assert.Equal(TableStatus.AVAILABLE, table.Status);
+        Assert.Equal(TableStatus.MAINTENANCE, table.Status);
         // Không tích điểm
         _loyaltyRepoMock.Verify(r => r.AddAsync(It.IsAny<LoyaltyTransaction>()), Times.Never);
         _customerRepoMock.Verify(r => r.GetByIdAsync(It.IsAny<int>()), Times.Never);
         // Vẫn bắn WebSocket thông báo về bàn (GUEST không có điểm nhưng bàn vẫn nhận event)
-        _notificationMock.Verify(n => n.NotifyPaymentSuccessAsync(7, It.IsAny<string>(), 150_000m), Times.Once);
+        _notificationMock.Verify(n => n.NotifyPaymentSuccessAsync(7, 0, It.IsAny<string>(), 150_000m), Times.Once);
     }
 
     [Fact]

@@ -3,7 +3,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../viewmodels/auth_viewmodel.dart';
-
+import '../../widgets/customer_bottom_nav.dart';
 
 class _AppColors {
   static const Color primary = Color(0xFFad2c00);
@@ -23,6 +23,12 @@ class _AppColors {
   static const Color onPrimary = Color(0xFFffffff);
 }
 
+void _showComingSoon(BuildContext context, String feature) {
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(content: Text('$feature đang được phát triển, sẽ sớm ra mắt!')),
+  );
+}
+
 class ProfilePage extends ConsumerWidget {
   const ProfilePage({super.key});
 
@@ -33,8 +39,19 @@ class ProfilePage extends ConsumerWidget {
     final guest = authState.guestSession;
     
     final name = user?.fullName ?? guest?.role ?? 'Khách';
-    final phone = user?.phoneNumber ?? 'Không có SĐT';
+    final phone = user?.phoneNumber != null && user!.phoneNumber!.isNotEmpty ? user.phoneNumber! : 'Không có SĐT';
     final isGuest = guest != null;
+    
+    final loyaltyPoints = user?.loyaltyPoints ?? 0;
+    String membership = isGuest ? 'KHÁCH VÃNG LAI' : 'THÀNH VIÊN MỚI';
+    if (user?.membershipLevel != null) {
+      final level = user!.membershipLevel!.toUpperCase();
+      if (level == 'BRONZE') membership = 'THÀNH VIÊN ĐỒNG';
+      else if (level == 'SILVER') membership = 'THÀNH VIÊN BẠC';
+      else if (level == 'GOLD') membership = 'THÀNH VIÊN VÀNG';
+      else if (level == 'VIP') membership = 'THÀNH VIÊN VIP';
+      else membership = 'THÀNH VIÊN $level';
+    }
 
     return Scaffold(
       backgroundColor: _AppColors.background,
@@ -44,7 +61,8 @@ class ProfilePage extends ConsumerWidget {
         scrolledUnderElevation: 2,
         leading: IconButton(
           icon: Icon(Icons.arrow_back, color: _AppColors.primary),
-          onPressed: () => context.pop(),
+          // Tài khoản luôn được vào qua tab bottom-nav (context.go, không push).
+          onPressed: () => context.canPop() ? context.pop() : context.go('/home'),
         ),
         title: Text(
           'Tài khoản',
@@ -79,10 +97,21 @@ class ProfilePage extends ConsumerWidget {
                     border: Border.all(color: _AppColors.primaryContainer, width: 2),
                   ),
                   child: ClipOval(
-                    child: Image.network(
-                      'https://lh3.googleusercontent.com/aida-public/AB6AXuCu5YfCa6oZa9ZAq8fcb1EFOfjc3-Vf6uR3HzW_5oVoL2_f4BkzyeBOl3Z8uXGKRvZxZP0fvd_DVHJqKAFvv4DZp3_A6Wz58pBAWAJ2ljXhP9mVXcSATn4rR1tdSD_LCXmJ5NGQBSRkEImbNFwegAR9H3z5wfXpx8av2c5LXU7q82we_FSlLS1XfDrOk7znj4t7k3HBry7-rJo5fD8RdykQtUvrOu_eTXT-T3DSLKRwQVI9auXMHOpXIcYM3jmbdN1wyCyVD_3pkUEg',
-                      fit: BoxFit.cover,
-                    ),
+                    child: user?.avatarUrl != null && user!.avatarUrl!.isNotEmpty
+                        ? Image.network(
+                            user.avatarUrl!,
+                            fit: BoxFit.cover,
+                            width: 80.r,
+                            height: 80.r,
+                            errorBuilder: (_, __, ___) => Container(
+                              color: _AppColors.primaryContainer,
+                              child: Icon(Icons.person, color: Colors.white, size: 40.sp),
+                            ),
+                          )
+                        : Container(
+                            color: _AppColors.primaryContainer,
+                            child: Icon(Icons.person, color: Colors.white, size: 40.sp),
+                          ),
                   ),
                 ),
                 SizedBox(width: 16.w),
@@ -118,7 +147,7 @@ class ProfilePage extends ConsumerWidget {
                           Icon(Icons.verified, color: _AppColors.onSecondaryContainer, size: 14.sp),
                           SizedBox(width: 4.w),
                           Text(
-                            isGuest ? 'KHÁCH VÃNG LAI' : 'THÀNH VIÊN BẠC',
+                            membership,
                             style: TextStyle(
                               color: _AppColors.onSecondaryContainer,
                               fontSize: 10.sp,
@@ -184,7 +213,7 @@ class ProfilePage extends ConsumerWidget {
                                 ),
                                 SizedBox(height: 4.h),
                                 Text(
-                                  '1,250 điểm',
+                                  '$loyaltyPoints điểm',
                                   style: TextStyle(
                                     color: Colors.white,
                                     fontSize: 26.sp,
@@ -227,7 +256,7 @@ class ProfilePage extends ConsumerWidget {
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             Text(
-                              'Còn 750 điểm tới hạng Vàng',
+                              isGuest ? 'Đăng ký tài khoản để tích điểm' : 'Tiếp tục tích điểm để thăng hạng',
                               style: TextStyle(
                                 color: Colors.white.withOpacity(0.9),
                                 fontSize: 14.sp,
@@ -237,7 +266,7 @@ class ProfilePage extends ConsumerWidget {
                         ),
                         SizedBox(height: 16.h),
                         InkWell(
-                          onTap: () {},
+                          onTap: () => _showComingSoon(context, 'Trang quyền lợi thành viên'),
                           borderRadius: BorderRadius.circular(8.r),
                           child: Container(
                             padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 8.h),
@@ -295,28 +324,13 @@ class ProfilePage extends ConsumerWidget {
                   _buildMenuItem(
                     icon: Icons.payments,
                     title: 'Phương thức thanh toán',
-                    onTap: () {},
+                    onTap: () => _showComingSoon(context, 'Quản lý phương thức thanh toán'),
                   ),
                   _buildDivider(),
                   _buildMenuItem(
                     icon: Icons.confirmation_number,
                     title: 'Mã giảm giá của tôi',
-                    badge: Container(
-                      padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 2.h),
-                      decoration: BoxDecoration(
-                        color: _AppColors.primary,
-                        borderRadius: BorderRadius.circular(4.r),
-                      ),
-                      child: Text(
-                        '3 MỚI',
-                        style: TextStyle(
-                          color: _AppColors.onPrimary,
-                          fontSize: 10.sp,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                    onTap: () {},
+                    onTap: () => _showComingSoon(context, 'Danh sách mã giảm giá'),
                   ),
                 ],
               ),
@@ -343,7 +357,7 @@ class ProfilePage extends ConsumerWidget {
                     iconBgColor: _AppColors.surfaceContainer,
                     iconColor: _AppColors.onSurfaceVariant,
                     title: 'Địa chỉ đã lưu',
-                    onTap: () {},
+                    onTap: () => _showComingSoon(context, 'Địa chỉ đã lưu'),
                   ),
                   _buildDivider(),
                   _buildMenuItem(
@@ -351,7 +365,7 @@ class ProfilePage extends ConsumerWidget {
                     iconBgColor: _AppColors.surfaceContainer,
                     iconColor: _AppColors.onSurfaceVariant,
                     title: 'Trợ giúp & Hỗ trợ',
-                    onTap: () {},
+                    onTap: () => _showComingSoon(context, 'Trung tâm trợ giúp'),
                   ),
                 ],
               ),
@@ -390,34 +404,7 @@ class ProfilePage extends ConsumerWidget {
         ),
       ),
       
-      // Bottom Navigation Bar
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          color: _AppColors.surface,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.04),
-              blurRadius: 20,
-              offset: const Offset(0, -4),
-            ),
-          ],
-          borderRadius: BorderRadius.vertical(top: Radius.circular(16.r)),
-        ),
-        child: SafeArea(
-          child: Padding(
-            padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 8.h),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                _buildNavItem(Icons.home, 'Trang chủ', false, () => context.go('/home')),
-                _buildNavItem(Icons.receipt_long, 'Đơn hàng', false, () => context.push('/orders')),
-                _buildNavItem(Icons.person, 'Tài khoản', true, () {}),
-                _buildNavItem(Icons.settings, 'Cài đặt', false, () => context.push('/settings')),
-              ],
-            ),
-          ),
-        ),
-      ),
+      bottomNavigationBar: const CustomerBottomNav(activeTab: CustomerNavTab.account),
     );
   }
 
@@ -478,35 +465,4 @@ class ProfilePage extends ConsumerWidget {
     );
   }
 
-  Widget _buildNavItem(IconData icon, String label, bool isActive, VoidCallback onTap) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 8.h),
-        decoration: BoxDecoration(
-          color: isActive ? _AppColors.secondaryContainer : Colors.transparent,
-          borderRadius: BorderRadius.circular(100.r), // capsule shape for nav
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              icon,
-              color: isActive ? _AppColors.onSecondaryContainer : _AppColors.onSurfaceVariant,
-              size: 24.sp,
-            ),
-            SizedBox(height: 4.h),
-            Text(
-              label,
-              style: TextStyle(
-                color: isActive ? _AppColors.onSecondaryContainer : _AppColors.onSurfaceVariant,
-                fontSize: 12.sp,
-                fontWeight: isActive ? FontWeight.bold : FontWeight.w600,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 }

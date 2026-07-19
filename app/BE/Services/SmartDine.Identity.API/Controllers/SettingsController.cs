@@ -9,14 +9,13 @@ using SmartDine.Domain.Constants;
 namespace SmartDine.Identity.API.Controllers;
 
 /// <summary>
-/// Controller quản lý cấu hình chung của nhà hàng (restaurant_settings) — dùng cho manager dashboard.
-///
-/// Chỉ có 1 bản ghi cấu hình duy nhất trong hệ thống (singleton row).
-/// Toàn bộ endpoint yêu cầu role MANAGER.
+/// Controller quản lý cấu hình chung của nhà hàng (restaurant_settings).
+/// GET: diner/staff/manager đọc (để hóa đơn dùng đúng VAT + phí DV).
+/// PATCH: chỉ MANAGER chỉnh.
 /// </summary>
 [ApiController]
 [Route("api/v1/settings")]
-[Authorize(Roles = Roles.Manager)]
+[Authorize]
 public class SettingsController : ControllerBase
 {
     private readonly SettingsService _settingsService;
@@ -27,9 +26,10 @@ public class SettingsController : ControllerBase
     }
 
     /// <summary>
-    /// GET /api/v1/settings — Lấy cấu hình nhà hàng hiện tại.
+    /// GET /api/v1/settings — Lấy cấu hình nhà hàng hiện tại (gồm TaxRate, ServiceChargeRate).
     /// </summary>
     [HttpGet]
+    [Authorize(Roles = Roles.AllExceptChef)]
     public async Task<IActionResult> Get()
     {
         var result = await _settingsService.GetAsync();
@@ -40,6 +40,7 @@ public class SettingsController : ControllerBase
     /// PATCH /api/v1/settings — Cập nhật cấu hình nhà hàng (partial update).
     /// </summary>
     [HttpPatch]
+    [Authorize(Roles = Roles.Manager)]
     public async Task<IActionResult> Update([FromBody] UpdateSettingsRequest request)
     {
         var result = await _settingsService.UpdateAsync(request);

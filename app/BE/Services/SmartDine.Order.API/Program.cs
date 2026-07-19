@@ -50,6 +50,18 @@ builder.Services.AddAuthentication(options =>
 
 builder.Services.AddAuthorization();
 
+// ===== CORS =====
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowDashboard", policy =>
+    {
+        policy.WithOrigins("http://localhost:3000")
+              .AllowAnyHeader()
+              .AllowAnyMethod()
+              .AllowCredentials();
+    });
+});
+
 // ===== Health Checks =====
 builder.Services.AddHealthChecks()
     .AddDbContextCheck<SmartDineDbContext>();
@@ -60,6 +72,7 @@ builder.Services.AddSignalR();
 
 // ===== Real-time & Caching Services =====
 builder.Services.AddScoped<IOrderNotificationService, OrderNotificationService>();
+builder.Services.AddScoped<RobotNotificationService>();
 builder.Services.AddDistributedMemoryCache();
 
 // ===== Payment Gateway (PayOS) =====
@@ -119,9 +132,6 @@ using (var scope = app.Services.CreateScope())
         {
             await context.Database.EnsureCreatedAsync();
         }
-
-        var seeder = services.GetRequiredService<DbSeeder>();
-        await seeder.SeedAsync();
     }
     catch (Exception ex)
     {
@@ -143,11 +153,14 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
+app.UseCors("AllowDashboard");
+
 app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
 app.MapHub<OrderHub>("/hubs/orders");
+app.MapHub<RobotHub>("/hubs/robot");
 app.MapHealthChecks("/health");
 app.MapMetrics("/metrics");
 

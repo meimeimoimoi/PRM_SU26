@@ -136,3 +136,6 @@ app.MapHealthChecks("/health");
 app.MapMetrics("/metrics");
 
 app.Run();
+
+// Cho WebApplicationFactory / integration tests truy cập entry point.
+public partial class Program { }

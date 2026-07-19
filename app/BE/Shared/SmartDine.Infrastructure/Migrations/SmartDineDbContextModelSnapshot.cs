@@ -404,6 +404,32 @@ namespace SmartDine.Infrastructure.Migrations
                     b.ToTable("dining_sessions", (string)null);
                 });
 
+            modelBuilder.Entity("SmartDine.Domain.Entities.Location", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("Locations");
+                });
+
             modelBuilder.Entity("SmartDine.Domain.Entities.LoyaltyTransaction", b =>
                 {
                     b.Property<int>("Id")
@@ -1016,7 +1042,7 @@ namespace SmartDine.Infrastructure.Migrations
 
                     b.HasIndex("ExternalRef")
                         .IsUnique()
-                        .HasFilter("external_ref IS NOT NULL");
+                        .HasFilter("\"ExternalRef\" IS NOT NULL");
 
                     b.HasIndex("InvoiceId")
                         .IsUnique();
@@ -1243,6 +1269,55 @@ namespace SmartDine.Infrastructure.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("RefreshTokens");
+                });
+
+            modelBuilder.Entity("SmartDine.Domain.Entities.RestaurantSettings", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Address")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<TimeSpan>("ClosingTime")
+                        .HasColumnType("time");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<TimeSpan>("OpeningTime")
+                        .HasColumnType("time");
+
+                    b.Property<string>("Phone")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("RestaurantName")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)");
+
+                    b.Property<decimal>("ServiceChargeRate")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("numeric(5,2)");
+
+                    b.Property<decimal>("TaxRate")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("numeric(5,2)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("restaurant_settings", (string)null);
                 });
 
             modelBuilder.Entity("SmartDine.Domain.Entities.Review", b =>
@@ -1480,6 +1555,9 @@ namespace SmartDine.Infrastructure.Migrations
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("boolean");
 
+                    b.Property<int?>("LocationId")
+                        .HasColumnType("integer");
+
                     b.Property<string>("QrCode")
                         .HasMaxLength(255)
                         .HasColumnType("character varying(255)");
@@ -1498,6 +1576,8 @@ namespace SmartDine.Infrastructure.Migrations
                         .HasColumnType("timestamp with time zone");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("LocationId");
 
                     b.HasIndex("TableNumber")
                         .IsUnique();
@@ -2004,6 +2084,15 @@ namespace SmartDine.Infrastructure.Migrations
                     b.Navigation("Session");
                 });
 
+            modelBuilder.Entity("SmartDine.Domain.Entities.Table", b =>
+                {
+                    b.HasOne("SmartDine.Domain.Entities.Location", "Location")
+                        .WithMany("Tables")
+                        .HasForeignKey("LocationId");
+
+                    b.Navigation("Location");
+                });
+
             modelBuilder.Entity("SmartDine.Domain.Entities.TableReservation", b =>
                 {
                     b.HasOne("SmartDine.Domain.Entities.Customer", "Customer")
@@ -2057,6 +2146,11 @@ namespace SmartDine.Infrastructure.Migrations
                     b.Navigation("Participants");
 
                     b.Navigation("Payments");
+                });
+
+            modelBuilder.Entity("SmartDine.Domain.Entities.Location", b =>
+                {
+                    b.Navigation("Tables");
                 });
 
             modelBuilder.Entity("SmartDine.Domain.Entities.MenuCategory", b =>

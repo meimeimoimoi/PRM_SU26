@@ -4,8 +4,9 @@ class MenuItemSummary {
   final double price;
   final String? imageUrl;
   final bool isAvailable;
-  // Note: API doesn't return rating in summary, but the UI expects a rating. We might mock it or default it.
-  final double rating; 
+  // API danh sách (GET /menu-items) không trả averageRating — null nghĩa là "chưa có đánh giá",
+  // KHÔNG được mặc định 1 số giả vì sẽ hiển thị sao đánh giá không có thật cho khách.
+  final double? rating;
 
   MenuItemSummary({
     required this.id,
@@ -13,7 +14,7 @@ class MenuItemSummary {
     required this.price,
     this.imageUrl,
     required this.isAvailable,
-    this.rating = 4.5,
+    this.rating,
   });
 
   factory MenuItemSummary.fromJson(Map<String, dynamic> json) {
@@ -23,7 +24,30 @@ class MenuItemSummary {
       price: (json['price'] ?? 0).toDouble(),
       imageUrl: json['imageUrl'],
       isAvailable: json['isAvailable'] ?? true,
-      rating: (json['averageRating'] ?? 4.5).toDouble(), // some detail API might have it
+      rating: json['averageRating'] != null ? (json['averageRating'] as num).toDouble() : null,
+    );
+  }
+}
+
+class MenuCategory {
+  final int id;
+  final String name;
+  final String? description;
+  final int itemCount;
+
+  MenuCategory({
+    required this.id,
+    required this.name,
+    this.description,
+    required this.itemCount,
+  });
+
+  factory MenuCategory.fromJson(Map<String, dynamic> json) {
+    return MenuCategory(
+      id: json['id'] ?? 0,
+      name: json['name'] ?? '',
+      description: json['description'],
+      itemCount: json['itemCount'] ?? 0,
     );
   }
 }

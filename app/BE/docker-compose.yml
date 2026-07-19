@@ -76,7 +76,7 @@ services:
     image: ollama/ollama:latest
     container_name: ollama-service
     ports:
-      - "11434:11434"
+      - "11435:11434"
     volumes:
       - ollama-data:/root/.ollama
     networks:
@@ -91,7 +91,7 @@ services:
       dockerfile: docker/Identity.Dockerfile
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
-      - ConnectionStrings__DefaultConnection=Host=postgres-db;Port=5432;Database=smartdine_identity;Username=postgres;Password=${POSTGRES_PASSWORD}
+      - ConnectionStrings__DefaultConnection=Host=postgres-db;Port=5432;Database=smartdine;Username=postgres;Password=${POSTGRES_PASSWORD}
       - Jwt__SecretKey=${RsaPublicKey}
       - Jwt__Issuer=SmartDineAPI
       - Jwt__Audience=SmartDineApp
@@ -118,7 +118,7 @@ services:
       dockerfile: docker/Menu.Dockerfile
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
-      - ConnectionStrings__DefaultConnection=Host=postgres-db;Port=5432;Database=smartdine_menu;Username=postgres;Password=${POSTGRES_PASSWORD}
+      - ConnectionStrings__DefaultConnection=Host=postgres-db;Port=5432;Database=smartdine;Username=postgres;Password=${POSTGRES_PASSWORD}
       - Jwt__SecretKey=${RsaPublicKey}
       - Jwt__Issuer=SmartDineAPI
       - Jwt__Audience=SmartDineApp
@@ -145,7 +145,7 @@ services:
       dockerfile: docker/Order.Dockerfile
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
-      - ConnectionStrings__DefaultConnection=Host=postgres-db;Port=5432;Database=smartdine_orders;Username=postgres;Password=${POSTGRES_PASSWORD}
+      - ConnectionStrings__DefaultConnection=Host=postgres-db;Port=5432;Database=smartdine;Username=postgres;Password=${POSTGRES_PASSWORD}
       - Jwt__SecretKey=${RsaPublicKey}
       - Jwt__Issuer=SmartDineAPI
       - Jwt__Audience=SmartDineApp
@@ -172,7 +172,7 @@ services:
       dockerfile: docker/Table.Dockerfile
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
-      - ConnectionStrings__DefaultConnection=Host=postgres-db;Port=5432;Database=smartdine_tables;Username=postgres;Password=${POSTGRES_PASSWORD}
+      - ConnectionStrings__DefaultConnection=Host=postgres-db;Port=5432;Database=smartdine;Username=postgres;Password=${POSTGRES_PASSWORD}
       - Jwt__SecretKey=${RsaPublicKey}
       - Jwt__Issuer=SmartDineAPI
       - Jwt__Audience=SmartDineApp
