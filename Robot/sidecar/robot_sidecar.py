@@ -48,6 +48,7 @@ log = logging.getLogger("sidecar")
 # Defaults
 # ---------------------------------------------------------------------------
 DEFAULT_SERVER_URL = os.environ.get("MAP_SERVER_URL", "http://localhost:3001")
+DEFAULT_SIGNALR_URL = os.environ.get("SIGNALR_URL", "http://localhost:5000/hubs/robot")
 DEFAULT_CONTROLLER_DIR = os.environ.get(
     "CONTROLLER_DIR",
     os.path.join(os.path.dirname(__file__), "..", "controllers", "robot_controller"),
@@ -281,7 +282,7 @@ class RobotSidecar:
         self.controller_dir = os.path.abspath(controller_dir)
         self.poll_interval = poll_interval
         self.map_id = map_id
-        self.signalr_url = signalr_url or os.environ.get("SIGNALR_URL", "http://localhost:5000/hubs/robot")
+        self.signalr_url = signalr_url or DEFAULT_SIGNALR_URL
         self.running = True
 
         # Change detection hashes
@@ -291,6 +292,8 @@ class RobotSidecar:
 
         # SignalR connection
         self.signalr_conn = None
+        self._signalr_reconnect_delay = 3  # seconds between reconnect attempts
+        self._signalr_max_reconnect_delay = 30
 
     def startup(self) -> bool:
         """Download map files from server if available. Non-blocking."""
@@ -325,6 +328,20 @@ class RobotSidecar:
             self._sync_state()
             self._sync_path()
             self._sync_command()
+
+    def _reconnect_signalr_if_needed(self):
+        """Attempt to reconnect SignalR if disconnected."""
+        if self.signalr_conn is not None:
+            return
+        log.info(f"Attempting SignalR reconnect to {self.signalr_url}...")
+        try:
+            self._connect_signalr()
+        except Exception as e:
+            log.warning(f"SignalR reconnect failed: {e}")
+            self._signalr_reconnect_delay = min(
+                self._signalr_reconnect_delay * 2,
+                self._signalr_max_reconnect_delay,
+            )
 
     def _sync_state(self):
         """Read robot_state.txt → POST to server (only if changed)."""
@@ -392,6 +409,7 @@ class RobotSidecar:
 
         self.signalr_conn.on_open(lambda: self._on_signalr_connected())
         self.signalr_conn.on_close(lambda: self._on_signalr_disconnected())
+        self.signalr_conn.on_error(lambda error: self._on_signalr_error(error))
         self.signalr_conn.on("ReceiveRobotCommand", self._on_robot_command)
         self.signalr_conn.on("ReceiveRobotState", lambda args: None)
         self.signalr_conn.on("ReceiveRobotPath", lambda args: None)
@@ -399,8 +417,10 @@ class RobotSidecar:
         try:
             self.signalr_conn.start()
             log.info(f"SignalR connected to {signalr_url}")
+            self._signalr_reconnect_delay = 3
         except Exception as e:
             log.error(f"SignalR connection failed: {e}")
+            self.signalr_conn = None
 
     def _on_signalr_connected(self):
         log.info("SignalR connected, joining RobotGroup")
@@ -411,6 +431,11 @@ class RobotSidecar:
 
     def _on_signalr_disconnected(self):
         log.warning("SignalR disconnected")
+        self.signalr_conn = None
+
+    def _on_signalr_error(self, error):
+        log.error(f"SignalR error: {error}")
+        self.signalr_conn = None
 
     def _on_robot_command(self, args):
         """Handle command received via SignalR."""
@@ -469,13 +494,18 @@ class RobotSidecar:
 
     def run(self):
         """Main loop with graceful shutdown."""
-        log.info(f"Sidecar started (poll={self.poll_interval}s, dir={self.controller_dir})")
+        log.info(f"Sidecar config:")
+        log.info(f"  Map server (HTTP): {self.client.base_url}")
+        log.info(f"  SignalR hub:       {self.signalr_url}")
+        log.info(f"  Controller dir:    {self.controller_dir}")
+        log.info(f"  Poll interval:     {self.poll_interval}s")
 
         self._connect_signalr()
         self.startup()
 
         while self.running:
             try:
+                self._reconnect_signalr_if_needed()
                 self.tick()
                 if self.signalr_conn is not None:
                     self._sync_state_signalr()
@@ -500,7 +530,7 @@ class RobotSidecar:
 def main():
     parser = argparse.ArgumentParser(description="SmartDine Robot Sidecar")
     parser.add_argument("--server", default=DEFAULT_SERVER_URL, help="Map server URL")
-    parser.add_argument("--signalr-url", default=None, help="SignalR hub URL (default: http://localhost:5000/hubs/robot)")
+    parser.add_argument("--signalr-url", default=DEFAULT_SIGNALR_URL, help="SignalR hub URL")
     parser.add_argument("--dir", default=DEFAULT_CONTROLLER_DIR, help="Robot controller directory")
     parser.add_argument("--interval", type=float, default=DEFAULT_POLL_INTERVAL, help="Poll interval (seconds)")
     parser.add_argument("--map-id", default=DEFAULT_MAP_ID, help="Map ID to use (auto-detect if not set)")
