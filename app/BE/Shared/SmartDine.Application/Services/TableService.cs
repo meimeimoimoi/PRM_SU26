@@ -148,8 +148,8 @@ public class TableService
             TableId = tableId,
             Status = DiningSessionStatus.ACTIVE,
             StartedAt = DateTime.UtcNow,
-            TaxRate = settings.TaxRate,
-            ServiceChargeRate = settings.ServiceChargeRate
+            TaxRate = settings?.TaxRate,
+            ServiceChargeRate = settings?.ServiceChargeRate
         };
 
         await _uow.DiningSessions.AddAsync(newSession);
@@ -401,8 +401,8 @@ public class TableService
                 GuestPhone = reservation.GuestPhone,
                 Status = DiningSessionStatus.ACTIVE,
                 StartedAt = DateTime.UtcNow,
-                TaxRate = settings.TaxRate,
-                ServiceChargeRate = settings.ServiceChargeRate
+                TaxRate = settings?.TaxRate,
+                ServiceChargeRate = settings?.ServiceChargeRate
             };
             await _uow.DiningSessions.AddAsync(newSession);
         }

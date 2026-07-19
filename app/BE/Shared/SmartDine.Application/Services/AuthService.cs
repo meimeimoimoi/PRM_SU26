@@ -458,6 +458,10 @@ public class AuthService
         var existingSession = await _uow.DiningSessions.GetActiveByTableIdAsync(table.Id);
         DiningSession session;
 
+        if(table == null){
+            throw new EntityNotFoundException("Table", request.TableId);
+        }
+
         var guestName = request.GuestName ?? "Guest";
 
         if (existingSession != null)
@@ -478,8 +482,8 @@ public class AuthService
                 GuestPhone = request.GuestPhone,
                 Status = DiningSessionStatus.ACTIVE,
                 StartedAt = DateTime.UtcNow,
-                TaxRate = settings.TaxRate,
-                ServiceChargeRate = settings.ServiceChargeRate
+                TaxRate = settings?.TaxRate,
+                ServiceChargeRate = settings?.ServiceChargeRate
             };
 
             await _uow.DiningSessions.AddAsync(session);
