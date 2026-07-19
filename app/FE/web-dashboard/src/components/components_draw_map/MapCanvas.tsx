@@ -15,6 +15,7 @@ import type { MapObject, MapObjectType, MapTool } from '@/types/map';
 import { useMapStore } from '@/store/mapStore';
 import { Toolbox } from './Toolbox';
 import { getMapPixels, pixelToWorld, worldToPixel } from '@/utils/coordinateUtils';
+import { useSignalR } from '@/hooks/useSignalR';
 
 const MIN_ZOOM = 0.25;
 const MAX_ZOOM = 3;
@@ -454,8 +455,10 @@ export function MapCanvas() {
   const removeGraphNode = useMapStore((s) => s.removeGraphNode);
   const removeGraphEdge = useMapStore((s) => s.removeGraphEdge);
 
+  const { on, connected } = useSignalR();
   const [robotState, setRobotState] = useState<{ x: number; y: number; theta: number; status: string } | null>(null);
   const [robotPath, setRobotPath] = useState<{ x: number; y: number }[]>([]);
+  const prevStatusRef = useRef<string>('OFFLINE');
 
   // Determine navigation phase based on robot status and path length
   // Phase1: Path calculation (path received but robot not yet moving)
@@ -464,64 +467,52 @@ export function MapCanvas() {
   const navPhase = (() => {
     if (!robotState) return 'Idle';
     const status = robotState.status;
-    if (status === 'ARRIVED' || status === 'IDLE') return 'Phase3';
+    if (status === 'ARRIVED_TABLE' || status === 'ARRIVED_KITCHEN' || status === 'IDLE') return 'Phase3';
     if (status === 'NAV_TO_TABLE') {
       if (robotPath.length <= 2) return 'Phase1';
       return 'Phase2';
     }
-    // Fallback for other statuses (e.g., RETURN_TO_KITCHEN)
+    if (status === 'RETURN_TO_KITCHEN') return 'Phase2';
     return 'Idle';
   })();
   const [mouseCanvasPos, setMouseCanvasPos] = useState<{ x: number; y: number } | null>(null);
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
 
-  // Poll robot position + path
+  // Listen to robot state + path via SignalR (replaces HTTP polling)
   useEffect(() => {
-    // ---------------------------------------------------------------
-    // Poll robot live status + path (unchanged)
-    // ---------------------------------------------------------------
-    const fetchRobotStatus = async () => {
-      try {
-        const res = await fetch('http://localhost:3001/api/robot/status');
-        const data = await res.json();
-        if (data && data.status !== 'OFFLINE') {
-          setRobotState(data);
+    if (!connected) return;
+    const cleanupState = on('ReceiveRobotState', (...args: unknown[]) => {
+      const data = args[0] as { x: number; y: number; theta: number; status: string };
+      if (data && data.status !== 'OFFLINE') {
+        setRobotState(data);
+        const prevStatus = prevStatusRef.current;
+        if (prevStatus !== data.status) {
+          if (data.status === 'ARRIVED_TABLE') {
+            message.success('Robot đã đến bàn giao hàng thành công.');
+          } else if (data.status === 'ARRIVED_KITCHEN') {
+            message.success('Robot đã quay lại bếp thành công.');
+          }
         }
-        // else: keep last known valid state to avoid flicker from
-        // transient file-read races (controller writes robot_state.txt
-        // every ~32ms via fopen+truncate, server reads every 150ms)
-      } catch (err) {
-        // ignore network errors silently; keep last known state
+        prevStatusRef.current = data.status;
       }
-    };
-    const fetchRobotPath = async () => {
-      try {
-        const res = await fetch('http://localhost:3001/api/robot/path');
-        const data = await res.json();
-        setRobotPath(data.path || []);
-      } catch (err) {
-        setRobotPath([]);
-      }
-    };
-    fetchRobotStatus();
-    fetchRobotPath();
-    const statusInterval = setInterval(fetchRobotStatus, 150);
-    const pathInterval = setInterval(fetchRobotPath, 500);
+    });
+    const cleanupPath = on('ReceiveRobotPath', (...args: unknown[]) => {
+      const data = args[0] as { path: { x: number; y: number }[] };
+      setRobotPath(data?.path || []);
+    });
+    return () => { cleanupState(); cleanupPath(); };
+  }, [on, connected]);
 
-    // ---------------------------------------------------------------
-    // Ensure a robotStart graph node exists when map meta provides one.
-    // This runs once per component mount and adds the node only if missing.
-    // ---------------------------------------------------------------
+  // Ensure a robotStart graph node exists when map meta provides one.
+  useEffect(() => {
     const ensureRobotStartNode = async () => {
-      // If a robotStart node already exists, nothing to do.
       if (graphNodes.some((n) => n.type === 'robotStart')) return;
 
       let nodeCreated = false;
 
-      // ① Try persisted selectedMapId first.
       if (selectedMapId) {
         try {
-          const metaRes = await fetch(`http://localhost:3001/api/maps/${selectedMapId}`);
+          const metaRes = await fetch(`/api/v1/maps/${selectedMapId}`);
           const meta = await metaRes.json();
           if (meta && typeof meta.robotStart?.x === 'number' && typeof meta.robotStart?.y === 'number') {
             addGraphNode({
@@ -540,16 +531,14 @@ export function MapCanvas() {
         }
       }
 
-      // ② Fallback: fetch the list of maps, pick the first one and persist its ID.
       if (!nodeCreated) {
         try {
-          const listRes = await fetch('http://localhost:3001/api/maps');
+          const listRes = await fetch('/api/v1/maps');
           const list = await listRes.json();
           if (!Array.isArray(list) || list.length === 0) return;
           const mapId = list[0].id;
-          // Persist the chosen map ID for future mounts.
           setSelectedMapId(mapId);
-          const metaRes = await fetch(`http://localhost:3001/api/maps/${mapId}`);
+          const metaRes = await fetch(`/api/v1/maps/${mapId}`);
           const meta = await metaRes.json();
           if (meta && typeof meta.robotStart?.x === 'number' && typeof meta.robotStart?.y === 'number') {
             addGraphNode({
@@ -568,31 +557,21 @@ export function MapCanvas() {
         }
       }
 
-      // ③ Final fallback: use live robot position if meta is missing.
-      if (!nodeCreated) {
-        try {
-          const statusRes = await fetch('http://localhost:3001/api/robot/status');
-          const status = await statusRes.json();
-          if (status && status.status !== 'OFFLINE' && typeof status.x === 'number' && typeof status.y === 'number') {
-            addGraphNode({
-              id: `robotStart-${Date.now()}`,
-              type: 'robotStart',
-              name: 'Start',
-              x: status.x,
-              y: status.y,
-              theta: 0,
-            });
-            message.info('ℹ️ Created start node from live robot position (meta missing)');
-          }
-        } catch (e) {
-          console.warn('Failed to fallback to robot status for start node', e);
-        }
+      if (!nodeCreated && robotState && robotState.status !== 'OFFLINE'
+          && typeof robotState.x === 'number' && typeof robotState.y === 'number') {
+        addGraphNode({
+          id: `robotStart-${Date.now()}`,
+          type: 'robotStart',
+          name: 'Start',
+          x: robotState.x,
+          y: robotState.y,
+          theta: 0,
+        });
+        message.info('Created start node from live robot position (meta missing)');
       }
     };
     ensureRobotStartNode();
-
-    return () => { clearInterval(statusInterval); clearInterval(pathInterval); };
-  }, [graphNodes, addGraphNode, selectedMapId]);
+  }, [graphNodes, addGraphNode, selectedMapId, setSelectedMapId, robotState]);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const [pan, setPan] = useState({ x: 0, y: 0 });

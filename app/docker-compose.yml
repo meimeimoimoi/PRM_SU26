@@ -94,6 +94,7 @@ services:
       - Jwt__SecretKey=f14cc5eb24eb6a57d5d36b3f6a30d58c9144445afa2d7f221f023d25bfe2f170
       - Jwt__Issuer=SmartDineAPI
       - Jwt__Audience=SmartDineApp
+      - SignalR__HubUrl=/hubs/robot
     ports:
       - "5003:8080"
     depends_on:

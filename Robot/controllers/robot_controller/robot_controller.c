@@ -28,23 +28,23 @@ static bool resolve_graph_target(const char *target, double *x, double *y, enum 
 // Robot parameters
 #define MAX_SPEED 15.5
 #define MAX_ACCEL 0.40
-#define MAX_OMEGA 1.8
-#define MAX_OMEGA_ACCEL 1.2
+#define MAX_OMEGA 3.0
+#define MAX_OMEGA_ACCEL 1.5
 #define WHEEL_RADIUS 0.0975
 #define WHEEL_BASE 0.381
 
 // DWA parameters
 #define DT 0.2
 #define V_SAMPLES 20
-#define OMEGA_SAMPLES 40
+#define OMEGA_SAMPLES 50
 #define PREDICT_TIME 2.0
 #define HEADING_GAIN 0.3
 #define CLEARANCE_GAIN 0.25
 #define VEL_GAIN 0.2
 #define OBSTACLE_MARGIN 0.15
 #define SMOOTH_GAIN 0.15
-#define OMEGA_SMOOTH_MAX 0.1
-#define OMEGA_SMOOTH_ROTATE 0.3
+#define OMEGA_SMOOTH_MAX 0.5
+#define OMEGA_SMOOTH_ROTATE 1.0
 #define MAX_FWD_VEL 0.7
 #define TURN_IN_PLACE_THRESHOLD 1.7
 #define SQRT2_MINUS_1 0.41421356237
@@ -137,6 +137,9 @@ bool calibrate_requested = false;
 
 // Delivery confirmation flag — set true after arriving at delivery table
 bool waiting_for_confirmation = false;
+
+// Persist arrival status until next command (so sidecar can read it)
+const char *pending_arrival_status = NULL;
 
 WbDeviceTag lidar;
 double lidar_ranges[LIDAR_MAX_SAMPLES];
@@ -421,6 +424,7 @@ void read_robot_command(double *target_x, double *target_y, bool *target_receive
     char direction[32] = "NONE";
     
     if (fscanf(fp, "%31s %31s %31s", cmd, target, direction) == 3) {
+        pending_arrival_status = NULL;
         if (strcmp(cmd, "NAV_TO_TABLE") == 0) {
             waiting_for_confirmation = false;
             if (resolve_graph_target(target, target_x, target_y, state)) {
@@ -1417,8 +1421,6 @@ int main(int argc, char **argv) {
         }
     }
     init_dynamic_map();
-    compute_distance_transform();
-
     WbDeviceTag left_motor = wb_robot_get_device("wheel_left_joint");
     WbDeviceTag right_motor = wb_robot_get_device("wheel_right_joint");
     WbDeviceTag left_enc = wb_robot_get_device("wheel_left_joint_sensor");
@@ -1594,6 +1596,7 @@ int main(int argc, char **argv) {
     printf("Robot at (%.2f, %.2f). Waiting for commands.\n", robot_x, robot_y);
 
     printf("=== Phase 3 DWA OK - He thong da san sang ===\n");
+    write_robot_state(robot_x, robot_y, robot_theta, 0.0, 0.0, "IDLE");
 
     while (wb_robot_step(TIME_STEP) != -1) {
         // Re-obtain device tags if any became invalid
@@ -1726,7 +1729,9 @@ int main(int argc, char **argv) {
 
                 update_dynamic_map_from_lidar(robot_x, robot_y, robot_theta,
                                                lidar_ranges, lidar_actual_count, lidar_fov);
-                compute_distance_transform();
+                if (robot_state != STATE_IDLE) {
+                    compute_distance_transform();
+                }
             }
         }
 
@@ -1782,7 +1787,16 @@ int main(int argc, char **argv) {
                     wb_motor_set_velocity(right_motor, 0.0);
                 }
                 clear_path_file();
-                write_robot_state(robot_x, robot_y, robot_theta, 0.0, 0.0, get_state_string(robot_state));
+                if (is_table_target()) {
+                    waiting_for_confirmation = true;
+                    pending_arrival_status = "ARRIVED_TABLE";
+                    write_robot_state(robot_x, robot_y, robot_theta, 0.0, 0.0, "ARRIVED_TABLE");
+                    printf("WAITING: Already at delivery table.\n");
+                } else {
+                    pending_arrival_status = "ARRIVED_KITCHEN";
+                    write_robot_state(robot_x, robot_y, robot_theta, 0.0, 0.0, "ARRIVED_KITCHEN");
+                    printf("ARRIVED: Already at kitchen/start.\n");
+                }
                 continue;
             }
 
@@ -1909,10 +1923,13 @@ int main(int argc, char **argv) {
                 clear_path_file();
                 if (is_table_target()) {
                     waiting_for_confirmation = true;
-                    write_robot_state(robot_x, robot_y, robot_theta, 0.0, 0.0, "WAITING_AT_TABLE");
+                    pending_arrival_status = "ARRIVED_TABLE";
+                    write_robot_state(robot_x, robot_y, robot_theta, 0.0, 0.0, "ARRIVED_TABLE");
                     printf("WAITING: At delivery table. Send CONFIRM to return to Kitchen.\n");
                 } else {
-                    write_robot_state(robot_x, robot_y, robot_theta, 0.0, 0.0, get_state_string(robot_state));
+                    pending_arrival_status = "ARRIVED_KITCHEN";
+                    write_robot_state(robot_x, robot_y, robot_theta, 0.0, 0.0, "ARRIVED_KITCHEN");
+                    printf("ARRIVED: At kitchen/start position.\n");
                 }
                 continue;
             }
@@ -1985,7 +2002,8 @@ int main(int argc, char **argv) {
                 wb_motor_set_velocity(left_motor, 0.0);
                 wb_motor_set_velocity(right_motor, 0.0);
             }
-            write_robot_state(robot_x, robot_y, robot_theta, 0.0, 0.0, get_state_string(robot_state));
+            const char *idle_status = pending_arrival_status ? pending_arrival_status : get_state_string(robot_state);
+            write_robot_state(robot_x, robot_y, robot_theta, 0.0, 0.0, idle_status);
             continue;
         }
 
