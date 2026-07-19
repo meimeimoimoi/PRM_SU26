@@ -4,24 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../viewmodels/auth_viewmodel.dart';
 import '../../widgets/customer_bottom_nav.dart';
-
-class _AppColors {
-  static const Color primary = Color(0xFFad2c00);
-  static const Color primaryFixed = Color(0xFFffdbd1);
-  static const Color background = Color(0xFFfcf9f8);
-  static const Color surface = Color(0xFFfcf9f8);
-  static const Color onSurface = Color(0xFF1b1c1c);
-  static const Color onSurfaceVariant = Color(0xFF5a413a);
-  static const Color surfaceContainer = Color(0xFFf0eded);
-  static const Color surfaceContainerLow = Color(0xFFf6f3f2);
-  static const Color surfaceContainerHigh = Color(0xFFeae7e7);
-  static const Color surfaceVariant = Color(0xFFe5e2e1);
-  static const Color secondary = Color(0xFF685b5a);
-  static const Color secondaryContainer = Color(0xFFeddcda);
-  static const Color onSecondaryContainer = Color(0xFF6c605e);
-  static const Color outline = Color(0xFF8f7068);
-  static const Color outlineVariant = Color(0xFFe3beb5);
-}
+import '../../theme/app_theme.dart';
 
 void _showComingSoon(BuildContext context, String feature) {
   ScaffoldMessenger.of(context).showSnackBar(
@@ -45,23 +28,28 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     final authState = ref.watch(authViewModelProvider);
     final isLoggedIn = authState.status == AuthStateStatus.authenticated;
     final isGuest = authState.status == AuthStateStatus.guest;
-    final userName = authState.user?.fullName ?? (isGuest ? 'Khách' : 'Người dùng');
+    final userName = authState.user?.fullName
+        ?? (isGuest
+            ? (authState.guestSession?.guestName.isNotEmpty == true
+                ? authState.guestSession!.guestName
+                : 'Khách')
+            : 'Người dùng');
     final userRole = authState.user?.role ?? authState.guestSession?.role ?? 'GUEST';
 
     return Scaffold(
-      backgroundColor: _AppColors.background,
+      backgroundColor: AppTheme.background,
       appBar: AppBar(
-        backgroundColor: _AppColors.surface,
+        backgroundColor: AppTheme.surface,
         elevation: 0,
         scrolledUnderElevation: 0,
         leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: _AppColors.primary),
+          icon: Icon(Icons.arrow_back, color: AppTheme.primary),
           onPressed: () => context.pop(),
         ),
         title: Text(
           'Cài đặt',
           style: TextStyle(
-            color: _AppColors.primary,
+            color: AppTheme.primary,
             fontSize: 20.sp,
             fontWeight: FontWeight.bold,
           ),
@@ -77,15 +65,9 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             Container(
               padding: EdgeInsets.all(16.r),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: AppTheme.surface,
                 borderRadius: BorderRadius.circular(12.r),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.04),
-                    blurRadius: 20,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
+                boxShadow: AppTheme.shadowCard,
               ),
               child: Row(
                 children: [
@@ -94,11 +76,11 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                     height: 64.r,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      border: Border.all(color: _AppColors.primary, width: 2),
+                      border: Border.all(color: AppTheme.primary, width: 2),
                     ),
                     child: Icon(
                       isLoggedIn ? Icons.person : Icons.person_outline,
-                      color: _AppColors.primary,
+                      color: AppTheme.primary,
                       size: 32.sp,
                     ),
                   ),
@@ -110,7 +92,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                         Text(
                           '$userName',
                           style: TextStyle(
-                            color: _AppColors.onSurface,
+                            color: AppTheme.onSurface,
                             fontSize: 20.sp,
                             fontWeight: FontWeight.w600,
                           ),
@@ -120,7 +102,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                         Text(
                           isGuest ? 'Khách' : 'Thành viên ${userRole == 'CUSTOMER' ? 'tiêu chuẩn' : userRole}',
                           style: TextStyle(
-                            color: _AppColors.onSurfaceVariant,
+                            color: AppTheme.onSurfaceVariant,
                             fontSize: 14.sp,
                           ),
                         ),
@@ -138,7 +120,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
               child: Text(
                 'ỨNG DỤNG',
                 style: TextStyle(
-                  color: _AppColors.primary,
+                  color: AppTheme.primary,
                   fontSize: 12.sp,
                   fontWeight: FontWeight.w600,
                   letterSpacing: 1.5,
@@ -147,15 +129,9 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             ),
             Container(
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: AppTheme.surface,
                 borderRadius: BorderRadius.circular(12.r),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.04),
-                    blurRadius: 20,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
+                boxShadow: AppTheme.shadowCard,
               ),
               child: Column(
                 children: [
@@ -179,11 +155,11 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                         Text(
                           'Tiếng Việt',
                           style: TextStyle(
-                            color: _AppColors.onSurfaceVariant,
+                            color: AppTheme.onSurfaceVariant,
                             fontSize: 14.sp,
                           ),
                         ),
-                        Icon(Icons.chevron_right, color: _AppColors.outline, size: 20.sp),
+                        Icon(Icons.chevron_right, color: AppTheme.outline, size: 20.sp),
                       ],
                     ),
                     onTap: () => _showComingSoon(context, 'Đổi ngôn ngữ'),
@@ -212,7 +188,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
               child: Text(
                 'HỖ TRỢ',
                 style: TextStyle(
-                  color: _AppColors.primary,
+                  color: AppTheme.primary,
                   fontSize: 12.sp,
                   fontWeight: FontWeight.w600,
                   letterSpacing: 1.5,
@@ -221,57 +197,49 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             ),
             Container(
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: AppTheme.surface,
                 borderRadius: BorderRadius.circular(12.r),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.04),
-                    blurRadius: 20,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
+                boxShadow: AppTheme.shadowCard,
               ),
               child: Column(
                 children: [
                   _buildSettingRow(
                     icon: Icons.help,
                     title: 'Trung tâm trợ giúp',
-                    trailing: Icon(Icons.chevron_right, color: _AppColors.outline, size: 20.sp),
+                    trailing: Icon(Icons.chevron_right, color: AppTheme.outline, size: 20.sp),
                     onTap: () => _showComingSoon(context, 'Trung tâm trợ giúp'),
                   ),
                   _buildDivider(),
                   _buildSettingRow(
                     icon: Icons.policy,
                     title: 'Điều khoản & Chính sách',
-                    trailing: Icon(Icons.chevron_right, color: _AppColors.outline, size: 20.sp),
+                    trailing: Icon(Icons.chevron_right, color: AppTheme.outline, size: 20.sp),
                     onTap: () => _showComingSoon(context, 'Điều khoản & Chính sách'),
                   ),
                   _buildDivider(),
                   _buildSettingRow(
                     icon: Icons.mail,
                     title: 'Liên hệ',
-                    trailing: Icon(Icons.chevron_right, color: _AppColors.outline, size: 20.sp),
+                    trailing: Icon(Icons.chevron_right, color: AppTheme.outline, size: 20.sp),
                     onTap: () => _showComingSoon(context, 'Trang liên hệ'),
                   ),
                 ],
               ),
             ),
-            
+
             SizedBox(height: 48.h),
-            
+
             // Logout Button
-            ElevatedButton(
+            OutlinedButton(
               onPressed: () async {
                 await ref.read(authViewModelProvider.notifier).logout();
                 if (mounted) {
                   context.go('/login');
                 }
               },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: _AppColors.surfaceContainer,
-                foregroundColor: _AppColors.secondary,
-                elevation: 0,
-                shadowColor: Colors.transparent,
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppTheme.onSurfaceVariant,
+                side: BorderSide(color: AppTheme.outlineVariant, width: 1.5),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12.r),
                 ),
@@ -293,13 +261,13 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                 ],
               ),
             ),
-            
+
             SizedBox(height: 24.h),
             Center(
               child: Text(
                 'SmartDine Phiên bản 2.4.0',
                 style: TextStyle(
-                  color: _AppColors.outlineVariant,
+                  color: AppTheme.outlineVariant,
                   fontSize: 12.sp,
                   fontWeight: FontWeight.w600,
                 ),
@@ -309,9 +277,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           ],
         ),
       ),
-      
-      // Settings không phải 1 trong 4 tab chính (luôn vào từ nút gear ở trang Tài
-      // khoản) nên không tab nào active ở đây.
+
       bottomNavigationBar: const CustomerBottomNav(),
     );
   }
@@ -334,17 +300,17 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                 width: 40.r,
                 height: 40.r,
                 decoration: BoxDecoration(
-                  color: _AppColors.secondaryContainer,
+                  color: AppTheme.secondaryContainer,
                   borderRadius: BorderRadius.circular(8.r),
                 ),
-                child: Icon(icon, color: _AppColors.primary, size: 24.sp),
+                child: Icon(icon, color: AppTheme.primary, size: 24.sp),
               ),
               SizedBox(width: 16.w),
               Expanded(
                 child: Text(
                   title,
                   style: TextStyle(
-                    color: _AppColors.onSurface,
+                    color: AppTheme.onSurface,
                     fontSize: 16.sp,
                   ),
                 ),
@@ -361,7 +327,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: 16.w),
       child: Divider(
-        color: _AppColors.surfaceContainer,
+        color: AppTheme.outlineVariant,
         height: 1,
         thickness: 1,
       ),
@@ -378,7 +344,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         height: 24.h,
         padding: EdgeInsets.all(4.r),
         decoration: BoxDecoration(
-          color: value ? _AppColors.primary : _AppColors.surfaceVariant,
+          color: value ? AppTheme.primary : AppTheme.surfaceContainerHigh,
           borderRadius: BorderRadius.circular(100.r),
         ),
         child: AnimatedAlign(
@@ -397,5 +363,4 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       ),
     );
   }
-
 }

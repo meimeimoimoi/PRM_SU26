@@ -4,12 +4,12 @@ export const getDefaultRoute = (role: string): string => {
   const normalizedRole = role.toUpperCase();
   switch (normalizedRole) {
     case 'STAFF':
-      return '/staff-dashboard';
+      return '/staffboard';
     case 'CUSTOMER':
       return '/menu';
     case 'MANAGER':
     default:
-      return '/dashboard';
+      return '/admin-v2';
   }
 };
 

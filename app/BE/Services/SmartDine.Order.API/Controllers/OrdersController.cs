@@ -90,6 +90,15 @@ public class OrdersController : ControllerBase
         return Ok(ApiResponse<OrderResponse>.Ok(result, ValidationMessages.ORDER_STATUS_UPDATED_SUCCESS));
     }
 
+    /// <summary>PATCH /api/v1/orders/items/status — Cập nhật hàng loạt trạng thái món (1 transaction)</summary>
+    [HttpPatch("items/status")]
+    [Authorize(Roles = Roles.KitchenStaff)]
+    public async Task<IActionResult> UpdateItemsStatus([FromBody] UpdateItemsStatusRequest request)
+    {
+        var result = await _orderService.UpdateItemsStatusAsync(request.ItemIds, request.Status);
+        return Ok(ApiResponse<bool>.Ok(result, ValidationMessages.ORDER_STATUS_UPDATED_SUCCESS));
+    }
+
     /// <summary>PATCH /api/v1/orders/items/{itemId}/status — Cập nhật trạng thái món ăn trong đơn hàng</summary>
     [HttpPatch("items/{itemId:int}/status")]
     [Authorize(Roles = Roles.KitchenStaff)]

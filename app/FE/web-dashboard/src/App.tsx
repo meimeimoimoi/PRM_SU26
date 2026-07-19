@@ -12,6 +12,16 @@ import StaffManagementPage from '@/pages/dashboard/StaffManagementPage';
 import TransactionsPage from '@/pages/dashboard/TransactionsPage';
 import SettingsPage from '@/pages/dashboard/SettingsPage';
 import StaffDashboardPage from '@/pages/dashboard/StaffDashboardPage';
+import AdminDashboard from '@/pages/admin/AdminDashboard';
+import AdminOverview from '@/pages/admin/AdminOverview';
+import AdminMenu from '@/pages/admin/AdminMenu';
+import AdminOrders from '@/pages/admin/AdminOrders';
+import AdminTable from '@/pages/admin/AdminTable';
+import AdminKitchen from '@/pages/admin/AdminKitchen';
+import AdminStaff from '@/pages/admin/AdminStaff';
+import AdminAnalytics from '@/pages/admin/AdminAnalytics';
+import AdminSettings from '@/pages/admin/AdminSettings';
+import StaffDashboard from '@/pages/admin/StaffDashboard';
 
 import { selectCurrentUser } from '@/store/slices/authSlice';
 import { getDefaultRoute } from '@/utils/roleUtils';
@@ -50,7 +60,7 @@ const App: React.FC = () => {
       theme={{
         algorithm: theme.defaultAlgorithm, // Light theme matching the screenshot
         token: {
-          colorPrimary: '#1890ff', // Blue theme matching screenshot buttons/links
+          colorPrimary: '#2563EB',
           borderRadius: 6,
         },
       }}
@@ -58,6 +68,21 @@ const App: React.FC = () => {
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
+
+          <Route path="/admin-v2" element={<AdminDashboard />}>
+            <Route index element={<AdminOverview />} />
+            <Route path="menu" element={<AdminMenu />} />
+            <Route path="tables" element={<AdminTable />} />
+            <Route path="staff" element={<AdminStaff />} />
+            <Route path="analytics" element={<AdminAnalytics />} />
+            <Route path="settings" element={<AdminSettings />} />
+          </Route>
+
+          <Route path="/staffboard" element={<StaffDashboard />}>
+            <Route index element={<Navigate to="/staffboard/kitchen" replace />} />
+            <Route path="kitchen" element={<AdminKitchen />} />
+            <Route path="orders" element={<AdminOrders />} />
+          </Route>
 
           {/* Nested Dashboard Routes inside DashboardLayout layout */}
           <Route
@@ -119,14 +144,7 @@ const App: React.FC = () => {
                 </RoleProtectedRoute>
               }
             />
-            <Route
-              path="staff-dashboard"
-              element={
-                <RoleProtectedRoute allowedRoles={['STAFF', 'MANAGER']}>
-                  <StaffDashboardPage />
-                </RoleProtectedRoute>
-              }
-            /> <Route path="draw-map" element={<RestaurantDrawPage />} />
+            <Route path="draw-map" element={<RestaurantDrawPage />} />
             {/* Fallback route within dashboard layout */}
             <Route path="*" element={<RoleIndexRedirect />} />
           </Route>

@@ -22,6 +22,13 @@ public class DiningSession : BaseEntity
     public DateTime? EndedAt { get; set; }
     public decimal? TotalSpent { get; set; }
 
+    /// <summary>
+    /// Snapshot thuế/phí tại lúc mở phiên. Manager đổi settings chỉ áp dụng phiên sau.
+    /// Null = phiên cũ trước khi có snapshot → fallback RestaurantSettings lúc tính bill.
+    /// </summary>
+    public decimal? TaxRate { get; set; }
+    public decimal? ServiceChargeRate { get; set; }
+
     // Navigation
     public List<Order> Orders { get; set; } = new();
     public List<SessionParticipant> Participants { get; set; } = new();

@@ -3,16 +3,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../services/auth_repository.dart';
-
-class _AppColors {
-  static const Color primary = Color(0xFFad2c00);
-  static const Color background = Color(0xFFfcf9f8);
-  static const Color surfaceContainerLowest = Color(0xFFffffff);
-  static const Color onSurface = Color(0xFF1b1c1c);
-  static const Color onSurfaceVariant = Color(0xFF5a413a);
-  static const Color outlineVariant = Color(0xFFe3beb5);
-  static const Color outline = Color(0xFF8f7068);
-}
+import '../../theme/app_theme.dart';
 
 /// Luồng quên mật khẩu 2 bước, dùng chung 1 trang:
 ///   1. Nhập email → gọi POST /auth/forgot-password.
@@ -108,15 +99,17 @@ class _ForgotPasswordPageState extends ConsumerState<ForgotPasswordPage> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
     final isStep2 = _resetToken != null;
 
     return Scaffold(
-      backgroundColor: _AppColors.background,
+      backgroundColor: colors.surface,
       appBar: AppBar(
-        backgroundColor: _AppColors.background,
+        backgroundColor: colors.surface,
         elevation: 0,
         leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: _AppColors.onSurface),
+          icon: Icon(Icons.arrow_back, color: colors.onSurface),
           onPressed: () => context.pop(),
         ),
       ),
@@ -127,14 +120,19 @@ class _ForgotPasswordPageState extends ConsumerState<ForgotPasswordPage> {
           children: [
             Text(
               isStep2 ? 'Đặt mật khẩu mới' : 'Quên mật khẩu',
-              style: TextStyle(color: _AppColors.onSurface, fontSize: 28.sp, fontWeight: FontWeight.bold),
+              style: theme.textTheme.headlineMedium?.copyWith(
+                color: colors.onSurface,
+                fontWeight: FontWeight.bold,
+              ),
             ),
             SizedBox(height: 8.h),
             Text(
               isStep2
                   ? 'Nhập mật khẩu mới cho tài khoản của bạn.'
                   : 'Nhập email đã đăng ký để nhận hướng dẫn đặt lại mật khẩu.',
-              style: TextStyle(color: _AppColors.onSurfaceVariant, fontSize: 16.sp),
+              style: theme.textTheme.bodyLarge?.copyWith(
+                color: colors.onSurfaceVariant,
+              ),
             ),
             SizedBox(height: 32.h),
             if (!isStep2) ...[
@@ -143,15 +141,17 @@ class _ForgotPasswordPageState extends ConsumerState<ForgotPasswordPage> {
                 icon: Icons.email_outlined,
                 hintText: 'Email',
                 keyboardType: TextInputType.emailAddress,
+                colors: colors,
               ),
               SizedBox(height: 24.h),
-              _buildSubmitButton('Gửi yêu cầu', _handleRequestToken),
+              _buildSubmitButton(colors, 'Gửi yêu cầu', _handleRequestToken),
             ] else ...[
               _buildTextField(
                 controller: _newPasswordController,
                 icon: Icons.lock_outline,
                 hintText: 'Mật khẩu mới',
                 obscureText: true,
+                colors: colors,
               ),
               SizedBox(height: 16.h),
               _buildTextField(
@@ -159,9 +159,10 @@ class _ForgotPasswordPageState extends ConsumerState<ForgotPasswordPage> {
                 icon: Icons.lock_outline,
                 hintText: 'Xác nhận mật khẩu mới',
                 obscureText: true,
+                colors: colors,
               ),
               SizedBox(height: 24.h),
-              _buildSubmitButton('Đặt lại mật khẩu', _handleResetPassword),
+              _buildSubmitButton(colors, 'Đặt lại mật khẩu', _handleResetPassword),
             ],
           ],
         ),
@@ -169,14 +170,14 @@ class _ForgotPasswordPageState extends ConsumerState<ForgotPasswordPage> {
     );
   }
 
-  Widget _buildSubmitButton(String label, VoidCallback onPressed) {
+  Widget _buildSubmitButton(ColorScheme colors, String label, VoidCallback onPressed) {
     return SizedBox(
       height: 56.h,
       child: ElevatedButton(
         onPressed: _loading ? null : onPressed,
         style: ElevatedButton.styleFrom(
-          backgroundColor: _AppColors.primary,
-          foregroundColor: Colors.white,
+          backgroundColor: colors.primary,
+          foregroundColor: colors.onPrimary,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
           elevation: 2,
         ),
@@ -197,27 +198,17 @@ class _ForgotPasswordPageState extends ConsumerState<ForgotPasswordPage> {
     required String hintText,
     TextInputType? keyboardType,
     bool obscureText = false,
+    required ColorScheme colors,
   }) {
     return TextField(
       controller: controller,
       keyboardType: keyboardType,
       obscureText: obscureText,
-      style: TextStyle(fontSize: 16.sp, color: _AppColors.onSurface),
+      style: TextStyle(fontSize: 16.sp, color: colors.onSurface),
       decoration: InputDecoration(
         hintText: hintText,
-        hintStyle: TextStyle(color: _AppColors.outline, fontSize: 16.sp),
-        prefixIcon: Icon(icon, color: _AppColors.outline),
-        filled: true,
-        fillColor: _AppColors.surfaceContainerLowest,
-        contentPadding: EdgeInsets.symmetric(vertical: 16.h, horizontal: 16.w),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12.r),
-          borderSide: const BorderSide(color: _AppColors.outlineVariant),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12.r),
-          borderSide: const BorderSide(color: _AppColors.primary),
-        ),
+        hintStyle: TextStyle(color: colors.outline, fontSize: 16.sp),
+        prefixIcon: Icon(icon, color: colors.outline),
       ),
     );
   }

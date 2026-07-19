@@ -2,12 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
-
-class _AppColors {
-  static const Color primary = Color(0xFFad2c00);
-  static const Color background = Color(0xFF000000);
-  static const Color onPrimary = Color(0xFFffffff);
-}
+import '../../theme/app_theme.dart';
 
 /// Quét QR dán trên bàn — QR được BE tạo theo quy ước `smartdine://table/{tableNumber}`
 /// (xem TableService.CreateAsync). Trả về số bàn qua context.pop(tableNumber) để
@@ -59,13 +54,16 @@ class _QrScanPageState extends State<QrScanPage> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+
     return Scaffold(
-      backgroundColor: _AppColors.background,
+      backgroundColor: Colors.black,
       appBar: AppBar(
         backgroundColor: Colors.black.withOpacity(0.4),
         elevation: 0,
-        iconTheme: const IconThemeData(color: _AppColors.onPrimary),
-        title: const Text('Quét mã QR trên bàn', style: TextStyle(color: _AppColors.onPrimary)),
+        iconTheme: IconThemeData(color: colors.onPrimary),
+        title: Text('Quét mã QR trên bàn', style: TextStyle(color: colors.onPrimary)),
         actions: [
           IconButton(
             icon: ValueListenableBuilder(
@@ -73,7 +71,7 @@ class _QrScanPageState extends State<QrScanPage> {
               builder: (context, state, child) {
                 return Icon(
                   state.torchState == TorchState.on ? Icons.flash_on : Icons.flash_off,
-                  color: _AppColors.onPrimary,
+                  color: colors.onPrimary,
                 );
               },
             ),
@@ -94,7 +92,7 @@ class _QrScanPageState extends State<QrScanPage> {
               width: 240.r,
               height: 240.r,
               decoration: BoxDecoration(
-                border: Border.all(color: _AppColors.primary, width: 3),
+                border: Border.all(color: colors.primary, width: 3),
                 borderRadius: BorderRadius.circular(16.r),
               ),
             ),
@@ -108,14 +106,14 @@ class _QrScanPageState extends State<QrScanPage> {
                 Text(
                   'Hướng camera vào mã QR dán trên bàn',
                   textAlign: TextAlign.center,
-                  style: TextStyle(color: _AppColors.onPrimary, fontSize: 14.sp),
+                  style: TextStyle(color: colors.onPrimary, fontSize: 14.sp),
                 ),
                 SizedBox(height: 16.h),
                 TextButton(
                   onPressed: () => context.pop(),
                   child: Text(
                     'Nhập tay số bàn thay vì quét',
-                    style: TextStyle(color: _AppColors.onPrimary, fontSize: 13.sp, decoration: TextDecoration.underline),
+                    style: TextStyle(color: colors.onPrimary, fontSize: 13.sp, decoration: TextDecoration.underline),
                   ),
                 ),
               ],
@@ -127,24 +125,27 @@ class _QrScanPageState extends State<QrScanPage> {
   }
 
   Widget _buildErrorState(BuildContext context, MobileScannerException error) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+
     return Container(
-      color: _AppColors.background,
+      color: Colors.black,
       padding: EdgeInsets.all(24.r),
       child: Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.no_photography, color: _AppColors.onPrimary, size: 48.sp),
+            Icon(Icons.no_photography, color: colors.onPrimary, size: 48.sp),
             SizedBox(height: 16.h),
             Text(
               'Không thể mở camera (có thể do quyền truy cập bị từ chối).',
               textAlign: TextAlign.center,
-              style: TextStyle(color: _AppColors.onPrimary, fontSize: 14.sp),
+              style: TextStyle(color: colors.onPrimary, fontSize: 14.sp),
             ),
             SizedBox(height: 16.h),
             ElevatedButton(
               onPressed: () => context.pop(),
-              style: ElevatedButton.styleFrom(backgroundColor: _AppColors.primary, foregroundColor: Colors.white),
+              style: ElevatedButton.styleFrom(backgroundColor: colors.primary, foregroundColor: colors.onPrimary),
               child: const Text('Nhập tay số bàn'),
             ),
           ],

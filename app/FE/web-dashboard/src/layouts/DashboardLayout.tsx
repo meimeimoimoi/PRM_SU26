@@ -1,16 +1,17 @@
 import React, { useMemo } from 'react';
 import { Link, useLocation, Outlet } from 'react-router-dom';
 import { Layout, Menu, Typography, Avatar, Dropdown, Space } from 'antd';
-import { 
-  AppstoreOutlined, 
-  TableOutlined, 
-  CoffeeOutlined, 
-  TeamOutlined, 
-  SettingOutlined, 
+import {
+  AppstoreOutlined,
+  TableOutlined,
+  CoffeeOutlined,
+  TeamOutlined,
+  SettingOutlined,
   LogoutOutlined,
   UserOutlined,
   HistoryOutlined,
-  FireOutlined
+  FireOutlined,
+  DashboardOutlined
 } from '@ant-design/icons';
 import { useSelector, useDispatch } from 'react-redux';
 import { selectCurrentUser, logout } from '@/store/slices/authSlice';
@@ -31,10 +32,15 @@ const DashboardLayout: React.FC = () => {
     const items = [];
 
     if (role === 'MANAGER') {
-      items.push({ 
-        key: 'dashboard', 
-        icon: <AppstoreOutlined style={{ fontSize: 16 }} />, 
-        label: <Link to="/dashboard">Dashboard</Link> 
+      items.push({
+        key: 'dashboard',
+        icon: <AppstoreOutlined style={{ fontSize: 16 }} />,
+        label: <Link to="/dashboard">Dashboard</Link>
+      });
+      items.push({
+        key: 'admin-v2',
+        icon: <DashboardOutlined style={{ fontSize: 16 }} />,
+        label: <Link to="/admin-v2">Admin V2 (New)</Link>
       });
     }
 
@@ -72,9 +78,9 @@ const DashboardLayout: React.FC = () => {
 
     if (role === 'MANAGER' || role === 'STAFF') {
       items.push({ 
-        key: 'staff-dashboard', 
+        key: 'staffboard', 
         icon: <FireOutlined style={{ fontSize: 16 }} />, 
-        label: <Link to="/staff-dashboard">Kitchen & Billing</Link> 
+        label: <Link to="/staffboard">Staff Operations</Link> 
       });
     }
 
@@ -83,6 +89,7 @@ const DashboardLayout: React.FC = () => {
 
   const getSelectedKey = () => {
     const path = location.pathname;
+    if (path.includes('/admin-v2')) return 'admin-v2';
     if (path.includes('/dashboard')) return 'dashboard';
     if (path.includes('/tables')) return 'tables';
     if (path.includes('/menu')) return 'menu';
@@ -95,6 +102,7 @@ const DashboardLayout: React.FC = () => {
 
   const getPageTitle = () => {
     const path = location.pathname;
+    if (path.includes('/admin-v2')) return 'SmartDine Admin V2';
     if (path.includes('/dashboard')) return 'RestoAdmin Dashboard';
     if (path.includes('/tables')) return 'Table Management';
     if (path.includes('/menu')) return 'Menu Management';

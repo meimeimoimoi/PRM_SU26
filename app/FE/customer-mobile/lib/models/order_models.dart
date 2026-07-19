@@ -88,6 +88,8 @@ class OrderResponse {
   final String status;
   final String? specialInstructions;
   final DateTime? createdAt;
+  final double? taxRate;
+  final double? serviceChargeRate;
 
   OrderResponse({
     required this.id,
@@ -102,6 +104,8 @@ class OrderResponse {
     required this.status,
     this.specialInstructions,
     this.createdAt,
+    this.taxRate,
+    this.serviceChargeRate,
   });
 
   factory OrderResponse.fromJson(Map<String, dynamic> json) {
@@ -119,6 +123,10 @@ class OrderResponse {
       status: json['status'] ?? 'PENDING',
       specialInstructions: json['specialInstructions'],
       createdAt: json['createdAt'] != null ? DateTime.tryParse(json['createdAt']) : null,
+      taxRate: json['taxRate'] != null ? (json['taxRate'] as num).toDouble() : null,
+      serviceChargeRate: json['serviceChargeRate'] != null
+          ? (json['serviceChargeRate'] as num).toDouble()
+          : null,
     );
   }
 }

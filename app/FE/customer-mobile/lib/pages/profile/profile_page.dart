@@ -4,24 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../viewmodels/auth_viewmodel.dart';
 import '../../widgets/customer_bottom_nav.dart';
-
-class _AppColors {
-  static const Color primary = Color(0xFFad2c00);
-  static const Color primaryContainer = Color(0xFFd34011);
-  static const Color onPrimaryContainer = Color(0xFFffffff);
-  static const Color background = Color(0xFFfcf9f8);
-  static const Color surface = Color(0xFFfcf9f8);
-  static const Color surfaceContainerLowest = Color(0xFFffffff);
-  static const Color surfaceContainer = Color(0xFFf0eded);
-  static const Color onSurface = Color(0xFF1b1c1c);
-  static const Color onSurfaceVariant = Color(0xFF5a413a);
-  static const Color secondaryContainer = Color(0xFFeddcda);
-  static const Color onSecondaryContainer = Color(0xFF6c605e);
-  static const Color outlineVariant = Color(0xFFe3beb5);
-  static const Color error = Color(0xFFba1a1a);
-  static const Color errorContainer = Color(0xFFffdad6);
-  static const Color onPrimary = Color(0xFFffffff);
-}
+import '../../theme/app_theme.dart';
 
 void _showComingSoon(BuildContext context, String feature) {
   ScaffoldMessenger.of(context).showSnackBar(
@@ -37,11 +20,15 @@ class ProfilePage extends ConsumerWidget {
     final authState = ref.watch(authViewModelProvider);
     final user = authState.user;
     final guest = authState.guestSession;
-    
-    final name = user?.fullName ?? guest?.role ?? 'Khách';
-    final phone = user?.phoneNumber != null && user!.phoneNumber!.isNotEmpty ? user.phoneNumber! : 'Không có SĐT';
+
+    final name = user?.fullName
+        ?? (guest?.guestName.isNotEmpty == true ? guest!.guestName : null)
+        ?? 'Khách';
+    final phone = user?.phoneNumber != null && user!.phoneNumber!.isNotEmpty
+        ? user.phoneNumber!
+        : 'Không có SĐT';
     final isGuest = guest != null;
-    
+
     final loyaltyPoints = user?.loyaltyPoints ?? 0;
     String membership = isGuest ? 'KHÁCH VÃNG LAI' : 'THÀNH VIÊN MỚI';
     if (user?.membershipLevel != null) {
@@ -54,27 +41,26 @@ class ProfilePage extends ConsumerWidget {
     }
 
     return Scaffold(
-      backgroundColor: _AppColors.background,
+      backgroundColor: AppTheme.background,
       appBar: AppBar(
-        backgroundColor: _AppColors.surface,
+        backgroundColor: AppTheme.surface,
         elevation: 0,
         scrolledUnderElevation: 2,
         leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: _AppColors.primary),
-          // Tài khoản luôn được vào qua tab bottom-nav (context.go, không push).
+          icon: Icon(Icons.arrow_back, color: AppTheme.primary),
           onPressed: () => context.canPop() ? context.pop() : context.go('/home'),
         ),
         title: Text(
           'Tài khoản',
           style: TextStyle(
-            color: _AppColors.primary,
+            color: AppTheme.primary,
             fontSize: 20.sp,
             fontWeight: FontWeight.bold,
           ),
         ),
         actions: [
           IconButton(
-            icon: Icon(Icons.settings, color: _AppColors.primary),
+            icon: Icon(Icons.settings, color: AppTheme.primary),
             onPressed: () => context.push('/settings'),
           ),
           SizedBox(width: 8.w),
@@ -94,7 +80,7 @@ class ProfilePage extends ConsumerWidget {
                   padding: EdgeInsets.all(4.r),
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    border: Border.all(color: _AppColors.primaryContainer, width: 2),
+                    border: Border.all(color: AppTheme.primary, width: 2),
                   ),
                   child: ClipOval(
                     child: user?.avatarUrl != null && user!.avatarUrl!.isNotEmpty
@@ -104,12 +90,12 @@ class ProfilePage extends ConsumerWidget {
                             width: 80.r,
                             height: 80.r,
                             errorBuilder: (_, __, ___) => Container(
-                              color: _AppColors.primaryContainer,
+                              color: AppTheme.primaryContainer,
                               child: Icon(Icons.person, color: Colors.white, size: 40.sp),
                             ),
                           )
                         : Container(
-                            color: _AppColors.primaryContainer,
+                            color: AppTheme.primaryContainer,
                             child: Icon(Icons.person, color: Colors.white, size: 40.sp),
                           ),
                   ),
@@ -121,7 +107,7 @@ class ProfilePage extends ConsumerWidget {
                     Text(
                       name,
                       style: TextStyle(
-                        color: _AppColors.onSurface,
+                        color: AppTheme.onSurface,
                         fontSize: 20.sp,
                         fontWeight: FontWeight.w600,
                       ),
@@ -130,7 +116,7 @@ class ProfilePage extends ConsumerWidget {
                     Text(
                       phone,
                       style: TextStyle(
-                        color: _AppColors.onSurfaceVariant,
+                        color: AppTheme.onSurfaceVariant,
                         fontSize: 14.sp,
                       ),
                     ),
@@ -138,18 +124,18 @@ class ProfilePage extends ConsumerWidget {
                     Container(
                       padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 4.h),
                       decoration: BoxDecoration(
-                        color: _AppColors.secondaryContainer,
+                        color: AppTheme.secondaryContainer,
                         borderRadius: BorderRadius.circular(100.r),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.verified, color: _AppColors.onSecondaryContainer, size: 14.sp),
+                          Icon(Icons.verified, color: AppTheme.onSecondaryContainer, size: 14.sp),
                           SizedBox(width: 4.w),
                           Text(
                             membership,
                             style: TextStyle(
-                              color: _AppColors.onSecondaryContainer,
+                              color: AppTheme.onSecondaryContainer,
                               fontSize: 10.sp,
                               fontWeight: FontWeight.w600,
                             ),
@@ -163,14 +149,15 @@ class ProfilePage extends ConsumerWidget {
             ),
             SizedBox(height: 24.h),
 
-            // Loyalty Points Card (Prominent Bento Style)
-            Container(
+            // Loyalty Points — chỉ thành viên đăng ký (không hiện với khách vãng lai)
+            if (!isGuest)
+              Container(
               decoration: BoxDecoration(
-                color: _AppColors.primary,
+                color: AppTheme.primary,
                 borderRadius: BorderRadius.circular(16.r),
                 boxShadow: [
                   BoxShadow(
-                    color: _AppColors.primary.withOpacity(0.3),
+                    color: AppTheme.primary.withOpacity(0.3),
                     blurRadius: 10,
                     offset: const Offset(0, 4),
                   ),
@@ -178,7 +165,6 @@ class ProfilePage extends ConsumerWidget {
               ),
               child: Stack(
                 children: [
-                  // Abstract Texture Overlay
                   Positioned(
                     right: -40.w,
                     top: -40.h,
@@ -242,7 +228,7 @@ class ProfilePage extends ConsumerWidget {
                           ),
                           child: FractionallySizedBox(
                             alignment: Alignment.centerLeft,
-                            widthFactor: 0.65, // 65% width
+                            widthFactor: 0.65,
                             child: Container(
                               decoration: BoxDecoration(
                                 color: Colors.white,
@@ -303,15 +289,9 @@ class ProfilePage extends ConsumerWidget {
             // Menu Items List
             Container(
               decoration: BoxDecoration(
-                color: _AppColors.surfaceContainerLowest,
+                color: AppTheme.surface,
                 borderRadius: BorderRadius.circular(16.r),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.04),
-                    blurRadius: 20,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
+                boxShadow: AppTheme.shadowCard,
               ),
               child: Column(
                 children: [
@@ -340,30 +320,24 @@ class ProfilePage extends ConsumerWidget {
             // Secondary Settings Group
             Container(
               decoration: BoxDecoration(
-                color: _AppColors.surfaceContainerLowest,
+                color: AppTheme.surface,
                 borderRadius: BorderRadius.circular(16.r),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.04),
-                    blurRadius: 20,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
+                boxShadow: AppTheme.shadowCard,
               ),
               child: Column(
                 children: [
                   _buildMenuItem(
                     icon: Icons.location_on,
-                    iconBgColor: _AppColors.surfaceContainer,
-                    iconColor: _AppColors.onSurfaceVariant,
+                    iconBgColor: AppTheme.surfaceContainerHigh,
+                    iconColor: AppTheme.onSurfaceVariant,
                     title: 'Địa chỉ đã lưu',
                     onTap: () => _showComingSoon(context, 'Địa chỉ đã lưu'),
                   ),
                   _buildDivider(),
                   _buildMenuItem(
                     icon: Icons.help,
-                    iconBgColor: _AppColors.surfaceContainer,
-                    iconColor: _AppColors.onSurfaceVariant,
+                    iconBgColor: AppTheme.surfaceContainerHigh,
+                    iconColor: AppTheme.onSurfaceVariant,
                     title: 'Trợ giúp & Hỗ trợ',
                     onTap: () => _showComingSoon(context, 'Trung tâm trợ giúp'),
                   ),
@@ -373,22 +347,20 @@ class ProfilePage extends ConsumerWidget {
             SizedBox(height: 24.h),
 
             // Logout Button
-            ElevatedButton(
+            OutlinedButton(
               onPressed: () async {
                 await ref.read(authViewModelProvider.notifier).logout();
                 if (context.mounted) {
                   context.go('/login');
                 }
               },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.white,
-                foregroundColor: _AppColors.error,
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppTheme.error,
+                side: BorderSide(color: AppTheme.errorContainer, width: 1.5),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12.r),
-                  side: BorderSide(color: _AppColors.errorContainer),
                 ),
                 padding: EdgeInsets.symmetric(vertical: 16.h),
-                elevation: 0,
               ),
               child: Text(
                 'Đăng xuất',
@@ -398,12 +370,12 @@ class ProfilePage extends ConsumerWidget {
                 ),
               ),
             ),
-            
+
             SizedBox(height: 48.h),
           ],
         ),
       ),
-      
+
       bottomNavigationBar: const CustomerBottomNav(activeTab: CustomerNavTab.account),
     );
   }
@@ -426,12 +398,12 @@ class ProfilePage extends ConsumerWidget {
               width: 40.r,
               height: 40.r,
               decoration: BoxDecoration(
-                color: iconBgColor ?? _AppColors.secondaryContainer,
+                color: iconBgColor ?? AppTheme.secondaryContainer,
                 shape: BoxShape.circle,
               ),
               child: Icon(
                 icon,
-                color: iconColor ?? _AppColors.primary,
+                color: iconColor ?? AppTheme.primary,
                 size: 24.sp,
               ),
             ),
@@ -440,14 +412,14 @@ class ProfilePage extends ConsumerWidget {
               child: Text(
                 title,
                 style: TextStyle(
-                  color: _AppColors.onSurface,
+                  color: AppTheme.onSurface,
                   fontSize: 16.sp,
                 ),
               ),
             ),
             if (badge != null) badge,
             if (badge != null) SizedBox(width: 4.w),
-            Icon(Icons.chevron_right, color: _AppColors.outlineVariant.withOpacity(0.8), size: 24.sp),
+            Icon(Icons.chevron_right, color: AppTheme.outlineVariant.withOpacity(0.8), size: 24.sp),
           ],
         ),
       ),
@@ -458,11 +430,10 @@ class ProfilePage extends ConsumerWidget {
     return Padding(
       padding: EdgeInsets.only(left: 72.w, right: 16.w),
       child: Divider(
-        color: _AppColors.outlineVariant.withOpacity(0.3),
+        color: AppTheme.outlineVariant.withOpacity(0.3),
         height: 1,
         thickness: 1,
       ),
     );
   }
-
 }

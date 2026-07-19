@@ -25,6 +25,12 @@ public class UpdateOrderStatusRequest
     public string Status { get; set; } = nameof(OrderStatus.PENDING);
 }
 
+public class UpdateItemsStatusRequest
+{
+    public List<int> ItemIds { get; set; } = new();
+    public string Status { get; set; } = nameof(OrderDetailStatus.WAITING);
+}
+
 public class OrderResponse
 {
     public int Id { get; set; }
@@ -40,6 +46,9 @@ public class OrderResponse
     public string Status { get; set; } = nameof(OrderStatus.PENDING);
     /// <summary>ACTIVE | CHECKOUT | CLOSED — CHECKOUT = đang chờ thanh toán (vd. tiền mặt tại quầy).</summary>
     public string SessionStatus { get; set; } = nameof(DiningSessionStatus.ACTIVE);
+    /// <summary>Snapshot thuế/phí của phiên — null nếu phiên legacy chưa snapshot.</summary>
+    public decimal? TaxRate { get; set; }
+    public decimal? ServiceChargeRate { get; set; }
     public string? SpecialInstructions { get; set; }
     public DateTime CreatedAt { get; set; }
 }

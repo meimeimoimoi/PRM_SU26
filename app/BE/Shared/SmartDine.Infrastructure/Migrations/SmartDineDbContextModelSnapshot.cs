@@ -375,6 +375,10 @@ namespace SmartDine.Infrastructure.Migrations
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("boolean");
 
+                    b.Property<decimal?>("ServiceChargeRate")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("numeric(5,2)");
+
                     b.Property<DateTime>("StartedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -387,6 +391,10 @@ namespace SmartDine.Infrastructure.Migrations
 
                     b.Property<int>("TableId")
                         .HasColumnType("integer");
+
+                    b.Property<decimal?>("TaxRate")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("numeric(5,2)");
 
                     b.Property<decimal?>("TotalSpent")
                         .HasPrecision(12, 2)

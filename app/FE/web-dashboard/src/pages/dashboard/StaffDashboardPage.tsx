@@ -345,11 +345,15 @@ const StaffDashboardPage: React.FC = () => {
       }
     });
 
-    // Cộng VAT + phí DV theo settings cho tổng từ orders
+    // Cộng VAT + phí DV theo snapshot phiên (fallback settings live)
     Object.values(tableMap).forEach((t) => {
+      const tableOrders = activeOrders.filter((o) => o.tableNumber === t.tableNumber);
+      const snap = tableOrders.find((o) => o.taxRate != null || o.serviceChargeRate != null);
+      const billTax = snap?.taxRate != null ? Number(snap.taxRate) : taxRatePercent;
+      const billService = snap?.serviceChargeRate != null ? Number(snap.serviceChargeRate) : serviceChargePercent;
       const net = t.totalAmount;
-      const service = Math.round(net * serviceChargePercent / 100);
-      const tax = Math.round(net * taxRatePercent / 100);
+      const service = Math.round(net * billService / 100);
+      const tax = Math.round(net * billTax / 100);
       t.totalAmount = net + service + tax;
     });
 
@@ -412,19 +416,21 @@ const StaffDashboardPage: React.FC = () => {
       });
     });
 
+    const snap = tblOrders.find((o) => o.taxRate != null || o.serviceChargeRate != null);
+    const billTax = snap?.taxRate != null ? Number(snap.taxRate) : taxRatePercent;
+    const billService = snap?.serviceChargeRate != null ? Number(snap.serviceChargeRate) : serviceChargePercent;
+    const net = subtotal - discount;
+
     return {
       tableNumber: selectedTable,
       items: Object.values(itemMap),
       subtotal,
       discount,
-      serviceFee: Math.round((subtotal - discount) * serviceChargePercent / 100),
-      vat: Math.round((subtotal - discount) * taxRatePercent / 100),
-      taxRatePercent,
-      serviceChargePercent,
-      totalAmount: Math.round(
-        (subtotal - discount) *
-          (1 + taxRatePercent / 100 + serviceChargePercent / 100)
-      ),
+      serviceFee: Math.round(net * billService / 100),
+      vat: Math.round(net * billTax / 100),
+      taxRatePercent: billTax,
+      serviceChargePercent: billService,
+      totalAmount: Math.round(net * (1 + billTax / 100 + billService / 100)),
     };
   }, [selectedTable, activeOrders, taxRatePercent, serviceChargePercent]);
 
@@ -878,17 +884,21 @@ const StaffDashboardPage: React.FC = () => {
           >
             In hóa đơn
           </Button>,
-          ...(isManagerViewOnly ? [] : [
-            <Button
-              key="checkout"
-              type="primary"
-              icon={<CheckOutlined />}
-              onClick={() => selectedTable && handleCheckoutTable(selectedTable)}
-              danger
-            >
-              Xác nhận đã thu tiền
-            </Button>
-          ])
+          ...(isManagerViewOnly ||
+          !(selectedTable != null &&
+            activeTablesList.some((t) => t.tableNumber === selectedTable && t.awaitingCash))
+            ? []
+            : [
+                <Button
+                  key="checkout"
+                  type="primary"
+                  icon={<CheckOutlined />}
+                  onClick={() => selectedTable && handleCheckoutTable(selectedTable)}
+                  danger
+                >
+                  Xác nhận đã thu tiền
+                </Button>
+              ])
         ]}
       >
         {selectedTableBillDetails ? (
