@@ -43,11 +43,11 @@ Ho Chi Minh \- July,2026
 
 [2\. Management Approach	6](#2.-management-approach)
 
-[3\. Master Schedule	6](#3.-project-deliverables)
+[3\. Project Deliverables	6](#3.-project-deliverables)
 
-[4\. Project Organization	6](#heading=h.f9nr6gng5zyw)
+[4\. Responsibility Assignments	6](#4.-responsibility-assignments)
 
-[5\. Project Communication	6](#4.-responsibility-assignments)
+[5\. Project Communications	6](#5.-project-communications)
 
 [6\. Configuration Management	6](#6.-configuration-management)
 
@@ -111,19 +111,33 @@ Ho Chi Minh \- July,2026
 
 | Acronym | Definition |
 | :---: | ----- |
-| PWM | Psychology website  |
-| AWS | Amazon Web Services |
+| API | Application Programming Interface |
 | BA | Business Analysis |
 | BR | Business Rule |
+| CRUD | Create, Read, Update, Delete |
+| DTO | Data Transfer Object |
+| DWA | Dynamic Window Approach (robot path planner) |
+| EF Core | Entity Framework Core (ORM) |
 | ERD | Entity Relationship Diagram |
+| F&B | Food and Beverage |
 | GUI | Graphical User Interface |
+| HMAC | Hash-based Message Authentication Code |
+| JWT | JSON Web Token |
+| LiDAR | Light Detection and Ranging |
+| LLM | Large Language Model |
+| ORM | Object-Relational Mapping |
 | PM | Project Manager |
+| POS | Point of Sale |
+| PWA | Progressive Web App |
+| QR | Quick Response (code) |
+| RSA | Rivest–Shamir–Adleman (asymmetric cryptography) |
 | SDD | Software Design Description |
+| SignalR | ASP.NET real-time communication library |
 | SPMP | Software Project Management Plan |
 | SRS | Software Requirement Specification |
 | UAT | User Acceptance Test |
 | UC | Use Case |
-| API | Application Program Interface |
+| YARP | Yet Another Reverse Proxy (API Gateway) |
 
 # **I. Project Introduction** {#i.-project-introduction}
 
@@ -183,10 +197,10 @@ The restaurant industry in Vietnam is undergoing a significant digital transform
 ## **4\. Business Opportunity** {#4.-business-opportunity}
 
 **Vietnam F&B Market:**
-- Vietnam F&B market reached approximately 200 billion USD (2025), growing 15-20%/year
-- Over 500,000 restaurants and eateries in Vietnam
-- Mobile usage rate: 70% of the population uses smartphones
-- Mobile payments: 40% of F&B transactions via e-wallets
+- Vietnam F&B market reached an estimated ~30 billion USD (2024), growing ~10-12%/year *(figure to be confirmed with a cited source, e.g. Statista / iPOS report)*
+- Over 300,000 restaurants and eateries in Vietnam
+- Mobile usage rate: ~70% of the population uses smartphones
+- Mobile payments: a growing share of F&B transactions via e-wallets
 
 **Problems that cannot be solved without SmartDine:**
 1. **Real-time ordering**: Customers scan QR codes, select dishes, and pay directly on their phones without staff assistance
@@ -358,7 +372,7 @@ The project uses **Agile Scrum** methodology with 2-week sprints:
 
 | Deliverable | Description |
 |-------------|-------------|
-| Docker Images | 6 Dockerfiles (5 APIs + Map Server) |
+| Docker Images | 7 Dockerfiles: Gateway + 5 APIs in `app/BE/docker/`, plus Map Server (`map-server/Dockerfile`) |
 | Deployment Config | docker-compose.yml, Render/Vercel config |
 | Source Code Repository | GitHub repo with full history |
 
@@ -538,14 +552,14 @@ Login → Dashboard (Manager)
 - **Authorization**: Public
 
 #### **3.2.3 Guest Login**
-- **Endpoint**: `POST /api/v1/auth/guest`
+- **Endpoint**: `POST /api/v1/auth/login-guest`
 - **Request**: `{ tableId }`
 - **Response**: `{ accessToken, refreshToken }`
-- **Description**: Guest login via QR scan (no account needed)
+- **Description**: Guest login via QR scan (no account needed), returns JWT with role=GUEST
 - **Authorization**: Public
 
 #### **3.2.4 Refresh Token**
-- **Endpoint**: `POST /api/v1/auth/refresh`
+- **Endpoint**: `POST /api/v1/auth/refresh-token`
 - **Request**: `{ refreshToken }`
 - **Response**: `{ accessToken, refreshToken }`
 - **Description**: Token refresh with rotation
@@ -559,27 +573,30 @@ Login → Dashboard (Manager)
 ### **3.3 Feature: Menu Management**
 
 #### **3.3.1 Get Menu (Paginated)**
-- **Endpoint**: `GET /api/v1/menu?page=&pageSize=&categoryId=&search=`
+- **Endpoint**: `GET /api/v1/menu-items?page=&pageSize=&categoryId=&search=`
 - **Response**: `{ items[], totalCount, page, pageSize }`
 - **Description**: Paginated menu with category filter and search
-- **Authorization**: Public
+- **Authorization**: Public (personalized if a token is supplied)
 
 #### **3.3.2 Create Menu Item**
-- **Endpoint**: `POST /api/v1/menu`
+- **Endpoint**: `POST /api/v1/menu-items`
 - **Request**: `{ name, description, price, categoryId, imageUrl, isAvailable }`
 - **Authorization**: MANAGER
 
-#### **3.3.3 Update Menu Item**
-- **Endpoint**: `PUT /api/v1/menu/{id}`
-- **Authorization**: MANAGER
+#### **3.3.3 Update / Toggle Menu Item**
+- **Endpoint**: `PATCH /api/v1/menu-items/{id}`
+- **Description**: Partial update — same endpoint updates fields and toggles `isAvailable`
+- **Authorization**: MANAGER, CHEF
 
 #### **3.3.4 Delete Menu Item**
-- **Endpoint**: `DELETE /api/v1/menu/{id}`
+- **Endpoint**: `DELETE /api/v1/menu-items/{id}`
+- **Description**: Soft delete
 - **Authorization**: MANAGER
 
-#### **3.3.5 Toggle Availability**
-- **Endpoint**: `PATCH /api/v1/menu/{id}/availability`
-- **Authorization**: MANAGER, CHEF
+#### **3.3.5 Menu Categories**
+- **Endpoint**: `GET/POST/PATCH/DELETE /api/v1/menu-categories`
+- **Description**: CRUD for menu categories
+- **Authorization**: Public (GET), MANAGER (write)
 
 ### **3.4 Feature: Order Management**
 
@@ -603,8 +620,9 @@ Login → Dashboard (Manager)
 - **Authorization**: STAFF, CHEF, MANAGER
 
 #### **3.4.4 Get Order History**
-- **Endpoint**: `GET /api/v1/orders/history`
-- **Authorization**: CUSTOMER (own), MANAGER (all)
+- **Endpoint**: `GET /api/v1/orders/my` (customer's own orders)
+- **Related**: `GET /api/v1/orders/session/{sessionId}`, `GET /api/v1/orders/today`, `GET /api/v1/orders/chart`
+- **Authorization**: CUSTOMER (own), STAFF/MANAGER (session & reporting queries)
 
 #### **3.4.5 Real-time Updates (SignalR)**
 - **Hub**: `/hubs/orders`
@@ -626,7 +644,8 @@ Login → Dashboard (Manager)
 - **Authorization**: PayOS system
 
 #### **3.5.3 Get Payment History**
-- **Endpoint**: `GET /api/v1/payments/history`
+- **Endpoint**: `GET /api/v1/payments`
+- **Related**: `GET /api/v1/payments/revenue-summary`, `GET /api/v1/payments/chart`, `GET /api/v1/payments/pending-cash`
 - **Authorization**: MANAGER
 
 #### **3.5.4 Loyalty Points**
@@ -639,43 +658,50 @@ Login → Dashboard (Manager)
 - **Response**: `{ tables[] }` with real-time status
 - **Authorization**: STAFF, MANAGER
 
-#### **3.6.2 Generate QR Code**
-- **Endpoint**: `GET /api/v1/tables/{id}/qr`
-- **Response**: QR code image URL
-- **Description**: QR encodes table ID for customer app
-- **Authorization**: MANAGER
+#### **3.6.2 Table QR Code**
+- **Description**: Each table stores a `QrCode` field (encodes table number). QR codes are printed and placed on tables; the customer app scans them to obtain the tableId. `TableNumber` cannot be edited (would invalidate printed QR).
+- **Authorization**: MANAGER (table CRUD)
 
-#### **3.6.3 Start Dining Session**
-- **Endpoint**: `POST /api/v1/dining-sessions`
-- **Request**: `{ tableId, guestName?, guestPhone? }`
-- **Description**: QR scan creates session, status = ACTIVE
+#### **3.6.3 Scan QR & Start / Join Dining Session**
+- **Endpoint**: `POST /api/v1/tables/{id}/scan`
+- **Request**: `{ customerId? }` (nullable — guest supported)
+- **Description**: Empty table → creates a new DiningSession + sets table OCCUPIED. Occupied table → returns the current session (joins the multi-diner group).
 - **Authorization**: CUSTOMER, GUEST
 
-#### **3.6.4 Join Dining Session**
-- **Endpoint**: `POST /api/v1/dining-sessions/{id}/join`
-- **Description**: Multi-diner support, host transfer on leave
-- **Authorization**: CUSTOMER
+#### **3.6.4 Dining Session Group Operations**
+- **Endpoints**:
+  - `GET /api/v1/dining-sessions/{id}/participants` — list diners (HOST/MEMBER)
+  - `POST /api/v1/dining-sessions/{id}/leave` — leave group (host transfers to next member)
+  - `GET /api/v1/dining-sessions/{id}/bill-summary` — running total
+  - `GET /api/v1/dining-sessions/{id}/orders` — items ordered in the session
+- **Description**: Multi-diner support with host transfer on leave
+- **Authorization**: CUSTOMER, GUEST (own session), STAFF/MANAGER (all)
 
-#### **3.6.5 Checkout Session**
-- **Endpoint**: `POST /api/v1/dining-sessions/{id}/checkout`
-- **Description**: Session lifecycle: ACTIVE → CHECKOUT → CLOSED
-- **Authorization**: CUSTOMER (host), STAFF
+#### **3.6.5 Close Session**
+- **Endpoint**: `PATCH /api/v1/tables/{id}/status`
+- **Description**: Staff sets the table to AVAILABLE → the service closes the active DiningSession. Session lifecycle: ACTIVE → CLOSED.
+- **Authorization**: STAFF, MANAGER
 
 #### **3.6.6 Table Reservation**
-- **Endpoint**: `POST /api/v1/reservations`
+- **Endpoint**: `POST /api/v1/tables/reservations`
+- **Related**: `PATCH /api/v1/tables/reservations/{id}/status`
 - **Description**: Conflict detection, time slot management
 - **Authorization**: CUSTOMER
 
 ### **3.7 Feature: Robot Delivery**
 
-#### **3.7.1 Send Robot Command**
-- **Endpoint**: `POST /api/v1/robots/command`
-- **Request**: `{ type: "deliver"|"return"|"manual", tableId?, position? }`
-- **Authorization**: STAFF, MANAGER
+> **Note**: Robot control is **not** exposed as REST endpoints. All robot commands and telemetry flow through the SignalR `RobotHub` (`/hubs/robot`) — there is no `RobotsController`. The dashboard sends commands and receives state/path updates in real time; a Python sidecar bridges the hub to the Webots controller.
 
-#### **3.7.2 Get Robot Status**
-- **Endpoint**: `GET /api/v1/robots/status`
-- **Response**: `{ robots[] }` with battery, position, state
+#### **3.7.1 Send Robot Command (SignalR)**
+- **Hub Method**: `RobotHub.SendCommand(command)`
+- **Command payload**: `{ type: "deliver"|"return"|"manual", tableId?, position? }`
+- **Delivery**: Hub → sidecar (`ReceiveCommand`) → Webots controller
+- **Authorization**: STAFF, MANAGER (authenticated SignalR connection)
+
+#### **3.7.2 Get Robot Status (SignalR)**
+- **Hub Method**: `RobotHub.UpdateState(state)` → dashboard receives `ReceiveStateUpdate(state)`
+- **State payload**: battery, position, robot state
+- **Persistence**: `robots` table stores RobotCode, Status, BatteryLevel
 - **Authorization**: STAFF, MANAGER
 
 #### **3.7.3 Real-time Robot Communication (SignalR)**
@@ -690,21 +716,28 @@ Login → Dashboard (Manager)
 
 ### **3.8 Feature: AI Recommendation**
 
-#### **3.8.1 Get Recommendations**
-- **Endpoint**: `GET /api/v1/ai/recommendations?customerId=`
-- **Response**: `{ recommendations[] }`
-- **Description**: Personalized menu suggestions via Ollama LLM
-- **Authorization**: CUSTOMER
+#### **3.8.1 Get Personalized Menu Recommendations**
+- **Endpoint**: `GET /api/v1/menu-items/ai-recommendations?limit=5`
+- **Response**: `{ recommendation_id, data[] }`
+- **Description**: Personalized dish suggestions (Carousel "Món ngon gợi ý cho bạn"). The AI scans `business_context_logs` + `customer_activities` and ranks items via Ollama LLM.
+- **Authorization**: CUSTOMER, GUEST
+
+#### **3.8.2 AI Assistant Query (Manager)**
+- **Endpoint**: `POST /api/v1/ai/query`
+- **Description**: Natural-language analytics assistant that pulls live data (e.g. revenue summary) and answers manager questions via Ollama LLM.
+- **Authorization**: MANAGER
 
 ### **3.9 Feature: Loyalty Program**
 
 #### **3.9.1 Get Customer Profile**
-- **Endpoint**: `GET /api/v1/customers/profile`
-- **Response**: `{ loyaltyPoints, membershipLevel, totalSpent, visitCount }`
-- **Authorization**: CUSTOMER
+- **Endpoint**: `GET /api/v1/auth/me`
+- **Response**: `UserInfoResponse` (includes loyaltyPoints, membershipLevel/LoyaltyTier, totalSpent for customers)
+- **Description**: Returns the current user parsed from the JWT
+- **Authorization**: Authenticated (CUSTOMER)
 
-#### **3.9.2 Get Loyalty History**
-- **Endpoint**: `GET /api/v1/customers/loyalty/history`
+#### **3.9.2 Loyalty Points & Tiers**
+- **Storage**: `loyalty_transactions` (earn/spend history) + `customers.LoyaltyPoints` / `MembershipLevel` (`LoyaltyTier` enum)
+- **Description**: Points are auto-credited on payment success (1 point per 1,000 VND × tier multiplier). Tier is recomputed from total spending.
 - **Authorization**: CUSTOMER
 
 #### **3.9.3 Membership Tiers**
@@ -806,7 +839,7 @@ Login → Dashboard (Manager)
 │              API GATEWAY (YARP Reverse Proxy, port 5000)         │
 │  ┌─────────────────────────────────────────────────────────┐   │
 │  │ /api/v1/auth/*    → Identity API (:5001)                │   │
-│  │ /api/v1/menu/*    → Menu API (:5002)                    │   │
+│  │ /api/v1/menu-items/*, /menu-categories/* → Menu API(:5002)│   │
 │  │ /api/v1/orders/*  → Order API (:5003)                   │   │
 │  │ /api/v1/payments/*→ Order API (:5003)                   │   │
 │  │ /api/v1/tables/*  → Table API (:5004)                   │   │
@@ -847,8 +880,10 @@ External Services:
 
 #### Backend Shared Libraries
 
+> Physical layout: the 3 shared projects live under `app/BE/Shared/`, and the 6 services (Gateway + 5 APIs) live under `app/BE/Services/`.
+
 ```
-SmartDine.Shared/
+app/BE/Shared/
 ├── SmartDine.Domain/           # Entities, Enums, Interfaces
 │   ├── Entities/               # 37 entity classes
 │   ├── Enums/                  # 18 enum types
@@ -856,7 +891,7 @@ SmartDine.Shared/
 │   └── Constants/              # Roles, messages
 │
 ├── SmartDine.Application/      # Business Logic
-│   ├── Services/               # 10 service implementations
+│   ├── Services/               # 9 service implementations
 │   ├── DTOs/                   # 9 DTO categories
 │   ├── Helper/                 # Utility classes
 │   └── DependencyInjection.cs  # DI registration
@@ -872,7 +907,7 @@ SmartDine.Shared/
 #### Microservice Structure
 
 ```
-SmartDine.Identity.API/
+app/BE/Services/SmartDine.Identity.API/
 ├── Controllers/     # AuthController, StaffController, SettingsController
 ├── Program.cs       # Service registration, middleware
 └── appsettings.json # Configuration
@@ -1730,8 +1765,8 @@ Example:
 |-----|-----------------|-------------|----------|
 | 1 | Schedule/Task Tracking | GitHub Projects board | GitHub |
 | 2 | Project Backlog | Sprint tasks, user stories | GitHub Projects |
-| 3 | Source Codes | Backend (5 APIs), Web Dashboard, Mobile App | `app/BE/`, `app/FE/` |
-| 4 | Database Script(s) | EF Core Migrations | `app/BE/SmartDine.Infrastructure/Migrations/` |
+| 3 | Source Codes | Backend (Gateway + 5 APIs), Web Dashboard, Mobile App, Map Server, Robot | `app/BE/`, `app/FE/`, `map-server/`, `Robot/` |
+| 4 | Database Script(s) | EF Core Migrations | `app/BE/Shared/SmartDine.Infrastructure/Migrations/` |
 | 5 | Final Report Document | Capstone Project Report | `SmartDine_Final Project Report.docx.md` |
 | 6 | Test Cases Document | Unit + Integration test files | `app/BE/Tests/SmartDine.Tests/` |
 | 7 | Defects List | GitHub Issues | GitHub Issues |
@@ -1743,25 +1778,30 @@ Example:
 ```
 PRM_SU26/
 ├── app/
-│   ├── BE/                              # Backend
-│   │   ├── SmartDine.Gateway/           # API Gateway (port 5000)
-│   │   ├── SmartDine.Identity.API/      # Auth Service (port 5001)
-│   │   ├── SmartDine.Menu.API/          # Menu Service (port 5002)
-│   │   ├── SmartDine.Order.API/         # Order Service (port 5003)
-│   │   ├── SmartDine.Table.API/         # Table Service (port 5004)
-│   │   ├── SmartDine.AI.API/            # AI Service (port 5005)
-│   │   ├── SmartDine.Application/       # Shared Business Logic
-│   │   ├── SmartDine.Domain/            # Shared Entities
-│   │   ├── SmartDine.Infrastructure/    # Shared Data Access
-│   │   ├── SmartDine.Tests/             # Test Suite
-│   │   ├── docker/                      # Dockerfiles (6)
+│   ├── BE/                              # Backend (.NET 9.0)
+│   │   ├── Services/                    # Microservices
+│   │   │   ├── SmartDine.Gateway/       # API Gateway (port 5000)
+│   │   │   ├── SmartDine.Identity.API/  # Auth Service (port 5001)
+│   │   │   ├── SmartDine.Menu.API/      # Menu Service (port 5002)
+│   │   │   ├── SmartDine.Order.API/     # Order Service (port 5003)
+│   │   │   ├── SmartDine.Table.API/     # Table Service (port 5004)
+│   │   │   └── SmartDine.AI.API/        # AI Service (port 5005)
+│   │   ├── Shared/                      # Shared class libraries
+│   │   │   ├── SmartDine.Application/   # Business Logic
+│   │   │   ├── SmartDine.Domain/        # Entities, Enums, Interfaces
+│   │   │   └── SmartDine.Infrastructure/# Data Access (+ Migrations)
+│   │   ├── Tests/SmartDine.Tests/       # Test Suite
+│   │   ├── Scripts/                     # run-services.bat, run.ps1, run-local.ps1
+│   │   ├── docker/                      # 6 Dockerfiles (Gateway + 5 APIs)
+│   │   ├── monitoring/                  # Prometheus + Grafana config
+│   │   ├── docs/                        # Sequence diagrams (PDF)
 │   │   └── docker-compose.yml           # Orchestration
-│   ├── FE/
-│   │   ├── web-dashboard/               # React Admin Dashboard
-│   │   └── customer-mobile/             # Flutter Customer App
-│   └── map-server/                      # Node.js Map Server
-├── Robot/                               # Webots Robot Controller
-├── docs/                                # Documentation
+│   └── FE/
+│       ├── web-dashboard/               # React Admin Dashboard
+│       └── customer-mobile/             # Flutter Customer App
+├── map-server/                          # Node.js Map Server (port 3001)
+├── Robot/                               # Webots Robot Controller + sidecar
+├── docs/                                # Documentation (phase1-6, DEPLOY.md)
 └── README.md                            # Project README
 ```
 
@@ -1776,7 +1816,7 @@ PRM_SU26/
 | Component | Requirement |
 |-----------|-------------|
 | OS | Windows 10+, macOS, Linux |
-| .NET SDK | 10.0 |
+| .NET SDK | 9.0 |
 | PostgreSQL | 15+ |
 | Docker | Latest (optional) |
 | Docker Compose | Latest (optional) |
@@ -1823,7 +1863,7 @@ dotnet tool install --global dotnet-ef
 
 # Update database
 cd app/BE
-dotnet ef database update --project SmartDine.Infrastructure --startup-project SmartDine.Identity.API
+dotnet ef database update --project Shared/SmartDine.Infrastructure --startup-project Services/SmartDine.Identity.API
 ```
 
 #### Step 3: Run Backend (Option A: Local)
@@ -1831,14 +1871,15 @@ dotnet ef database update --project SmartDine.Infrastructure --startup-project S
 ```bash
 cd app/BE
 # Run all services simultaneously (Windows)
-run-services.bat
+Scripts/run-services.bat
 
-# Or run individually (Terminal 1-5)
-dotnet run --project SmartDine.Gateway
-dotnet run --project SmartDine.Identity.API
-dotnet run --project SmartDine.Menu.API
-dotnet run --project SmartDine.Order.API
-dotnet run --project SmartDine.Table.API
+# Or run individually (Terminal 1-6)
+dotnet run --project Services/SmartDine.Gateway
+dotnet run --project Services/SmartDine.Identity.API
+dotnet run --project Services/SmartDine.Menu.API
+dotnet run --project Services/SmartDine.Order.API
+dotnet run --project Services/SmartDine.Table.API
+dotnet run --project Services/SmartDine.AI.API
 ```
 
 #### Step 3: Run Backend (Option B: Docker)
@@ -1873,8 +1914,8 @@ flutter run -d chrome --web-port=8090
 #### Step 6: Run Robot (Optional)
 
 ```bash
-# 1. Start Map Server
-cd app/map-server
+# 1. Start Map Server (located at repo root, not inside app/)
+cd map-server
 npm install
 npm start
 # Server runs at http://localhost:3001
@@ -2087,23 +2128,30 @@ SmartDine consists of 3 main interfaces:
 |--------|----------|--------|------|
 | Auth | `/api/v1/auth/login` | POST | Public |
 | Auth | `/api/v1/auth/register` | POST | Public |
-| Auth | `/api/v1/auth/guest` | POST | Public |
-| Auth | `/api/v1/auth/refresh` | POST | Public |
+| Auth | `/api/v1/auth/login-guest` | POST | Public |
+| Auth | `/api/v1/auth/refresh-token` | POST | Public |
 | Auth | `/api/v1/auth/logout` | POST | Auth |
-| Menu | `/api/v1/menu` | GET | Public |
-| Menu | `/api/v1/menu` | POST | Manager |
-| Menu | `/api/v1/menu/{id}` | PUT | Manager |
-| Menu | `/api/v1/menu/{id}` | DELETE | Manager |
+| Auth | `/api/v1/auth/me` | GET | Auth |
+| Menu | `/api/v1/menu-items` | GET | Public |
+| Menu | `/api/v1/menu-items` | POST | Manager |
+| Menu | `/api/v1/menu-items/{id}` | PATCH | Manager, Chef |
+| Menu | `/api/v1/menu-items/{id}` | DELETE | Manager |
+| Menu | `/api/v1/menu-items/ai-recommendations` | GET | Customer |
+| Menu | `/api/v1/menu-categories` | GET | Public |
 | Orders | `/api/v1/orders` | POST | Customer |
 | Orders | `/api/v1/orders/active` | GET | Staff |
 | Orders | `/api/v1/orders/{id}/status` | PATCH | Staff |
+| Orders | `/api/v1/orders/my` | GET | Customer |
 | Payments | `/api/v1/payments/create-intent` | POST | Customer |
 | Payments | `/api/v1/payments/webhook` | POST | PayOS |
+| Payments | `/api/v1/payments` | GET | Manager |
 | Tables | `/api/v1/tables` | GET | Staff |
-| Tables | `/api/v1/tables/{id}/qr` | GET | Manager |
-| Sessions | `/api/v1/dining-sessions` | POST | Customer |
-| Robots | `/api/v1/robots/command` | POST | Staff |
-| AI | `/api/v1/ai/recommendations` | GET | Customer |
+| Tables | `/api/v1/tables/{id}/scan` | POST | Customer/Guest |
+| Tables | `/api/v1/tables/reservations` | POST | Customer |
+| Sessions | `/api/v1/dining-sessions/{id}/participants` | GET | Customer |
+| AI | `/api/v1/ai/query` | POST | Manager |
+
+> Robot control uses SignalR `RobotHub` (`/hubs/robot`), not REST — see §3.7.
 
 ### SignalR Hubs
 
