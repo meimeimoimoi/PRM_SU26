@@ -72,7 +72,8 @@ builder.Services.AddCors(options =>
         policy.WithOrigins(
                 "http://localhost:3000",
                 "http://localhost:5173",
-                "https://smartdine-order.onrender.com"
+                "https://smartdine-order.onrender.com",
+                "https://prm-su-26-red.vercel.app"
             )
               .AllowAnyHeader()
               .AllowAnyMethod()
