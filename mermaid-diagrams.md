@@ -72,7 +72,7 @@ flowchart LR
 ```mermaid
 flowchart LR
     A["Staff Commands"] --> B["Robot Navigate"]
-    B --> C["Robot Pick Up"]
-    C --> D["Robot Deliver"]
+    B --> C["Load Food onto Robot"]
+    C --> D["Unload Food at Table"]
     D --> E["Robot Return"]
 ```

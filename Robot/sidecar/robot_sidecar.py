@@ -2,23 +2,23 @@
 """
 SmartDine Robot Sidecar
 =======================
-Bridge between the Webots robot controller (file I/O) and the deployed map-server (HTTP)
-with real-time SignalR connection for instant command delivery and state updates.
+Bridge between the Webots robot controller (file I/O) and the Order API.
+All real-time communication via SignalR. HTTP used only for map file download at startup.
 
 Startup:
-  1. Fetch active map from server
-  2. Download map files (map.pgm, graph.json, waypoints.txt, meta.json)
+  1. Fetch active map from Order API
+  2. Download map files (map.pgm, graph.json, waypoints.txt, meta.json, map.yaml)
   3. Write them to the robot controller directory
   4. Connect to backend SignalR hub
 
 Main loop (~200ms):
-  1. Read robot_state.txt → push via SignalR (or HTTP fallback)
-  2. Read robot_path.txt → push via SignalR (or HTTP fallback)
-  3. GET /api/robot/command → write command.txt (or receive via SignalR push)
+  1. Read robot_state.txt → push via SignalR
+  2. Read robot_path.txt → push via SignalR
+  3. Receive commands via SignalR push → write command.txt
 
 Usage:
   pip install -r requirements.txt
-  python robot_sidecar.py [--server URL] [--dir CONTROLLER_DIR] [--interval SECONDS]
+  python robot_sidecar.py [--url ORDER_API_URL] [--dir CONTROLLER_DIR] [--interval SECONDS]
 """
 
 import argparse
@@ -47,8 +47,7 @@ log = logging.getLogger("sidecar")
 # ---------------------------------------------------------------------------
 # Defaults
 # ---------------------------------------------------------------------------
-DEFAULT_SERVER_URL = os.environ.get("MAP_SERVER_URL", "http://localhost:3001")
-DEFAULT_SIGNALR_URL = os.environ.get("SIGNALR_URL", "http://localhost:5000/hubs/robot")
+DEFAULT_ORDER_API_URL = os.environ.get("ORDER_API_URL", "http://localhost:5003")
 DEFAULT_CONTROLLER_DIR = os.environ.get(
     "CONTROLLER_DIR",
     os.path.join(os.path.dirname(__file__), "..", "controllers", "robot_controller"),
@@ -154,30 +153,29 @@ def _is_finite(v: float) -> bool:
 
 
 # ---------------------------------------------------------------------------
-# Server communication
+# Order API HTTP client (map download only)
 # ---------------------------------------------------------------------------
 
-class ServerClient:
-    """HTTP client for the map-server."""
+class ApiClient:
+    """HTTP client for the Order API — used only for map file download at startup."""
 
     def __init__(self, base_url: str):
         self.base_url = base_url.rstrip("/")
         self.session = requests.Session()
-        self.session.headers.update({"Content-Type": "application/json"})
 
     def _url(self, path: str) -> str:
         return f"{self.base_url}{path}"
 
     def is_alive(self) -> bool:
         try:
-            r = self.session.get(self._url("/api/robot/command"), timeout=3)
-            return r.status_code == 200
+            r = self.session.get(self._url("/health"), timeout=5)
+            return r.status_code < 400
         except Exception:
             return False
 
     def list_maps(self) -> list[dict] | None:
         try:
-            r = self.session.get(self._url("/api/maps"), timeout=5)
+            r = self.session.get(self._url("/api/v1/maps"), timeout=5)
             r.raise_for_status()
             return r.json()
         except Exception as e:
@@ -185,40 +183,13 @@ class ServerClient:
             return None
 
     def get_map_files(self, map_id: str) -> dict | None:
-        """Download all map files for a given map ID."""
+        """Download all map files for a given map ID from Order API."""
         try:
-            r = self.session.get(self._url(f"/api/robot/map-files/{map_id}"), timeout=30)
+            r = self.session.get(self._url(f"/api/v1/maps/{map_id}/files"), timeout=30)
             r.raise_for_status()
             return r.json()
         except Exception as e:
             log.error(f"Failed to get map files for {map_id}: {e}")
-            return None
-
-    def post_robot_state(self, state: dict) -> bool:
-        try:
-            r = self.session.post(self._url("/api/robot/state"), json=state, timeout=3)
-            r.raise_for_status()
-            return True
-        except Exception as e:
-            log.warning(f"Failed to post robot state: {e}")
-            return False
-
-    def post_robot_path(self, path: list[dict]) -> bool:
-        try:
-            r = self.session.post(self._url("/api/robot/path"), json={"path": path}, timeout=3)
-            r.raise_for_status()
-            return True
-        except Exception as e:
-            log.warning(f"Failed to post robot path: {e}")
-            return False
-
-    def get_command(self) -> dict | None:
-        try:
-            r = self.session.get(self._url("/api/robot/command"), timeout=3)
-            r.raise_for_status()
-            return r.json()
-        except Exception as e:
-            log.warning(f"Failed to get command: {e}")
             return None
 
 
@@ -276,35 +247,33 @@ def write_map_files_to_controller(controller_dir: str, map_data: dict) -> bool:
 # ---------------------------------------------------------------------------
 
 class RobotSidecar:
-    def __init__(self, server_url: str, controller_dir: str, poll_interval: float, map_id: str | None,
-                 signalr_url: str | None = None):
-        self.client = ServerClient(server_url)
+    def __init__(self, order_api_url: str, controller_dir: str, poll_interval: float, map_id: str | None):
+        self.api = ApiClient(order_api_url)
         self.controller_dir = os.path.abspath(controller_dir)
         self.poll_interval = poll_interval
         self.map_id = map_id
-        self.signalr_url = signalr_url or DEFAULT_SIGNALR_URL
+        self.signalr_url = f"{order_api_url.rstrip('/')}/hubs/robot"
         self.running = True
 
         # Change detection hashes
         self._last_state_hash = ""
         self._last_path_hash = ""
-        self._last_command = None
 
         # SignalR connection
         self.signalr_conn = None
-        self._signalr_reconnect_delay = 3  # seconds between reconnect attempts
+        self._signalr_reconnect_delay = 3
         self._signalr_max_reconnect_delay = 30
 
     def startup(self) -> bool:
-        """Download map files from server if available. Non-blocking."""
-        log.info(f"Checking map server: {self.client.base_url}")
-        if not self.client.is_alive():
-            log.warning("Map server unreachable, skipping map download.")
+        """Download map files from Order API. Non-blocking."""
+        log.info(f"Checking Order API: {self.api.base_url}")
+        if not self.api.is_alive():
+            log.warning("Order API unreachable, skipping map download.")
             return True
 
         # Resolve map ID
         if not self.map_id:
-            maps = self.client.list_maps()
+            maps = self.api.list_maps()
             if not maps:
                 log.warning("No maps found on server, skipping map download.")
                 return True
@@ -313,7 +282,7 @@ class RobotSidecar:
             log.info(f"Auto-selected map: {self.map_id}")
 
         # Download map files
-        map_data = self.client.get_map_files(self.map_id)
+        map_data = self.api.get_map_files(self.map_id)
         if not map_data:
             log.warning(f"Failed to download map {self.map_id}")
             return True
@@ -323,11 +292,8 @@ class RobotSidecar:
         return True
 
     def tick(self):
-        """One iteration of the main loop."""
-        if self.signalr_conn is None:
-            self._sync_state()
-            self._sync_path()
-            self._sync_command()
+        """One iteration of the main loop — SignalR only."""
+        pass  # Commands received via SignalR push, state/path pushed via SignalR
 
     def _reconnect_signalr_if_needed(self):
         """Attempt to reconnect SignalR if disconnected."""
@@ -343,67 +309,16 @@ class RobotSidecar:
                 self._signalr_max_reconnect_delay,
             )
 
-    def _sync_state(self):
-        """Read robot_state.txt → POST to server (only if changed)."""
-        state_file = os.path.join(self.controller_dir, "robot_state.txt")
-        h = file_hash(state_file)
-        if h == self._last_state_hash:
-            return  # No change
-        self._last_state_hash = h
-
-        raw = read_file(state_file)
-        if not raw:
-            return
-
-        state = parse_robot_state(raw)
-        if state:
-            self.client.post_robot_state(state)
-
-    def _sync_path(self):
-        """Read robot_path.txt → POST to server (only if changed)."""
-        path_file = os.path.join(self.controller_dir, "robot_path.txt")
-        h = file_hash(path_file)
-        if h == self._last_path_hash:
-            return  # No change
-        self._last_path_hash = h
-
-        raw = read_file(path_file)
-        if raw is None:
-            return
-
-        points = parse_robot_path(raw)
-        self.client.post_robot_path(points)
-
-    def _sync_command(self):
-        """GET command from server → write command.txt (only if new command)."""
-        cmd = self.client.get_command()
-        if not cmd:
-            return
-
-        cmd_str = f"{cmd.get('command', 'NONE')} {cmd.get('target', 'NONE')} {cmd.get('direction', 'NONE')}"
-
-        # Skip if same as last sent or if NONE
-        if cmd_str == self._last_command:
-            return
-        if cmd.get("command") == "NONE" and self._last_command is not None:
-            return  # Don't write NONE if we already wrote a real command
-
-        self._last_command = cmd_str
-        command_file = os.path.join(self.controller_dir, "command.txt")
-        write_file(command_file, cmd_str)
-        log.info(f"Command written: {cmd_str}")
-
     # ------------------------------------------------------------------
     # SignalR connection
     # ------------------------------------------------------------------
 
     def _connect_signalr(self):
-        """Connect to backend SignalR hub for real-time commands."""
-        signalr_url = self.signalr_url
+        """Connect to Order API SignalR hub."""
         token = os.environ.get("AUTH_TOKEN", "")
 
         self.signalr_conn = BaseHubConnection(
-            url=signalr_url,
+            url=self.signalr_url,
             headers={"Authorization": f"Bearer {token}"} if token else {},
         )
 
@@ -416,7 +331,7 @@ class RobotSidecar:
 
         try:
             self.signalr_conn.start()
-            log.info(f"SignalR connected to {signalr_url}")
+            log.info(f"SignalR connected to {self.signalr_url}")
             self._signalr_reconnect_delay = 3
         except Exception as e:
             log.error(f"SignalR connection failed: {e}")
@@ -447,7 +362,7 @@ class RobotSidecar:
             log.info(f"SignalR command received: {cmd_str}")
 
     def _sync_state_signalr(self):
-        """Push robot state via SignalR (replaces HTTP POST)."""
+        """Push robot state via SignalR."""
         if not self.signalr_conn:
             return
         state_file = os.path.join(self.controller_dir, "robot_state.txt")
@@ -471,7 +386,7 @@ class RobotSidecar:
                 log.warning(f"SignalR state push failed: {e}")
 
     def _sync_path_signalr(self):
-        """Push robot path via SignalR (replaces HTTP POST)."""
+        """Push robot path via SignalR."""
         if not self.signalr_conn:
             return
         path_file = os.path.join(self.controller_dir, "robot_path.txt")
@@ -495,18 +410,16 @@ class RobotSidecar:
     def run(self):
         """Main loop with graceful shutdown."""
         log.info(f"Sidecar config:")
-        log.info(f"  Map server (HTTP): {self.client.base_url}")
-        log.info(f"  SignalR hub:       {self.signalr_url}")
-        log.info(f"  Controller dir:    {self.controller_dir}")
-        log.info(f"  Poll interval:     {self.poll_interval}s")
+        log.info(f"  Order API:       {self.api.base_url}")
+        log.info(f"  SignalR hub:     {self.signalr_url}")
+        log.info(f"  Controller dir:  {self.controller_dir}")
+        log.info(f"  Poll interval:   {self.poll_interval}s")
 
-        self._connect_signalr()
         self.startup()
 
         while self.running:
             try:
                 self._reconnect_signalr_if_needed()
-                self.tick()
                 if self.signalr_conn is not None:
                     self._sync_state_signalr()
                     self._sync_path_signalr()
@@ -529,19 +442,17 @@ class RobotSidecar:
 
 def main():
     parser = argparse.ArgumentParser(description="SmartDine Robot Sidecar")
-    parser.add_argument("--server", default=DEFAULT_SERVER_URL, help="Map server URL")
-    parser.add_argument("--signalr-url", default=DEFAULT_SIGNALR_URL, help="SignalR hub URL")
+    parser.add_argument("--url", default=DEFAULT_ORDER_API_URL, help="Order API URL (default: http://localhost:5003)")
     parser.add_argument("--dir", default=DEFAULT_CONTROLLER_DIR, help="Robot controller directory")
     parser.add_argument("--interval", type=float, default=DEFAULT_POLL_INTERVAL, help="Poll interval (seconds)")
     parser.add_argument("--map-id", default=DEFAULT_MAP_ID, help="Map ID to use (auto-detect if not set)")
     args = parser.parse_args()
 
     sidecar = RobotSidecar(
-        server_url=args.server,
+        order_api_url=args.url,
         controller_dir=args.dir,
         poll_interval=args.interval,
         map_id=args.map_id,
-        signalr_url=args.signalr_url,
     )
 
     def shutdown(signum, frame):
