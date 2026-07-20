@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace SmartDine.Order.API.Controllers;
@@ -23,7 +24,7 @@ public class MapsController : ControllerBase
         else
         {
             _dataRoot = Path.GetFullPath(
-                Path.Combine(env.ContentRootPath, "..", "..", "..", "..", "map-server", "data", "maps"));
+                Path.Combine(env.ContentRootPath, "data", "maps"));
         }
     }
 
@@ -89,4 +90,67 @@ public class MapsController : ControllerBase
 
         return Ok(dict);
     }
+
+    /// <summary>GET /api/v1/maps/{id}/files — Download all map files for sidecar.
+    /// Returns JSON with: meta, graph, waypoints, mapYaml, mapPgmBase64.</summary>
+    [HttpGet("{id}/files")]
+    public IActionResult GetFiles(string id)
+    {
+        var mapDir = Path.Combine(_dataRoot, id);
+        if (!Directory.Exists(mapDir))
+            return NotFound(new { error = "Map not found" });
+
+        var result = new MapFilesResponse();
+
+        // meta.json
+        var metaPath = Path.Combine(mapDir, "meta.json");
+        if (System.IO.File.Exists(metaPath))
+        {
+            var json = System.IO.File.ReadAllText(metaPath);
+            result.Meta = JsonSerializer.Deserialize<JsonElement>(json, JsonOpts);
+        }
+
+        // graph.json
+        var graphPath = Path.Combine(mapDir, "graph.json");
+        if (System.IO.File.Exists(graphPath))
+        {
+            var json = System.IO.File.ReadAllText(graphPath);
+            result.Graph = JsonSerializer.Deserialize<JsonElement>(json, JsonOpts);
+        }
+
+        // waypoints.txt
+        var wpPath = Path.Combine(mapDir, "waypoints.txt");
+        if (System.IO.File.Exists(wpPath))
+            result.Waypoints = System.IO.File.ReadAllText(wpPath);
+
+        // map.yaml
+        var yamlPath = Path.Combine(mapDir, "map.yaml");
+        if (System.IO.File.Exists(yamlPath))
+            result.MapYaml = System.IO.File.ReadAllText(yamlPath);
+
+        // map.pgm → base64
+        var pgmPath = Path.Combine(mapDir, "map.pgm");
+        if (System.IO.File.Exists(pgmPath))
+            result.MapPgmBase64 = Convert.ToBase64String(System.IO.File.ReadAllBytes(pgmPath));
+
+        return Ok(result);
+    }
+}
+
+public class MapFilesResponse
+{
+    [JsonPropertyName("meta")]
+    public JsonElement? Meta { get; set; }
+
+    [JsonPropertyName("graph")]
+    public JsonElement? Graph { get; set; }
+
+    [JsonPropertyName("waypoints")]
+    public string? Waypoints { get; set; }
+
+    [JsonPropertyName("mapYaml")]
+    public string? MapYaml { get; set; }
+
+    [JsonPropertyName("mapPgmBase64")]
+    public string? MapPgmBase64 { get; set; }
 }

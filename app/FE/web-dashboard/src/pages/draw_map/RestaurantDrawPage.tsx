@@ -11,7 +11,7 @@ const { Content, Sider } = Layout;
 
 const RestaurantDrawPage: React.FC = () => {
   return (
-    <Layout style={{ height: "100vh", overflow: "hidden" }}>
+    <Layout style={{ height: "100%", overflow: "hidden" }}>
       <Toolbar />
 
       <Layout>
