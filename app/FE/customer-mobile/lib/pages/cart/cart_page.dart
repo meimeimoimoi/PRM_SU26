@@ -29,9 +29,9 @@ class _CartPageState extends ConsumerState<CartPage> {
   @override
   Widget build(BuildContext context) {
     final authState = ref.watch(authViewModelProvider);
-    final tableNumber = authState.guestSession?.tableNumber ?? 1;
-    final tableId = authState.guestSession?.tableId ?? 1;
-    final sessionId = authState.guestSession?.sessionId ?? 1;
+    final tableNumber = authState.tableNumber;
+    final tableId = authState.tableId;
+    final sessionId = authState.sessionId;
 
     final cartState = ref.watch(cartViewModelProvider);
     final items = cartState.items;
@@ -69,7 +69,7 @@ class _CartPageState extends ConsumerState<CartPage> {
                   borderRadius: BorderRadius.circular(12.r),
                 ),
                 child: Text(
-                  'Bàn $tableNumber',
+                  tableNumber != null && tableNumber > 0 ? 'Bàn $tableNumber' : 'Chưa chọn bàn',
                   style: TextStyle(
                     color: AppTheme.onPrimaryContainer,
                     fontSize: 12.sp,
@@ -175,6 +175,12 @@ class _CartPageState extends ConsumerState<CartPage> {
                   onPressed: items.isEmpty || cartState.isSubmitting || checkoutLocked
                       ? null
                       : () async {
+                          if (tableId == null || tableId <= 0 || sessionId == null || sessionId <= 0) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Chưa gắn bàn — vui lòng quét QR đăng nhập lại')),
+                            );
+                            return;
+                          }
                           final orderId = await ref
                               .read(cartViewModelProvider.notifier)
                               .checkout(tableId, sessionId, couponCode: _appliedCoupon);

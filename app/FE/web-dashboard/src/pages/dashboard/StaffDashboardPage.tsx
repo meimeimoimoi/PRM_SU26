@@ -63,9 +63,9 @@ const groupKitchenItemsByOrder = (items: KitchenItem[]): KitchenOrderGroup[] => 
 
 const StaffDashboardPage: React.FC = () => {
   const user = useSelector(selectCurrentUser);
-  // Manager chỉ được xem Kitchen & Billing ở mức tối thiểu, không thao tác — tránh
-  // manager vô tình can thiệp vào ca làm việc thực tế của staff/bếp.
-  const isManagerViewOnly = user?.role === 'MANAGER';
+  // Chỉ STAFF thao tác Kitchen & Billing; MANAGER chỉ xem.
+  const canOperate = String(user?.role || '').toUpperCase() === 'STAFF';
+  const isManagerViewOnly = !canOperate;
 
   // Kitchen Queue State
   const [kitchenItems, setKitchenItems] = useState<KitchenItem[]>([]);
@@ -784,7 +784,15 @@ const StaffDashboardPage: React.FC = () => {
                             >
                               Xem chi tiết
                             </Button>
-                            {table.awaitingCash && !isManagerViewOnly ? (
+                            <Button 
+                              type="default" 
+                              icon={<PrinterOutlined />} 
+                              onClick={() => handlePrintCheckoutBill(table.tableNumber)}
+                              className="btn-print"
+                            >
+                              In hóa đơn
+                            </Button>
+                            {canOperate && table.awaitingCash && (
                               <Button
                                 type="primary"
                                 icon={<CheckOutlined />}
@@ -793,15 +801,6 @@ const StaffDashboardPage: React.FC = () => {
                                 danger
                               >
                                 Xác nhận thu tiền
-                              </Button>
-                            ) : (
-                              <Button 
-                                type="primary" 
-                                icon={<PrinterOutlined />} 
-                                onClick={() => handlePrintCheckoutBill(table.tableNumber)}
-                                className="btn-print"
-                              >
-                                In hóa đơn
                               </Button>
                             )}
                           </div>
@@ -884,9 +883,9 @@ const StaffDashboardPage: React.FC = () => {
           >
             In hóa đơn
           </Button>,
-          ...(isManagerViewOnly ||
-          !(selectedTable != null &&
-            activeTablesList.some((t) => t.tableNumber === selectedTable && t.awaitingCash))
+          ...(!canOperate ||
+            selectedTable == null ||
+            !activeTablesList.some((t) => t.tableNumber === selectedTable && t.awaitingCash)
             ? []
             : [
                 <Button

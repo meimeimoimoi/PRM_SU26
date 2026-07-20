@@ -15,6 +15,13 @@ public class LoginRequest
 {
     public string Email { get; set; } = string.Empty;
     public string Password { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Số bàn (TableNumber) — chỉ dùng khi CUSTOMER đăng nhập từ app khách.
+    /// &gt; 0 → sau login tạo/join DiningSession trên bàn đó.
+    /// Staff/Manager bỏ trống hoặc 0.
+    /// </summary>
+    public int TableNumber { get; set; }
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -43,6 +50,7 @@ public class RegisterRequest
 /// Client lưu AccessToken vào header "Authorization: Bearer {token}" cho các request tiếp theo.
 /// RefreshToken lưu phía client (secure storage), gửi khi AccessToken hết hạn.
 /// ExpiresIn tính bằng giây (3600 = 1 giờ).
+/// SessionId/TableId/TableNumber có giá trị khi CUSTOMER login kèm TableNumber (tạo/join phiên bàn).
 /// </summary>
 public class TokenResponse
 {
@@ -50,6 +58,11 @@ public class TokenResponse
     public string RefreshToken { get; set; } = string.Empty;
     public int ExpiresIn { get; set; }
     public UserInfoResponse User { get; set; } = null!;
+
+    /// <summary>DiningSession vừa tạo/join — 0 nếu không gắn bàn.</summary>
+    public int SessionId { get; set; }
+    public int TableId { get; set; }
+    public int TableNumber { get; set; }
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -164,6 +177,37 @@ public class GuestLoginResponse
     /// <summary>Tên khách nhập khi quét QR / join bàn — hiển thị trên trang tài khoản.</summary>
     public string GuestName { get; set; } = "Guest";
 }
+
+/// <summary>CUSTOMER gắn bàn sau khi đăng nhập — tạo/join DiningSession, giữ JWT thành viên.</summary>
+public class JoinTableRequest
+{
+    /// <summary>Số bàn in trên QR (TableNumber), không phải PK.</summary>
+    public int TableNumber { get; set; }
+}
+
+/// <summary>Đăng nhập/đăng ký CUSTOMER + gắn bàn trong 1 request.</summary>
+public class LoginWithTableRequest
+{
+    public string Email { get; set; } = string.Empty;
+    public string Password { get; set; } = string.Empty;
+    public int TableNumber { get; set; }
+    /// <summary>Có thì đăng ký mới; null/empty thì chỉ login.</summary>
+    public string? FullName { get; set; }
+    public string? PhoneNumber { get; set; }
+}
+
+/// <summary>Token thành viên + phiên bàn vừa gắn.</summary>
+public class CustomerDiningLoginResponse
+{
+    public string AccessToken { get; set; } = string.Empty;
+    public string RefreshToken { get; set; } = string.Empty;
+    public int ExpiresIn { get; set; }
+    public UserInfoResponse User { get; set; } = null!;
+    public int SessionId { get; set; }
+    public int TableId { get; set; }
+    public int TableNumber { get; set; }
+}
+
 
 // ─────────────────────────────────────────────────────────────
 // Logout

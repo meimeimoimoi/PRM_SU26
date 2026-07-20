@@ -133,7 +133,8 @@ public class TableService
             return new ScanTableResponse
             {
                 SessionId = existingSession.Id,
-                TableId = tableId,
+                TableId = table.Id,
+                TableNumber = table.TableNumber,
                 Status = existingSession.Status.ToString(),
                 IsNewSession = false,
                 Message = string.Format(ValidationMessages.SCAN_JOINED_SESSION, table.TableNumber)
@@ -145,7 +146,7 @@ public class TableService
         var newSession = new DiningSession
         {
             CustomerId = request.CustomerId,
-            TableId = tableId,
+            TableId = table.Id,
             Status = DiningSessionStatus.ACTIVE,
             StartedAt = DateTime.UtcNow,
             TaxRate = settings?.TaxRate,
@@ -170,11 +171,22 @@ public class TableService
         return new ScanTableResponse
         {
             SessionId = newSession.Id,
-            TableId = tableId,
+            TableId = table.Id,
+            TableNumber = table.TableNumber,
             Status = newSession.Status.ToString(),
             IsNewSession = true,
             Message = string.Format(ValidationMessages.SCAN_NEW_SESSION, table.TableNumber)
         };
+    }
+
+    /// <summary>
+    /// Quét/join bàn theo số bàn (TableNumber) — khớp QR in trên bàn và Flutter.
+    /// </summary>
+    public async Task<ScanTableResponse> ScanTableByNumberAsync(int tableNumber, ScanTableRequest request)
+    {
+        var table = await _uow.Tables.GetByTableNumberAsync(tableNumber)
+            ?? throw new EntityNotFoundException("Table", tableNumber);
+        return await ScanTableAsync(table.Id, request);
     }
 
     // ═══════════════════════════════════════════════════════════════

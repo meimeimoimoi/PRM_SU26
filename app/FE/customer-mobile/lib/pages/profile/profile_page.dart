@@ -27,7 +27,7 @@ class ProfilePage extends ConsumerWidget {
     final phone = user?.phoneNumber != null && user!.phoneNumber!.isNotEmpty
         ? user.phoneNumber!
         : 'Không có SĐT';
-    final isGuest = guest != null;
+    final isGuest = authState.status == AuthStateStatus.guest;
 
     final loyaltyPoints = user?.loyaltyPoints ?? 0;
     String membership = isGuest ? 'KHÁCH VÃNG LAI' : 'THÀNH VIÊN MỚI';

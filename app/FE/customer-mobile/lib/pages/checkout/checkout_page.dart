@@ -13,7 +13,7 @@ class CheckoutPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final authState = ref.watch(authViewModelProvider);
-    final tableNumber = authState.guestSession?.tableNumber ?? 1;
+    final tableNumber = authState.tableNumber;
 
     return Scaffold(
       backgroundColor: AppTheme.background,
@@ -27,7 +27,7 @@ class CheckoutPage extends ConsumerWidget {
             Icon(Icons.restaurant, color: AppTheme.primary, size: 24.sp),
             SizedBox(width: 8.w),
             Text(
-              'Bàn $tableNumber',
+              tableNumber != null && tableNumber > 0 ? 'Bàn $tableNumber' : 'Chưa chọn bàn',
               style: TextStyle(
                 color: AppTheme.primary,
                 fontSize: 20.sp,

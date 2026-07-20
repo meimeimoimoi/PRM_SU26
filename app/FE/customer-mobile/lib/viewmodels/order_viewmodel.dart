@@ -6,8 +6,8 @@ import 'auth_viewmodel.dart';
 final orderListProvider = FutureProvider<List<OrderResponse>>((ref) async {
   final authState = ref.watch(authViewModelProvider);
   final repo = ref.watch(orderRepositoryProvider);
-  final sessionId = authState.guestSession?.sessionId;
-  if (sessionId != null) {
+  final sessionId = authState.sessionId;
+  if (sessionId != null && sessionId > 0) {
     return repo.getSessionOrders(sessionId);
   }
   return repo.getMyOrders();

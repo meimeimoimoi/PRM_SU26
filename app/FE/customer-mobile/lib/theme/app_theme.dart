@@ -196,7 +196,9 @@ class AppTheme {
       ),
       padding: EdgeInsets.symmetric(vertical: 16.h, horizontal: 24.w),
       textStyle: textTheme.labelLarge,
-      minimumSize: Size(double.infinity, 56.h),
+      // Không dùng width infinity — sẽ crash khi nút nằm trong Row (vd. màn quét QR).
+      // Full-width: bọc SizedBox(width: double.infinity) ở chỗ gọi.
+      minimumSize: Size(64, 56.h),
     ),
   );
 
@@ -209,7 +211,7 @@ class AppTheme {
       ),
       padding: EdgeInsets.symmetric(vertical: 16.h, horizontal: 24.w),
       textStyle: textTheme.labelLarge,
-      minimumSize: Size(double.infinity, 56.h),
+      minimumSize: Size(64, 56.h),
     ),
   );
 

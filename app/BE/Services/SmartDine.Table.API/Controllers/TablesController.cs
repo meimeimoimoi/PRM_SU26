@@ -91,26 +91,55 @@ public class TablesController : ControllerBase
     }
 
     /// <summary>
-    /// API 2 — Khách quét mã QR tại bàn.
+    /// API 2 — Khách quét mã QR tại bàn (theo table PK).
     ///
     /// POST /api/v1/tables/{id}/scan
     /// Role: CUSTOMER, GUEST.
-    ///
-    /// Luồng: Khách scan QR trên bàn → app gửi tableId + customerId (nullable).
-    ///   - Bàn trống → tạo DiningSession mới + chuyển bàn OCCUPIED.
-    ///   - Bàn đã có khách → trả session hiện tại (tham gia nhóm gọi món).
     /// </summary>
     [HttpPost("{id:int}/scan")]
     [Authorize(Roles = Roles.AllDiners)]
-    public async Task<IActionResult> ScanTable(int id, [FromBody] ScanTableRequest request)
+    public async Task<IActionResult> ScanTable(int id, [FromBody] ScanTableRequest? request)
     {
-        // GUEST: guestSessionId = JWT sub claim (không phải customerId)
-        var role = User.FindFirst(ClaimTypes.Role)?.Value;
-        if (role == nameof(UserRole.GUEST))
-            request.GuestSessionId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        request ??= new ScanTableRequest();
+        BindDinerIdentity(request);
 
         var result = await _tableService.ScanTableAsync(id, request);
         return Ok(ApiResponse<ScanTableResponse>.Ok(result, result.Message));
+    }
+
+    /// <summary>
+    /// API 2b — Quét/join bàn theo số bàn (TableNumber) — khớp QR Flutter.
+    ///
+    /// POST /api/v1/tables/by-number/{tableNumber}/scan
+    /// Role: CUSTOMER, GUEST.
+    /// </summary>
+    [HttpPost("by-number/{tableNumber:int}/scan")]
+    [Authorize(Roles = Roles.AllDiners)]
+    public async Task<IActionResult> ScanTableByNumber(int tableNumber, [FromBody] ScanTableRequest? request)
+    {
+        request ??= new ScanTableRequest();
+        BindDinerIdentity(request);
+
+        var result = await _tableService.ScanTableByNumberAsync(tableNumber, request);
+        return Ok(ApiResponse<ScanTableResponse>.Ok(result, result.Message));
+    }
+
+    /// <summary>Gắn CustomerId / GuestSessionId từ JWT — không tin body client.</summary>
+    private void BindDinerIdentity(ScanTableRequest request)
+    {
+        var role = User.FindFirst(ClaimTypes.Role)?.Value;
+        var sub = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+        if (role == nameof(UserRole.CUSTOMER) && int.TryParse(sub, out var customerId))
+        {
+            request.CustomerId = customerId;
+            request.GuestSessionId = null;
+        }
+        else if (role == nameof(UserRole.GUEST))
+        {
+            request.GuestSessionId = sub;
+            request.CustomerId = null;
+        }
     }
 
     /// <summary>

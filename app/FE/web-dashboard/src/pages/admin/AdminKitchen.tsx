@@ -43,10 +43,13 @@ function timerColor(seconds: number, status: KitchenItemStatus) {
 
 function AdminKitchen() {
   const user = useSelector(selectCurrentUser);
-  const isManagerView = user?.role === 'MANAGER';
+  const role = String((user as any)?.role ?? (user as any)?.Role ?? '').trim().toUpperCase();
+  /** Chỉ STAFF thao tác bếp (Cook/Done/Served / Đã dọn). */
+  const canOperateKitchen = role === 'STAFF';
 
   const [kitchenItems, setKitchenItems] = useState<KitchenItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [confirmingTable, setConfirmingTable] = useState<number | null>(null);
   const [activeOrders, setActiveOrders] = useState<OrderResponse[]>([]);
   const [activeTab, setActiveTab] = useState<'kitchen' | 'billing'>('kitchen');
   const [searchTable, setSearchTable] = useState('');
@@ -75,13 +78,17 @@ function AdminKitchen() {
       );
       setPendingCashPayments(pendingCash);
       if (settings) { setTaxRate(Number(settings.taxRate) || 0); setServiceCharge(Number(settings.serviceChargeRate) || 0); }
-      if (pendingCash.length > 0) {
-        setPendingCashTables((prev) => {
-          const next = new Set(prev);
-          pendingCash.forEach((p) => next.add(p.tableNumber));
-          return next;
-        });
-      }
+      // Đồng bộ lại set pending từ API + session CHECKOUT (không chỉ add)
+      const nextPending = new Set<number>();
+      pendingCash.forEach((p) => {
+        if (p.tableNumber != null) nextPending.add(Number(p.tableNumber));
+      });
+      orders.forEach((o) => {
+        if (String(o.sessionStatus || '').toUpperCase() === 'CHECKOUT') {
+          nextPending.add(o.tableNumber);
+        }
+      });
+      setPendingCashTables(nextPending);
     } catch {} finally { if (spinner) setLoading(false); }
   }, []);
 
@@ -150,15 +157,30 @@ function AdminKitchen() {
   };
 
   const handleCheckout = async (tableNo: number) => {
-    if (!confirm(`Xác nhận đã thu tiền Bàn ${tableNo}? Bàn sẽ chuyển sang cần dọn (MAINTENANCE).`)) return;
+    if (confirmingTable != null) return;
+    setConfirmingTable(tableNo);
     try {
+      // Gọi thẳng API — không dùng window.confirm (dễ bị chặn, không ra POST)
       await orderService.completePaymentByTable(tableNo);
       setActiveOrders((prev) => prev.filter((o) => o.tableNumber !== tableNo));
-      setPendingCashTables((prev) => { const n = new Set(prev); n.delete(tableNo); return n; });
-      setShowBill(false); setSelectedTable(null);
+      setPendingCashTables((prev) => {
+        const n = new Set(prev);
+        n.delete(tableNo);
+        return n;
+      });
+      setPendingCashPayments((prev) => prev.filter((p) => p.tableNumber !== tableNo));
+      setShowBill(false);
+      setSelectedTable(null);
       await loadData(false);
-    } catch {
-      alert('Xác nhận thanh toán thất bại.');
+    } catch (err: any) {
+      const msg =
+        err?.response?.data?.message ||
+        err?.response?.data?.title ||
+        err?.message ||
+        'Xác nhận thanh toán thất bại.';
+      alert(msg);
+    } finally {
+      setConfirmingTable(null);
     }
   };
 
@@ -205,8 +227,10 @@ function AdminKitchen() {
                 </div>
               </div>
               <button
+                type="button"
                 onClick={() => handleMarkCleaned(t)}
-                className="shrink-0 px-3 py-1.5 rounded-lg text-[11px] font-medium bg-emerald-600 text-white hover:bg-emerald-700 transition-all cursor-pointer font-body"
+                disabled={!canOperateKitchen}
+                className="shrink-0 px-3 py-1.5 rounded-lg text-[11px] font-medium bg-emerald-600 text-white hover:bg-emerald-700 transition-all cursor-pointer font-body disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 Đã dọn xong
               </button>
@@ -225,8 +249,21 @@ function AdminKitchen() {
     const map: Record<number, { tableNumber: number; totalAmount: number; itemsCount: number; awaitingCash: boolean }> = {};
     activeOrders.forEach((o) => {
       const count = o.items.reduce((s, i) => s + i.quantity, 0);
-      if (map[o.tableNumber]) { map[o.tableNumber].totalAmount += o.finalAmount; map[o.tableNumber].itemsCount += count; }
-      else { map[o.tableNumber] = { tableNumber: o.tableNumber, totalAmount: o.finalAmount, itemsCount: count, awaitingCash: false }; }
+      const awaitingCash =
+        String(o.sessionStatus || '').toUpperCase() === 'CHECKOUT' ||
+        pendingCashTables.has(o.tableNumber);
+      if (map[o.tableNumber]) {
+        map[o.tableNumber].totalAmount += o.finalAmount;
+        map[o.tableNumber].itemsCount += count;
+        if (awaitingCash) map[o.tableNumber].awaitingCash = true;
+      } else {
+        map[o.tableNumber] = {
+          tableNumber: o.tableNumber,
+          totalAmount: o.finalAmount,
+          itemsCount: count,
+          awaitingCash,
+        };
+      }
     });
     // Card list phải khớp bill modal: cộng VAT + phí DV theo snapshot phiên (fallback settings)
     Object.values(map).forEach((t) => {
@@ -240,13 +277,15 @@ function AdminKitchen() {
       t.totalAmount = net + service + tax;
     });
     pendingCashPayments.forEach((p) => {
+      const tableNo = Number(p.tableNumber);
+      if (!tableNo) return;
       // amount từ payment PENDING đã gồm thuế/phí (khớp hóa đơn)
-      if (map[p.tableNumber]) { map[p.tableNumber].awaitingCash = true; map[p.tableNumber].totalAmount = p.amount; }
-      else { map[p.tableNumber] = { tableNumber: p.tableNumber, totalAmount: p.amount, itemsCount: 0, awaitingCash: true }; }
+      if (map[tableNo]) { map[tableNo].awaitingCash = true; map[tableNo].totalAmount = Number(p.amount); }
+      else { map[tableNo] = { tableNumber: tableNo, totalAmount: Number(p.amount), itemsCount: 0, awaitingCash: true }; }
     });
     return Object.values(map).filter((t) => !searchTable || t.tableNumber.toString().includes(searchTable))
       .sort((a, b) => Number(b.awaitingCash) - Number(a.awaitingCash) || a.tableNumber - b.tableNumber);
-  }, [activeOrders, searchTable, pendingCashPayments, taxRate, serviceCharge]);
+  }, [activeOrders, searchTable, pendingCashTables, pendingCashPayments, taxRate, serviceCharge]);
 
   const billDetails = useMemo(() => {
     if (selectedTable === null) return null;
@@ -313,19 +352,19 @@ function AdminKitchen() {
                 className="flex items-center gap-1 px-2.5 py-1.5 rounded-md text-[10px] font-medium text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-all cursor-pointer font-body">
                 <Printer size={12} /> Print
               </button>
-              {!isManagerView && (
+              {!canOperateKitchen ? null : (
                 status === 'WAITING' ? (
-                  <button onClick={() => handleOrderAction(g, 'DOING')}
+                  <button type="button" onClick={() => handleOrderAction(g, 'DOING')}
                     className="flex items-center gap-1 px-2.5 py-1.5 rounded-md text-[10px] font-medium bg-blue-50 text-blue-600 hover:bg-blue-100 transition-all cursor-pointer font-body ml-auto">
                     <Play size={12} /> Cook ({g.items.length})
                   </button>
                 ) : status === 'DOING' ? (
-                  <button onClick={() => handleOrderAction(g, 'DONE')}
+                  <button type="button" onClick={() => handleOrderAction(g, 'DONE')}
                     className="flex items-center gap-1 px-2.5 py-1.5 rounded-md text-[10px] font-medium bg-amber-50 text-amber-600 hover:bg-amber-100 transition-all cursor-pointer font-body ml-auto">
                     <CheckCircle2 size={12} /> Done ({g.items.length})
                   </button>
                 ) : (
-                  <button onClick={() => handleOrderAction(g, 'SERVED')}
+                  <button type="button" onClick={() => handleOrderAction(g, 'SERVED')}
                     className="flex items-center gap-1 px-2.5 py-1.5 rounded-md text-[10px] font-medium bg-emerald-50 text-emerald-600 hover:bg-emerald-100 transition-all cursor-pointer font-body ml-auto">
                     <CheckCircle2 size={12} /> Served ({g.items.length})
                   </button>
@@ -396,20 +435,33 @@ function AdminKitchen() {
                 </div>
                 <div className="text-lg font-bold text-slate-800 font-heading mb-1">{t.totalAmount.toLocaleString('vi-VN')}đ</div>
                 <div className="text-xs text-slate-400 font-body mb-4">{t.itemsCount} items</div>
-                <div className="flex items-center gap-2">
-                  <button onClick={() => { setSelectedTable(t.tableNumber); setShowBill(true); }}
-                    className="flex-1 px-3 py-1.5 rounded-lg text-[11px] font-medium text-slate-600 hover:text-slate-800 hover:bg-slate-100 transition-all cursor-pointer font-body border border-slate-200">
-                    Details
-                  </button>
-                  {t.awaitingCash && !isManagerView ? (
-                    <button onClick={() => handleCheckout(t.tableNumber)}
-                      className="flex-1 px-3 py-1.5 rounded-lg text-[11px] font-medium bg-accent text-white hover:bg-accent/80 transition-all cursor-pointer font-body">
-                      Confirm Cash
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => { setSelectedTable(t.tableNumber); setShowBill(true); }}
+                      className="flex-1 px-3 py-1.5 rounded-lg text-[11px] font-medium text-slate-600 hover:text-slate-800 hover:bg-slate-100 transition-all cursor-pointer font-body border border-slate-200"
+                    >
+                      Details
                     </button>
-                  ) : (
-                    <button onClick={() => handlePrintBill(t.tableNumber)}
-                      className="px-3 py-1.5 rounded-lg text-[11px] font-medium text-slate-600 hover:text-slate-800 hover:bg-slate-100 transition-all cursor-pointer font-body border border-slate-200">
+                    <button
+                      type="button"
+                      onClick={() => handlePrintBill(t.tableNumber)}
+                      className="px-3 py-1.5 rounded-lg text-[11px] font-medium text-slate-600 hover:text-slate-800 hover:bg-slate-100 transition-all cursor-pointer font-body border border-slate-200"
+                      title="Print bill"
+                    >
                       <Printer size={12} />
+                    </button>
+                  </div>
+                  {/* Chỉ khi khách đã tạo payment intent (CHECKOUT / pending-cash) */}
+                  {t.awaitingCash && (
+                    <button
+                      type="button"
+                      disabled={confirmingTable === t.tableNumber}
+                      onClick={() => { void handleCheckout(t.tableNumber); }}
+                      className="w-full px-3 py-2 rounded-lg text-[12px] font-semibold text-white bg-accent hover:bg-accent/80 transition-all cursor-pointer font-body disabled:opacity-60"
+                    >
+                      {confirmingTable === t.tableNumber ? 'Confirming…' : 'Confirm Cash'}
                     </button>
                   )}
                 </div>
@@ -455,15 +507,23 @@ function AdminKitchen() {
               </div>
             </div>
             <div className="flex justify-end gap-3 mt-5 pt-3 border-t border-slate-200">
-              <button onClick={() => selectedTable && handlePrintBill(selectedTable)}
-                className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium text-slate-600 hover:text-slate-800 hover:bg-slate-100 transition-all cursor-pointer font-body">
+              <button
+                type="button"
+                onClick={() => selectedTable && handlePrintBill(selectedTable)}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium text-slate-600 hover:text-slate-800 hover:bg-slate-100 transition-all cursor-pointer font-body"
+              >
                 <Printer size={15} /> Print
               </button>
-              {/* Chỉ hiện khi khách đã tạo yêu cầu thanh toán tiền mặt (CHECKOUT / Cash pending) */}
-              {!isManagerView && selectedTable != null && activeTableList.some((t) => t.tableNumber === selectedTable && t.awaitingCash) && (
-                <button onClick={() => selectedTable && handleCheckout(selectedTable)}
-                  className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-accent text-white text-sm font-medium hover:bg-accent/80 transition-all cursor-pointer font-body">
-                  <DollarSign size={15} /> Confirm Payment
+              {selectedTable != null &&
+                activeTableList.some((t) => t.tableNumber === selectedTable && t.awaitingCash) && (
+                <button
+                  type="button"
+                  disabled={confirmingTable === selectedTable}
+                  onClick={() => { void handleCheckout(selectedTable); }}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-accent text-white text-sm font-medium hover:bg-accent/80 transition-all cursor-pointer font-body disabled:opacity-60"
+                >
+                  <DollarSign size={15} />
+                  {confirmingTable === selectedTable ? 'Confirming…' : 'Confirm Payment'}
                 </button>
               )}
             </div>

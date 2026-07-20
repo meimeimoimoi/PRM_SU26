@@ -90,6 +90,45 @@ public class AuthServiceTests
         var result = await _authService.LoginAsync(new LoginRequest { Email = "cust@test.com", Password = "pass123" });
 
         Assert.Equal("CUSTOMER", result.User.Role);
+        Assert.Equal(0, result.SessionId);
+    }
+
+    [Fact]
+    public async Task Login_CustomerWithTableNumber_CreatesDiningSession()
+    {
+        _userRepoMock.Setup(r => r.GetByEmailAsync("cust@test.com")).ReturnsAsync((User?)null);
+        var customer = new Customer
+        {
+            Id = 10,
+            Email = "cust@test.com",
+            FullName = "Customer",
+            PasswordHash = "hashed",
+            Phone = "09000",
+            MembershipLevel = LoyaltyTier.BRONZE
+        };
+        _customerRepoMock.Setup(r => r.GetByEmailAsync("cust@test.com")).ReturnsAsync(customer);
+        _passwordHasherMock.Setup(p => p.VerifyPassword("pass123", "hashed")).Returns(true);
+        SetupTokenGeneration(10, "cust@test.com", "Customer", "CUSTOMER");
+
+        var table = new Table { Id = 5, TableNumber = 3, Status = TableStatus.AVAILABLE };
+        _tableRepoMock.Setup(r => r.GetByTableNumberAsync(3)).ReturnsAsync(table);
+        _sessionRepoMock.Setup(r => r.GetActiveByTableIdAsync(5)).ReturnsAsync((DiningSession?)null);
+        _sessionRepoMock.Setup(r => r.AddAsync(It.IsAny<DiningSession>()))
+            .ReturnsAsync((DiningSession s) => { s.Id = 77; return s; });
+
+        var result = await _authService.LoginAsync(new LoginRequest
+        {
+            Email = "cust@test.com",
+            Password = "pass123",
+            TableNumber = 3
+        });
+
+        Assert.Equal("CUSTOMER", result.User.Role);
+        Assert.Equal(77, result.SessionId);
+        Assert.Equal(5, result.TableId);
+        Assert.Equal(3, result.TableNumber);
+        Assert.Equal(TableStatus.OCCUPIED, table.Status);
+        _sessionRepoMock.Verify(r => r.AddAsync(It.IsAny<DiningSession>()), Times.Once);
     }
 
     [Fact]
