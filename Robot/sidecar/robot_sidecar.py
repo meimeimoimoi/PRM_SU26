@@ -47,7 +47,7 @@ log = logging.getLogger("sidecar")
 # ---------------------------------------------------------------------------
 # Defaults
 # ---------------------------------------------------------------------------
-DEFAULT_ORDER_API_URL = os.environ.get("ORDER_API_URL", "http://localhost:5003")
+DEFAULT_ORDER_API_URL = os.environ.get("ORDER_API_URL", "https://smartdine-order.onrender.com")
 DEFAULT_CONTROLLER_DIR = os.environ.get(
     "CONTROLLER_DIR",
     os.path.join(os.path.dirname(__file__), "..", "controllers", "robot_controller"),

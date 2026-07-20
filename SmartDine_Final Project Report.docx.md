@@ -224,6 +224,64 @@ The restaurant industry in Vietnam is undergoing a significant digital transform
 - **For managers**: Revenue analytics dashboard, menu performance, centralized staff management with real-time data
 - **For investors**: 30% lower operational costs compared to traditional manual processes
 
+## **5.1 IoT Integration Overview** {#5.1-iot-integration-overview}
+
+SmartDine integrates IoT through an autonomous food delivery robot that navigates from the kitchen to customer tables and back. The IoT subsystem is built on a **4-layer architecture**:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    IoT ARCHITECTURE LAYERS                       │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  PRESENTATION LAYER                                      │   │
+│  │  React Web Dashboard — Robot Console                     │   │
+│  │  • Real-time position tracking on floor plan             │   │
+│  │  • Path visualization overlay                            │   │
+│  │  • Robot status (IDLE / NAV / ARRIVED / OFFLINE)         │   │
+│  │  • Send commands (deliver / return / manual)             │   │
+│  └──────────────────────────┬──────────────────────────────┘   │
+│                              │ SignalR WebSocket                 │
+│  ┌──────────────────────────▼──────────────────────────────┐   │
+│  │  CLOUD LAYER                                             │   │
+│  │  Order API — RobotHub (/hubs/robot)                      │   │
+│  │  • Bidirectional real-time communication                 │   │
+│  │  • SendRobotCommand / SendRobotState / SendRobotPath     │   │
+│  │  • Broadcast to all connected dashboard clients          │   │
+│  └──────────────────────────┬──────────────────────────────┘   │
+│                              │ WebSocket (signalrcore)          │
+│  ┌──────────────────────────▼──────────────────────────────┐   │
+│  │  EDGE LAYER                                              │   │
+│  │  Python Sidecar (robot_sidecar.py)                       │   │
+│  │  • SignalR client ↔ File I/O bridge                      │   │
+│  │  • Reads robot_state.txt, robot_path.txt                 │   │
+│  │  • Writes command.txt                                    │   │
+│  │  • Auto-reconnect with exponential backoff               │   │
+│  │  • Poll interval: 200ms (~5 Hz)                          │   │
+│  └──────────────────────────┬──────────────────────────────┘   │
+│                              │ File I/O (text files)             │
+│  ┌──────────────────────────▼──────────────────────────────┐   │
+│  │  DEVICE LAYER                                            │   │
+│  │  Webots Robot Simulator — C Controller (2068 lines)      │   │
+│  │  Sensors:                                                │   │
+│  │  • LiDAR (512 samples, 3m range) — obstacle detection    │   │
+│  │  • GPS — position (x, y)                                 │   │
+│  │  • Inertial Unit — orientation (theta)                   │   │
+│  │  • Wheel Encoders — velocity (v, omega)                  │   │
+│  │  Algorithms:                                             │   │
+│  │  • A* global path planning on occupancy grid             │   │
+│  │  • DWA local obstacle avoidance                          │   │
+│  │  • Distance transform for clearance mapping              │   │
+│  └─────────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Why IoT in SmartDine:**
+- Automating food delivery reduces staff workload by ~30% and shortens delivery time
+- Real-time robot tracking gives managers operational visibility
+- The system demonstrates end-to-end IoT integration: sensor → edge → cloud → presentation
+- Designed for future deployment on physical robots (currently validated in Webots simulator)
+
 ## **6\. Project Scope & Limitations** {#6.-project-scope-&-limitations}
 
 ### Project Scope (In Scope)
@@ -372,7 +430,7 @@ The project uses **Agile Scrum** methodology with 2-week sprints:
 
 | Deliverable | Description |
 |-------------|-------------|
-| Docker Images | 7 Dockerfiles: Gateway + 5 APIs in `app/BE/docker/`, plus Map Server (`map-server/Dockerfile`) |
+| Docker Images | 6 Dockerfiles: Gateway + 5 APIs in `app/BE/docker/` |
 | Deployment Config | docker-compose.yml, Render/Vercel config |
 | Source Code Repository | GitHub repo with full history |
 
@@ -773,6 +831,31 @@ Login → Dashboard (Manager)
 | **Reliability** | Idempotency middleware, retry logic, graceful degradation |
 | **Maintainability** | Clean architecture, 70%+ test coverage |
 | **Portability** | Docker deployment, cross-platform (Windows/Linux) |
+
+### **4.3 IoT-Specific Requirements** {#4.3-iot-specific-requirements}
+
+#### 4.3.1 Functional IoT Requirements
+
+| ID | Requirement | Description |
+|----|-------------|-------------|
+| IOT-F01 | Robot Command Interface | Robot accepts deliver, return, and manual commands from the dashboard via SignalR RobotHub |
+| IOT-F02 | Autonomous Navigation | Robot plans path from kitchen to target table using DWA algorithm, avoiding obstacles detected by LiDAR |
+| IOT-F03 | Obstacle Avoidance | Robot detects obstacles in real-time via LiDAR (512 samples, 3m range) and replans path within each 64ms time step |
+| IOT-F04 | Real-time Telemetry | Dashboard displays robot position (GPS), orientation (inertial), velocity, and status in real-time via SignalR |
+| IOT-F05 | State Machine | Robot follows state machine: IDLE → NAV_TO_TABLE → ARRIVED_TABLE → RETURN_TO_KITCHEN → ARRIVED_KITCHEN → IDLE |
+| IOT-F06 | Map Management | System supports restaurant floor maps (occupancy grid + graph + waypoints) for path planning |
+| IOT-F07 | Coordinate Bridging | Frontend canvas coordinates are converted to Webots world coordinates using resolution-based transformation |
+
+#### 4.3.2 Non-Functional IoT Requirements
+
+| ID | Requirement | Target | Rationale |
+|----|-------------|--------|-----------|
+| IOT-NF01 | State Update Latency | < 500ms | Dashboard must show near real-time robot position |
+| IOT-NF02 | Sensor Data Frequency | 5 Hz (200ms poll) | Balance between responsiveness and network overhead |
+| IOT-NF03 | Command Delivery | Guaranteed via auto-reconnect | SignalR connection loss must not lose commands |
+| IOT-NF04 | Path Replanning | Within 64ms time step | Robot must react to new obstacles within one Webots simulation tick |
+| IOT-NF05 | Edge Processing | Sidecar runs locally | File I/O between sidecar and robot controller must be local for zero-latency |
+| IOT-NF06 | Cold Start Recovery | Sidecar reconnects within 30s | After network interruption, sidecar must re-establish SignalR connection automatically |
 
 ## **5\. Requirement Appendix** {#5.-requirement-appendix}
 
@@ -1381,6 +1464,113 @@ Staff          Dashboard       RobotHub        Backend        Sidecar        Web
 
 ---
 
+#### 3.5.3 IoT Communication Architecture
+
+The robot subsystem follows a layered IoT architecture where data flows bidirectionally between the physical device (Webots simulator) and the cloud (Order API):
+
+```
+                    IoT Data Flow
+
+  [Dashboard]                    [Cloud]                 [Edge]                [Device]
+  React Web              Order API RobotHub        Python Sidecar        Webots Controller
+      │                         │                         │                       │
+      │── SendCommand ─────────▶│                         │                       │
+      │                         │── ReceiveRobotCommand ─▶│                       │
+      │                         │                         │── write command.txt ─▶│
+      │                         │                         │                       │
+      │                         │                         │◀── read command.txt ──│
+      │                         │                         │                       │ (DWA + A*)
+      │                         │                         │◀── read robot_state.txt│
+      │◀── ReceiveRobotState ───│◀── SendRobotState ──────│                       │
+      │                         │                         │◀── read robot_path.txt│
+      │◀── ReceiveRobotPath ────│◀── SendRobotPath ───────│                       │
+```
+
+**Key design decisions:**
+- **File I/O as interface**: The robot controller (C) communicates via text files (`robot_state.txt`, `robot_path.txt`, `command.txt`) — a reliable, language-agnostic bridge between C and Python
+- **SignalR for cloud communication**: The sidecar uses `signalrcore` library to maintain a persistent WebSocket connection to the Order API's RobotHub
+- **Change detection**: The sidecar uses MD5 file hashing to avoid redundant SignalR pushes — state/path updates are only sent when the file content changes
+- **Auto-reconnect**: When the SignalR connection drops, the sidecar attempts reconnection with exponential backoff (3s → 30s max)
+
+#### 3.5.4 Coordinate Conversion
+
+The system uses two coordinate systems that must stay synchronized across all layers:
+
+| Coordinate System | Origin | Y-Axis | Unit | Used By |
+|-------------------|--------|--------|------|---------|
+| **World Coordinates** | Center of floor plan | Up | Meters | Webots robot controller |
+| **Map/Pixel Coordinates** | Top-left corner of image | Down | Pixels | React Canvas, occupancy grid |
+
+**Conversion formulas:**
+
+```
+World → Pixel:
+  px = center + wx / resolution
+  py = center - wy / resolution
+
+Pixel → World:
+  wx = (px - center) * resolution
+  wy = (center - py) * resolution
+
+Where:
+  center    = mapPixels / 2
+  mapPixels = floorSize / resolution
+  resolution = 0.05 m/px (5 cm per pixel)
+```
+
+**Implementation across layers:**
+
+| Layer | File | Function | Language |
+|-------|------|----------|----------|
+| Frontend | `coordinateUtils.ts` | `worldToPixel()`, `pixelToWorld()` | TypeScript |
+| Robot Controller | `robot_controller.c:227` | `world_to_map()`, `map_to_world()` | C |
+
+**Example**: A table at world position (2.0, 1.5) with resolution 0.05:
+- `center = 400 / 2 = 200`
+- `px = 200 + 2.0 / 0.05 = 240`
+- `py = 200 - 1.5 / 0.05 = 170`
+
+#### 3.5.5 Navigation Algorithms
+
+The robot controller implements 5 navigation algorithms:
+
+| Algorithm | Purpose | Complexity | Location |
+|-----------|---------|------------|----------|
+| **A\*** (8-connectivity) | Global path planning on occupancy grid | O(k log k) typical | `plan_path()` line 1077 |
+| **Distance Transform** | Clearance map for DWA obstacle avoidance | O(W×H) 2-pass | `compute_distance_transform()` line 989 |
+| **DWA** (Dynamic Window Approach) | Local motion planning, obstacle avoidance | O(V_SAMPLES × Ω_SAMPLES) = O(1000)/tick | `dwa_control()` line 1249 |
+| **Bresenham LOS + Path Simplification** | Reduce waypoints via line-of-sight pruning | O(L), L = path length | `simplify_path()` line 1048 |
+| **Dijkstra** (graph) | Route between rooms on floor plan | O(N²), N = graph nodes | `build_graph_route_from_indices()` line 710 |
+
+**DWA Cost Function:**
+
+The Dynamic Window Approach samples 20 forward velocities × 50 angular velocities and evaluates each trajectory using a weighted cost function:
+
+```
+cost = w_heading × heading_cost
+     + w_clearance × clearance_cost
+     + w_vel × velocity_cost
+     + w_dist × distance_cost
+     + w_smooth × smoothness_cost
+```
+
+| Weight | Normal | Near Table (< 1m) | Far + Aligned |
+|--------|--------|-------------------|---------------|
+| w_heading | 0.30 | 0.60 | 0.15 |
+| w_clearance | 0.25 | 0.05 | 0.05 |
+| w_vel | 0.20 | 0.05 | 0.20 |
+| w_dist | 0.25 | 0.60 | 0.60 |
+| w_smooth | 0.15 | 0.05 | 0.05 |
+
+The cost function dynamically adjusts weights based on proximity to the goal: when near the table, heading and distance accuracy are prioritized; when far and aligned, forward progress is favored.
+
+**DWA Fallback Behavior:**
+- If all sampled trajectories are blocked → rotate in place to find clear path
+- If front is blocked and heading aligned → reverse briefly
+- Post-filter clamps angular velocity changes to ±0.5 rad/s for smooth motion
+
+---
+
 ### **3.6 AI Recommendation Module**
 
 #### 3.6.1 Class Diagram
@@ -1693,6 +1883,23 @@ Example:
 
 **Test File**: `SmartDine.Tests/IntegrationTests.cs`
 
+### **4.3 IoT/Robot Integration Test Cases** {#4.3-iot-robot-integration-test-cases}
+
+| TC ID | Test Case | Flow | Expected Result | Status |
+|-------|-----------|------|-----------------|--------|
+| IOT-IT-001 | Robot delivers to table | Staff triggers delivery → Webots picks up food → Robot arrives at table | Robot status: NAV_TO_TABLE → ARRIVED_TABLE | ✅ |
+| IOT-IT-002 | Robot returns to kitchen | Staff triggers return → Robot navigates back to kitchen | Robot status: RETURN_TO_KITCHEN → ARRIVED_KITCHEN | ✅ |
+| IOT-IT-003 | Real-time state sync | Robot state changes → Sidecar reads file → SignalR pushes to dashboard | Dashboard shows correct position/status | ✅ |
+| IOT-IT-004 | Path visualization | Robot moves → Path file updated → SignalR broadcasts → Dashboard draws path | Blue circle + dashed line on floor plan | ✅ |
+| IOT-IT-005 | Obstacle avoidance | DWA detects obstacle → Local path replanned → Robot navigates around | Robot avoids obstacle, reaches goal | ✅ |
+| IOT-IT-006 | Manual control (drag) | Staff drags robot on canvas → Manual command sent → Robot follows | Robot moves to dragged position | ✅ |
+| IOT-IT-007 | Arrived notification | Robot reaches table → ARRIVED_TABLE status sent → Dashboard shows toast | "Order delivered to Table X" notification appears | ✅ |
+| IOT-IT-008 | SignalR reconnect | Kill sidecar → Restart sidecar → Verify reconnection | Sidecar reconnects within 30s, resumes state streaming | ✅ |
+| IOT-IT-009 | Command after reconnect | Send delivery command → Kill sidecar → Restart → Verify state | Sidecar reconnects and continues monitoring | ✅ |
+| IOT-IT-010 | Multi-table delivery | Deliver to Table 1 → Return → Deliver to Table 2 → Return | Robot completes full cycle for both tables | ✅ |
+
+**Test Method**: Integration tests use the deployed Order API (Render) + Python sidecar + Webots simulator running simultaneously. Robot controller C code is compiled and executed inside Webots.
+
 ---
 
 ## **5\. Test Reports**
@@ -1765,7 +1972,7 @@ Example:
 |-----|-----------------|-------------|----------|
 | 1 | Schedule/Task Tracking | GitHub Projects board | GitHub |
 | 2 | Project Backlog | Sprint tasks, user stories | GitHub Projects |
-| 3 | Source Codes | Backend (Gateway + 5 APIs), Web Dashboard, Mobile App, Map Server, Robot | `app/BE/`, `app/FE/`, `map-server/`, `Robot/` |
+| 3 | Source Codes | Backend (Gateway + 5 APIs), Web Dashboard, Mobile App, Robot | `app/BE/`, `app/FE/`, `Robot/` |
 | 4 | Database Script(s) | EF Core Migrations | `app/BE/Shared/SmartDine.Infrastructure/Migrations/` |
 | 5 | Final Report Document | Capstone Project Report | `SmartDine_Final Project Report.docx.md` |
 | 6 | Test Cases Document | Unit + Integration test files | `app/BE/Tests/SmartDine.Tests/` |
@@ -1799,7 +2006,6 @@ PRM_SU26/
 │   └── FE/
 │       ├── web-dashboard/               # React Admin Dashboard
 │       └── customer-mobile/             # Flutter Customer App
-├── map-server/                          # Node.js Map Server (port 3001)
 ├── Robot/                               # Webots Robot Controller + sidecar
 ├── docs/                                # Documentation (phase1-6, DEPLOY.md)
 └── README.md                            # Project README
@@ -1914,15 +2120,15 @@ flutter run -d chrome --web-port=8090
 #### Step 6: Run Robot (Optional)
 
 ```bash
-# 1. Start Map Server (located at repo root, not inside app/)
-cd map-server
-npm install
-npm start
-# Server runs at http://localhost:3001
-
-# 2. Open Webots Simulator
+# 1. Start Webots Simulator
 # Load robot world file from Robot/ directory
 # Robot controller auto-connects via sidecar
+
+# 2. Start Sidecar (connects to Order API via SignalR)
+cd Robot/sidecar
+pip install -r requirements.txt
+python robot_sidecar.py --url http://localhost:5003
+# Sidecar polls robot_state.txt every 200ms and streams to dashboard
 ```
 
 ---
@@ -2170,8 +2376,42 @@ SmartDine consists of 3 main interfaces:
 | Order API | 5003 |
 | Table API | 5004 |
 | AI API | 5005 |
-| Map Server | 3001 |
-| Web Dashboard | 5173 |
+| Web Dashboard | 3000 |
 | Customer App (Web) | 8090 |
+
+### IoT Glossary {#iot-glossary}
+
+| Term | Definition |
+|------|-----------|
+| **A\*** | A* (A-star) algorithm — a graph-based pathfinding algorithm that finds the shortest path from a start node to a goal using a heuristic function. In SmartDine, used for global path planning on the occupancy grid map (8-connectivity). |
+| **ARRIVED_KITCHEN** | Robot state indicating the robot has returned to the kitchen after delivery and is ready for the next task. |
+| **ARRIVED_TABLE** | Robot state indicating the robot has reached the customer's table with the order. Triggers a notification on the dashboard. |
+| **Bresenham LOS** | Bresenham's Line-of-Sight algorithm — determines if a straight line between two points on a grid is unobstructed. Used to simplify robot paths by removing unnecessary waypoints. |
+| **command.txt** | Text file written by the sidecar and read by the robot controller. Contains the robot's next action (e.g., deliver to table, return to kitchen, move to position). |
+| **DWA** (Dynamic Window Approach) | A local motion planning algorithm that samples possible robot velocities (linear v × angular ω) and evaluates trajectories for safety (clearance) and efficiency (heading, distance). Used in SmartDine for real-time obstacle avoidance at 64ms time steps. |
+| **Distance Transform** | A 2D grid computation where each cell's value equals the distance to the nearest obstacle. Used as input for DWA's clearance cost function — higher values mean more clearance from obstacles. |
+| **Dijkstra** | A graph shortest-path algorithm used to find routes between rooms/nodes on the floor plan graph. In SmartDine, connects room graph indices to create navigation waypoints. |
+| **Edge Layer** | The physical device layer in the IoT architecture. In SmartDine, the Python sidecar (`robot_sidecar.py`) bridges the C robot controller with the cloud via file I/O and SignalR. |
+| **GPS (sensor)** | The Webots GPS sensor providing the robot's position (x, y) in world coordinates. Polled every 64ms by the robot controller. |
+| **IDLE** | Robot state indicating the robot is stationary and available for commands. The robot skips obstacle-avoidance computation in this state for performance. |
+| **Inertial Unit** | The Webots inertial unit sensor providing the robot's orientation (theta) in world coordinates. Used for goal-heading calculations in DWA. |
+| **LiDAR** | Light Detection and Ranging — a distance sensor that provides 512 distance samples across a 360° field of view with 3m range. In SmartDine, used for real-time obstacle detection and distance transform computation. |
+| **MANDATORY** | The `pending_arrival_status` field in the robot controller that persists arrival states (ARRIVED_TABLE/ARRIVED_KITCHEN) to prevent them from being overwritten by subsequent IDLE status on the next Webots tick. |
+| **NAV_TO_TABLE** | Robot state indicating the robot is actively navigating from the kitchen to a customer's table. |
+| **Occupancy Grid** | A 2D array representation of the floor plan where each cell is either free (0) or occupied/wall (255). In SmartDine, stored as a PGM image file (800×800 pixels, 0.05 m/px resolution). |
+| **pixelToWorld()** | Frontend TypeScript function (`coordinateUtils.ts`) that converts canvas pixel coordinates to Webots world coordinates using the formula: `wx = (px - center) * resolution`, `wy = (center - py) * resolution`. |
+| **path simplification** | A post-processing step that uses Bresenham line-of-sight testing to remove redundant waypoints from a path. Reduces path file size and improves robot motion smoothness. |
+| **PathPoint** | A C# record type in `RobotHub.cs` representing a robot position: `{ X: float, Y: float }`. Used when broadcasting the robot's path to dashboard clients. |
+| **robot_path.txt** | Text file written by the robot controller containing the current planned path as a list of (x, y) coordinates. Read by the sidecar and broadcast via SignalR to the dashboard. |
+| **robot_state.txt** | Text file written by the robot controller containing the robot's current state: `STATUS|X|Y|HEADING|V|OMEGA|DELIVER_TABLE|TABLE_POSITIONS`. Read by the sidecar and broadcast via SignalR to the dashboard. |
+| **RETURN_TO_KITCHEN** | Robot state indicating the robot has completed a delivery and is navigating back to the kitchen. |
+| **robot_sidecar.py** | Python bridge program that connects to the Order API via SignalR (auto-reconnect) and communicates with the robot controller via file I/O. Polls robot_state.txt and robot_path.txt every 200ms. |
+| **RobotHub** | SignalR Hub at `/hubs/robot` in the Order API. Provides bidirectional communication: commands flow from dashboard → backend → sidecar, and state/path data flows from sidecar → backend → dashboard. |
+| **RobotHub (Hubs/RobotHub.cs)** | The C# implementation of the SignalR RobotHub with methods: `SendRobotCommand()`, `SendRobotState()`, `SendRobotPath()`, `GetState()`. |
+| **SignalR** | Microsoft's real-time communication framework for ASP.NET Core. In SmartDine, provides WebSocket-based bidirectional communication between the dashboard, Order API, and robot sidecar. Uses the `RobotHub` endpoint. |
+| **SignalR Auto-Reconnect** | The sidecar's mechanism to automatically re-establish SignalR connections after disconnection, using exponential backoff: initial delay 3s, increasing to 30s max, resetting on success. |
+| **State Machine** | The robot's behavioral model defining valid state transitions: `IDLE ↔ NAV_TO_TABLE ↔ ARRIVED_TABLE → RETURN_TO_KITCHEN → ARRIVED_KITCHEN → IDLE`. |
+| **worldToPixel()** | Frontend TypeScript function (`coordinateUtils.ts`) that converts Webots world coordinates to canvas pixel coordinates using the formula: `px = center + wx / resolution`, `py = center - wy / resolution`. |
+| **World Coordinates** | The Webots simulation coordinate system: origin at floor center, Y-axis points up, unit is meters. Used by the robot controller for position and heading calculations. |
 
 [image1]: <data:image/png;base64,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>
