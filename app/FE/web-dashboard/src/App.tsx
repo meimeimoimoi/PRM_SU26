@@ -82,6 +82,7 @@ const App: React.FC = () => {
             <Route index element={<Navigate to="/staffboard/kitchen" replace />} />
             <Route path="kitchen" element={<AdminKitchen />} />
             <Route path="orders" element={<AdminOrders />} />
+            <Route path="draw-map" element={<RestaurantDrawPage />} />
           </Route>
 
           {/* Nested Dashboard Routes inside DashboardLayout layout */}
@@ -144,7 +145,6 @@ const App: React.FC = () => {
                 </RoleProtectedRoute>
               }
             />
-            <Route path="draw-map" element={<RestaurantDrawPage />} />
             {/* Fallback route within dashboard layout */}
             <Route path="*" element={<RoleIndexRedirect />} />
           </Route>

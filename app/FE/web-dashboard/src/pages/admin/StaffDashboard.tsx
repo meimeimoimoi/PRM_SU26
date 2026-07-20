@@ -11,11 +11,13 @@ import {
   X,
   Clock,
   LayoutDashboard,
+  Bot,
 } from 'lucide-react';
 
 const navigation = [
   { name: 'Kitchen & Billing', icon: ChefHat, path: '/staffboard/kitchen' },
   { name: 'Today Orders', icon: ClipboardList, path: '/staffboard/orders' },
+  { name: 'Robot Controller', icon: Bot, path: '/staffboard/draw-map' },
 ];
 
 function Sidebar({ open, onClose }: {
@@ -115,6 +117,8 @@ function StaffDashboard() {
     '/staffboard': 'Staff Operations',
     '/staffboard/kitchen': 'Kitchen & Billing',
     '/staffboard/orders': 'Today Orders',
+    '/draw-map': 'Robot Controller',
+    '/staffboard/draw-map': 'Robot Controller',
   };
   const pageTitle = pageTitles[location.pathname] || 'Staffboard';
 
