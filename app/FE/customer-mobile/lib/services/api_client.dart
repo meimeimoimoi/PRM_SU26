@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../config/constants.dart';
@@ -26,6 +27,17 @@ final dioProvider = Provider<Dio>((ref) {
     },
   ));
 
+  // Log request body — xem trong terminal Flutter khi bấm Đăng nhập.
+  dio.interceptors.add(LogInterceptor(
+    request: true,
+    requestHeader: false,
+    requestBody: true,
+    responseHeader: false,
+    responseBody: false,
+    error: true,
+    logPrint: (o) => debugPrint(o.toString()),
+  ));
+
   dio.interceptors.add(InterceptorsWrapper(
     onRequest: (options, handler) async {
       final token = await storage.read(key: 'access_token');
@@ -40,11 +52,15 @@ final dioProvider = Provider<Dio>((ref) {
     onError: (DioException e, handler) async {
       if (e.response?.statusCode == 401) {
         final refreshToken = await storage.read(key: 'refresh_token');
-        if (refreshToken != null) {
+        final accessToken = await storage.read(key: 'access_token');
+        if (refreshToken != null && accessToken != null) {
           try {
             final tokenResponse = await Dio().post(
               '${dio.options.baseUrl}auth/refresh-token',
-              data: {'refreshToken': refreshToken},
+              data: {
+                'accessToken': accessToken,
+                'refreshToken': refreshToken,
+              },
             );
             final newAccessToken = tokenResponse.data['data']['accessToken'];
             final newRefreshToken = tokenResponse.data['data']['refreshToken'];

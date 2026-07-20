@@ -29,7 +29,7 @@ class _OrderListPageState extends ConsumerState<OrderListPage> {
       }
     });
 
-    final tableId = ref.read(authViewModelProvider).guestSession?.tableId;
+    final tableId = ref.read(authViewModelProvider).tableId;
     _socketService.subscribeToEvent('ReceiveOrderStatusUpdate', (data) {
       if (mounted) ref.invalidate(orderListProvider);
     });

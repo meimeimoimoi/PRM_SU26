@@ -269,7 +269,7 @@ public class DiningSessionRepository : GenericRepository<DiningSession>, IDining
         await _dbSet.Include(d => d.Table)
                     .Include(d => d.Customer)
                     .Include(d => d.Participants)
-                    .Include(d => d.Orders)
+                    .Include(d => d.Orders).ThenInclude(o => o.OrderDetails)
                     .FirstOrDefaultAsync(d => d.Id == id);
 }
 
@@ -357,8 +357,11 @@ public class PaymentRepository : GenericRepository<Payment>, IPaymentRepository
     public async Task<(IReadOnlyList<Payment> Items, int TotalCount)> GetPagedFilteredAsync(
         DateTime? fromDate, DateTime? toDate, string? status, string? paymentMethod, int page, int pageSize)
     {
-        var query = _dbSet.Include(p => p.Session).ThenInclude(s => s.Table)
-                          .Include(p => p.Session).ThenInclude(s => s.Customer)
+        // IgnoreQueryFilters: session soft-delete sau thanh toán — vẫn cần Table/Customer cho lịch sử giao dịch.
+        var query = _dbSet.IgnoreQueryFilters()
+                          .Where(p => !p.IsDeleted)
+                          .Include(p => p.Session).ThenInclude(s => s!.Table)
+                          .Include(p => p.Session).ThenInclude(s => s!.Customer)
                           .AsQueryable();
 
         if (fromDate.HasValue)

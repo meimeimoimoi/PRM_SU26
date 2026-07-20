@@ -17,6 +17,7 @@ import {
   X,
   Clock,
 } from 'lucide-react';
+import ChatWidget from '@/components/ChatWidget';
 
 const navigation = [
   { name: 'Dashboard', icon: LayoutDashboard, path: '/admin-v2' },
@@ -178,6 +179,9 @@ function AdminDashboard() {
           </div>
         </main>
       </div>
+
+      {/* AI chat — chỉ MANAGER (AiController.Query yêu cầu role Manager) */}
+      {user?.role === 'MANAGER' && <ChatWidget />}
     </div>
   );
 }
