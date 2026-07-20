@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../models/auth_models.dart';
 import '../services/auth_repository.dart';
+import '../utils/error_utils.dart';
 import '../services/api_client.dart' show secureStorageProvider, setTokenInvalidatedCallback;
 
 enum AuthStateStatus { initial, loading, authenticated, guest, error }
@@ -60,12 +61,16 @@ class AuthViewModel extends StateNotifier<AuthState> {
           final sessionId = await _storage.read(key: 'session_id');
           final tableIdStr = await _storage.read(key: 'table_id');
           final tableNumStr = await _storage.read(key: 'table_number');
+          final guestName = await _storage.read(key: 'guest_name');
           state = AuthState.guest(GuestLoginResponse(
             token: token,
             sessionId: int.tryParse(sessionId ?? '') ?? 0,
             tableId: int.tryParse(tableIdStr ?? '') ?? 0,
-            tableNumber: int.tryParse(tableNumStr ?? '') ?? 0, 
-            role: user.role
+            tableNumber: int.tryParse(tableNumStr ?? '') ?? 0,
+            role: user.role,
+            guestName: (guestName != null && guestName.isNotEmpty)
+                ? guestName
+                : (user.fullName.isNotEmpty ? user.fullName : 'Guest'),
           ));
         } else {
           state = AuthState.authenticated(user);
@@ -92,7 +97,7 @@ class AuthViewModel extends StateNotifier<AuthState> {
       state = AuthState.authenticated(response.user);
       return true;
     } catch (e) {
-      state = AuthState.error(e.toString());
+      state = AuthState.error(extractErrorMessage(e));
       return false;
     } finally {
       _isLoggingIn = false;
@@ -109,7 +114,7 @@ class AuthViewModel extends StateNotifier<AuthState> {
       state = AuthState.authenticated(response.user);
       return true;
     } catch (e) {
-      state = AuthState.error(e.toString());
+      state = AuthState.error(extractErrorMessage(e));
       return false;
     } finally {
       _isLoggingIn = false;
@@ -125,11 +130,12 @@ class AuthViewModel extends StateNotifier<AuthState> {
       await _storage.write(key: 'session_id', value: response.sessionId.toString());
       await _storage.write(key: 'table_id', value: response.tableId.toString());
       await _storage.write(key: 'table_number', value: response.tableNumber.toString());
+      await _storage.write(key: 'guest_name', value: response.guestName);
       // Guests don't have refresh tokens
       state = AuthState.guest(response);
       return true;
     } catch (e) {
-      state = AuthState.error(e.toString());
+      state = AuthState.error(extractErrorMessage(e));
       return false;
     } finally {
       _isLoggingIn = false;

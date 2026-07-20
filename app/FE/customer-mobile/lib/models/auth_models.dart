@@ -62,6 +62,7 @@ class GuestLoginResponse {
   final int tableId;
   final int tableNumber;
   final String role;
+  final String guestName;
 
   GuestLoginResponse({
     required this.token,
@@ -69,6 +70,7 @@ class GuestLoginResponse {
     required this.tableId,
     required this.tableNumber,
     required this.role,
+    this.guestName = 'Guest',
   });
 
   factory GuestLoginResponse.fromJson(Map<String, dynamic> json) {
@@ -78,6 +80,9 @@ class GuestLoginResponse {
       tableId: json['tableId'] ?? 0,
       tableNumber: json['tableNumber'] ?? 0,
       role: json['role'] ?? 'GUEST',
+      guestName: (json['guestName'] as String?)?.trim().isNotEmpty == true
+          ? json['guestName'] as String
+          : 'Guest',
     );
   }
 }

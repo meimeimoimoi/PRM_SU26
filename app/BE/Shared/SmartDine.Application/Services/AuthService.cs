@@ -62,21 +62,27 @@ public class AuthService
     /// </summary>
     public async Task<TokenResponse> LoginAsync(LoginRequest request)
     {
+        var email = (request.Email ?? string.Empty).Trim();
+        var password = request.Password ?? string.Empty;
+
+        if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(password))
+            throw new BusinessRuleViolationException(ValidationMessages.EMAIL_OR_PASSSWORD_INVALID);
+
         // Ưu tiên tìm trong Users (nhân viên) trước
-        var user = await _uow.Users.GetByEmailAsync(request.Email);
+        var user = await _uow.Users.GetByEmailAsync(email);
         if (user != null && user.IsActive)
         {
-            if (!_passwordHasher.VerifyPassword(request.Password, user.PasswordHash))
+            if (!_passwordHasher.VerifyPassword(password, user.PasswordHash))
                 throw new BusinessRuleViolationException(ValidationMessages.EMAIL_OR_PASSSWORD_INVALID);
 
             return await GenerateTokenResponseAsync(user.Id, user.Email, user.FullName, user.Role.ToString(), UserType.USER);
         }
 
         // Fallback: tìm trong Customers (khách hàng)
-        var customer = await _uow.Customers.GetByEmailAsync(request.Email);
+        var customer = await _uow.Customers.GetByEmailAsync(email);
         if (customer != null)
         {
-            if (customer.PasswordHash == null || !_passwordHasher.VerifyPassword(request.Password, customer.PasswordHash))
+            if (customer.PasswordHash == null || !_passwordHasher.VerifyPassword(password, customer.PasswordHash))
                 throw new BusinessRuleViolationException(ValidationMessages.EMAIL_OR_PASSSWORD_INVALID);
 
             return await GenerateTokenResponseAsync(customer.Id, customer.Email ?? string.Empty, customer.FullName ?? "Customer", UserRole.CUSTOMER.ToString(), UserType.CUSTOMER, customer.Phone, customer.LoyaltyPoints, customer.MembershipLevel.ToString());
@@ -104,18 +110,21 @@ public class AuthService
     /// </summary>
     public async Task<TokenResponse> RegisterAsync(RegisterRequest request)
     {
+        var email = (request.Email ?? string.Empty).Trim().ToLowerInvariant();
+        var phone = string.IsNullOrWhiteSpace(request.PhoneNumber) ? null : request.PhoneNumber.Trim();
+
         // Check trùng email trên cả 2 bảng
-        if (await _uow.Users.ExistsAsync(request.Email) || await _uow.Customers.GetByEmailAsync(request.Email) != null)
+        if (await _uow.Users.ExistsAsync(email) || await _uow.Customers.GetByEmailAsync(email) != null)
             throw new BusinessRuleViolationException(ValidationMessages.EMAIL_ALREADY_EXISTS);
 
-        if (!string.IsNullOrEmpty(request.PhoneNumber) && await _uow.Customers.GetByPhoneAsync(request.PhoneNumber) != null)
+        if (!string.IsNullOrEmpty(phone) && await _uow.Customers.GetByPhoneAsync(phone) != null)
             throw new BusinessRuleViolationException(ValidationMessages.PHONE_ALREADY_EXISTS);
 
         var customer = new Customer
         {
-            FullName = request.FullName,
-            Email = request.Email,
-            Phone = request.PhoneNumber,
+            FullName = request.FullName.Trim(),
+            Email = email,
+            Phone = phone,
             PasswordHash = _passwordHasher.HashPassword(request.Password),
             LoyaltyPoints = 0,
             MembershipLevel = LoyaltyTier.BRONZE,
@@ -361,7 +370,7 @@ public class AuthService
     /// Error cases:
     ///   - User/Customer bị xóa hoặc không tồn tại → EntityNotFoundException (404).
     /// </summary>
-    public async Task<UserInfoResponse> GetCurrentUserAsync(int id, string role)
+    public async Task<UserInfoResponse> GetCurrentUserAsync(int id, string role, string? displayName = null)
     {
         if (role == UserRole.CUSTOMER.ToString())
         {
@@ -382,14 +391,17 @@ public class AuthService
         }
         else if (role == UserRole.GUEST.ToString())
         {
-            // GUEST không có row trong DB — id truyền vào đây là sessionId (lấy từ claim
-            // "session_id" ở Controller, không phải sub/NameIdentifier vốn là UUID) → trả info tối thiểu
+            // id = sessionId từ claim session_id; tên ưu tiên JWT (mỗi guest nhập riêng)
+            var session = await _uow.DiningSessions.GetByIdAsync(id);
             return new UserInfoResponse
             {
                 Id = id,
-                FullName = "Guest",
+                FullName = !string.IsNullOrWhiteSpace(displayName)
+                    ? displayName!
+                    : (session?.GuestName ?? "Guest"),
                 Email = string.Empty,
-                Role = UserRole.GUEST.ToString()
+                Role = UserRole.GUEST.ToString(),
+                PhoneNumber = session?.GuestPhone
             };
         }
         else
@@ -446,6 +458,10 @@ public class AuthService
         var existingSession = await _uow.DiningSessions.GetActiveByTableIdAsync(table.Id);
         DiningSession session;
 
+        if(table == null){
+            throw new EntityNotFoundException("Table", request.TableId);
+        }
+
         var guestName = request.GuestName ?? "Guest";
 
         if (existingSession != null)
@@ -455,16 +471,19 @@ public class AuthService
         }
         else
         {
-            // Bàn trống → mở bàn + tạo session mới
+            // Bàn trống → mở bàn + tạo session mới (snapshot thuế/phí tại thời điểm mở)
             table.Status = TableStatus.OCCUPIED;
 
+            var settings = await _uow.Settings.GetSingletonAsync();
             session = new DiningSession
             {
                 TableId = table.Id,
                 GuestName = guestName,
                 GuestPhone = request.GuestPhone,
                 Status = DiningSessionStatus.ACTIVE,
-                StartedAt = DateTime.UtcNow
+                StartedAt = DateTime.UtcNow,
+                TaxRate = settings?.TaxRate,
+                ServiceChargeRate = settings?.ServiceChargeRate
             };
 
             await _uow.DiningSessions.AddAsync(session);
@@ -492,7 +511,8 @@ public class AuthService
             SessionId = session.Id,
             TableId = table.Id,
             TableNumber = table.TableNumber,
-            Role = UserRole.GUEST.ToString()
+            Role = UserRole.GUEST.ToString(),
+            GuestName = guestName
         };
     }
 

@@ -122,7 +122,8 @@ public class AuthController : ControllerBase
     public async Task<IActionResult> GetCurrentUser()
     {
         var (userId, role) = ExtractIdentity();
-        var result = await _authService.GetCurrentUserAsync(userId, role);
+        var displayName = User.FindFirstValue(ClaimTypes.Name);
+        var result = await _authService.GetCurrentUserAsync(userId, role, displayName);
         return Ok(ApiResponse<UserInfoResponse>.Ok(result));
     }
 

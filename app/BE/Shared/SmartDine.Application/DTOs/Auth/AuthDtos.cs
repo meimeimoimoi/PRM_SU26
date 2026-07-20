@@ -161,6 +161,8 @@ public class GuestLoginResponse
     public int TableId { get; set; }
     public int TableNumber { get; set; }
     public string Role { get; set; } = nameof(UserRole.GUEST);
+    /// <summary>Tên khách nhập khi quét QR / join bàn — hiển thị trên trang tài khoản.</summary>
+    public string GuestName { get; set; } = "Guest";
 }
 
 // ─────────────────────────────────────────────────────────────

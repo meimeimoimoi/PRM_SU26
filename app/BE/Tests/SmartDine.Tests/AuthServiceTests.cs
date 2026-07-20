@@ -22,6 +22,7 @@ public class AuthServiceTests
     private readonly Mock<ITableRepository> _tableRepoMock;
     private readonly Mock<IDiningSessionRepository> _sessionRepoMock;
     private readonly Mock<IRepository<SessionParticipant>> _participantRepoMock;
+    private readonly Mock<ISettingsRepository> _settingsRepoMock;
     private readonly AuthService _authService;
 
     public AuthServiceTests()
@@ -36,6 +37,7 @@ public class AuthServiceTests
         _tableRepoMock = new Mock<ITableRepository>();
         _sessionRepoMock = new Mock<IDiningSessionRepository>();
         _participantRepoMock = new Mock<IRepository<SessionParticipant>>();
+        _settingsRepoMock = new Mock<ISettingsRepository>();
 
         _uowMock.Setup(u => u.Users).Returns(_userRepoMock.Object);
         _uowMock.Setup(u => u.Customers).Returns(_customerRepoMock.Object);
@@ -44,6 +46,12 @@ public class AuthServiceTests
         _uowMock.Setup(u => u.Tables).Returns(_tableRepoMock.Object);
         _uowMock.Setup(u => u.DiningSessions).Returns(_sessionRepoMock.Object);
         _uowMock.Setup(u => u.SessionParticipants).Returns(_participantRepoMock.Object);
+        _uowMock.Setup(u => u.Settings).Returns(_settingsRepoMock.Object);
+        _settingsRepoMock.Setup(r => r.GetSingletonAsync()).ReturnsAsync(new RestaurantSettings
+        {
+            TaxRate = 8.00m,
+            ServiceChargeRate = 5.00m
+        });
         _participantRepoMock.Setup(r => r.AddAsync(It.IsAny<SessionParticipant>()))
             .ReturnsAsync((SessionParticipant p) => p);
         _uowMock.Setup(u => u.SaveChangesAsync(It.IsAny<CancellationToken>())).ReturnsAsync(1);

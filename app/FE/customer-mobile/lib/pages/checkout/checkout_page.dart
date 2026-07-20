@@ -3,23 +3,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../viewmodels/auth_viewmodel.dart';
-
-class _AppColors {
-  static const Color primary = Color(0xFFad2c00);
-  static const Color primaryContainer = Color(0xFFd34011);
-  static const Color onPrimaryContainer = Color(0xFFffffff);
-  static const Color background = Color(0xFFfcf9f8);
-  static const Color surface = Color(0xFFfcf9f8);
-  static const Color surfaceContainer = Color(0xFFf0eded);
-  static const Color surfaceContainerLowest = Color(0xFFffffff);
-  static const Color onSurface = Color(0xFF1b1c1c);
-  static const Color onSurfaceVariant = Color(0xFF5a413a);
-  static const Color primaryFixed = Color(0xFFffdbd1);
-  static const Color outlineVariant = Color(0xFFe3beb5);
-  static const Color secondaryContainer = Color(0xFFeddcda);
-  static const Color onSecondaryContainer = Color(0xFF6c605e);
-  static const Color onPrimary = Color(0xFFffffff);
-}
+import '../../theme/app_theme.dart';
 
 class CheckoutPage extends ConsumerWidget {
   const CheckoutPage({super.key, this.orderId});
@@ -32,20 +16,20 @@ class CheckoutPage extends ConsumerWidget {
     final tableNumber = authState.guestSession?.tableNumber ?? 1;
 
     return Scaffold(
-      backgroundColor: _AppColors.background,
+      backgroundColor: AppTheme.background,
       appBar: AppBar(
-        backgroundColor: _AppColors.surface,
+        backgroundColor: AppTheme.surface,
         elevation: 0,
         scrolledUnderElevation: 0,
         automaticallyImplyLeading: false,
         title: Row(
           children: [
-            Icon(Icons.restaurant, color: _AppColors.primary, size: 24.sp),
+            Icon(Icons.restaurant, color: AppTheme.primary, size: 24.sp),
             SizedBox(width: 8.w),
             Text(
               'Bàn $tableNumber',
               style: TextStyle(
-                color: _AppColors.primary,
+                color: AppTheme.primary,
                 fontSize: 20.sp,
                 fontWeight: FontWeight.bold,
               ),
@@ -60,7 +44,7 @@ class CheckoutPage extends ConsumerWidget {
               decoration: const BoxDecoration(
                 shape: BoxShape.circle,
               ),
-              child: Icon(Icons.close, color: _AppColors.onSurfaceVariant, size: 24.sp),
+              child: Icon(Icons.close, color: AppTheme.onSurfaceVariant, size: 24.sp),
             ),
           ),
           SizedBox(width: 8.w),
@@ -94,11 +78,11 @@ class CheckoutPage extends ConsumerWidget {
                           width: 96.r,
                           height: 96.r,
                           decoration: BoxDecoration(
-                            color: _AppColors.primaryFixed,
+                            color: AppTheme.primaryContainer,
                             shape: BoxShape.circle,
                             boxShadow: [
                               BoxShadow(
-                                color: _AppColors.primary.withOpacity(0.1),
+                                color: AppTheme.primary.withOpacity(0.1),
                                 blurRadius: 20,
                                 offset: const Offset(0, 8),
                               ),
@@ -107,7 +91,7 @@ class CheckoutPage extends ConsumerWidget {
                           child: Center(
                             child: Icon(
                               Icons.check_circle,
-                              color: _AppColors.primary,
+                              color: AppTheme.primary,
                               size: 48.sp,
                             ),
                           ),
@@ -118,7 +102,7 @@ class CheckoutPage extends ConsumerWidget {
                         'Đặt món thành công!',
                         textAlign: TextAlign.center,
                         style: TextStyle(
-                          color: _AppColors.onSurface,
+                          color: AppTheme.onSurface,
                           fontSize: 26.sp,
                           fontWeight: FontWeight.bold,
                         ),
@@ -130,27 +114,25 @@ class CheckoutPage extends ConsumerWidget {
                           'Đơn hàng của bạn đã được gửi đến quầy chế biến. Chúc bạn một bữa ăn ngon miệng!',
                           textAlign: TextAlign.center,
                           style: TextStyle(
-                            color: _AppColors.onSurfaceVariant,
+                            color: AppTheme.onSurfaceVariant,
                             fontSize: 16.sp,
                           ),
                         ),
                       ),
                       SizedBox(height: 40.h),
-                      
-                      SizedBox(height: 40.h),
-                      
+
                       // Action Section
                       ElevatedButton(
                         onPressed: () => context.go('/home'),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: _AppColors.primary,
-                          foregroundColor: _AppColors.onPrimary,
+                          backgroundColor: AppTheme.primary,
+                          foregroundColor: AppTheme.onPrimary,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12.r),
                           ),
                           padding: EdgeInsets.symmetric(vertical: 16.h),
                           elevation: 4,
-                          shadowColor: _AppColors.primary.withOpacity(0.3),
+                          shadowColor: AppTheme.primary.withOpacity(0.3),
                           minimumSize: Size(double.infinity, 56.h),
                         ),
                         child: Row(
@@ -169,7 +151,7 @@ class CheckoutPage extends ConsumerWidget {
                         ),
                       ),
                       SizedBox(height: 16.h),
-                      ElevatedButton(
+                      OutlinedButton(
                         onPressed: () {
                           if (orderId != null) {
                             context.push('/order_tracking/$orderId');
@@ -177,14 +159,11 @@ class CheckoutPage extends ConsumerWidget {
                             context.go('/orders');
                           }
                         },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: _AppColors.surfaceContainer,
-                          foregroundColor: _AppColors.onSurface,
+                        style: OutlinedButton.styleFrom(
+                          padding: EdgeInsets.symmetric(vertical: 16.h),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12.r),
                           ),
-                          padding: EdgeInsets.symmetric(vertical: 16.h),
-                          elevation: 0,
                           minimumSize: Size(double.infinity, 56.h),
                         ),
                         child: Row(
@@ -206,14 +185,14 @@ class CheckoutPage extends ConsumerWidget {
                   ),
                 ),
               ),
-              
+
               // Ambient Decoration Footer
               Padding(
                 padding: EdgeInsets.symmetric(vertical: 24.h),
                 child: Text(
                   'Thực hiện bởi SmartDine AI',
                   style: TextStyle(
-                    color: _AppColors.onSurfaceVariant.withOpacity(0.6),
+                    color: AppTheme.onSurfaceVariant.withOpacity(0.6),
                     fontSize: 12.sp,
                     fontWeight: FontWeight.w600,
                   ),

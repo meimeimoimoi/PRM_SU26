@@ -30,6 +30,8 @@ public class DiningSessionConfiguration : IEntityTypeConfiguration<DiningSession
         builder.Property(d => d.GuestPhone).HasMaxLength(20);
         builder.Property(d => d.Status).HasConversion<string>().HasMaxLength(20).HasDefaultValue(DiningSessionStatus.ACTIVE);
         builder.Property(d => d.TotalSpent).HasPrecision(12, 2);
+        builder.Property(d => d.TaxRate).HasPrecision(5, 2);
+        builder.Property(d => d.ServiceChargeRate).HasPrecision(5, 2);
 
         builder.HasOne(d => d.Customer)
                .WithMany(c => c.DiningSessions)

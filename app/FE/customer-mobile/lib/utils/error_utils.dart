@@ -7,11 +7,28 @@ String extractErrorMessage(Object error) {
   if (error is DioException) {
     final data = error.response?.data;
     if (data is Map && data['errors'] is List && (data['errors'] as List).isNotEmpty) {
-      return (data['errors'] as List).join(', ');
+      final raw = (data['errors'] as List).map((e) => e.toString()).join(', ');
+      return _localizeAuthError(raw);
     }
     if (data is Map && data['message'] is String) {
-      return data['message'] as String;
+      return _localizeAuthError(data['message'] as String);
+    }
+    if (error.response?.statusCode == 422) {
+      return 'Email hoặc mật khẩu không đúng';
     }
   }
   return error.toString();
+}
+
+String _localizeAuthError(String code) {
+  switch (code) {
+    case 'EMAIL_OR_PASSWORD_INVALID':
+      return 'Email hoặc mật khẩu không đúng';
+    case 'EMAIL_ALREADY_EXISTS':
+      return 'Email này đã được đăng ký';
+    case 'PHONE_ALREADY_EXISTS':
+      return 'Số điện thoại này đã được đăng ký';
+    default:
+      return code;
+  }
 }

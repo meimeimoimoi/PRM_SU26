@@ -166,54 +166,86 @@ public class OrderService
 
     public async Task<bool> UpdateItemStatusAsync(int itemId, string newStatus)
     {
-        var item = await _uow.OrderDetails.GetByIdAsync(itemId);
-        if (item == null)
-            throw new EntityNotFoundException("OrderDetail", itemId);
+        return await UpdateItemsStatusAsync(new[] { itemId }, newStatus);
+    }
+
+    /// <summary>
+    /// Cập nhật nhiều món trong cùng 1 transaction rồi suy ra order status một lần.
+    /// Tránh race khi kitchen bấm "Ready" cập nhật song song từng item (Promise.all)
+    /// khiến order kẹt COOKING dù mọi món đã DONE.
+    /// </summary>
+    public async Task<bool> UpdateItemsStatusAsync(IReadOnlyList<int> itemIds, string newStatus)
+    {
+        if (itemIds == null || itemIds.Count == 0)
+            return false;
 
         if (!Enum.TryParse<OrderDetailStatus>(newStatus, true, out var parsedStatus))
             throw new BusinessRuleViolationException(ValidationMessages.ORDER_STATUS_INVALID);
 
-        item.Status = parsedStatus;
-        if (parsedStatus == OrderDetailStatus.DONE)
+        var distinctIds = itemIds.Distinct().ToList();
+        var items = new List<OrderDetail>();
+        foreach (var id in distinctIds)
         {
-            item.CompletedAt = DateTime.UtcNow;
+            var item = await _uow.OrderDetails.GetByIdAsync(id)
+                ?? throw new EntityNotFoundException("OrderDetail", id);
+            items.Add(item);
         }
 
-        var order = await _uow.Orders.GetByIdAsync(item.OrderId);
-        if (order != null)
-        {
-            var activeItems = order.OrderDetails.Where(d => d.Status != OrderDetailStatus.CANCELLED && d.Status != OrderDetailStatus.RETURNED).ToList();
-            if (activeItems.Any())
-            {
-                // Suy ra trạng thái đơn từ trạng thái các item, nhưng áp dụng qua cùng
-                // transition graph với UpdateStatusAsync (order.CanTransitionTo) để 2 luồng
-                // cập nhật (theo đơn / theo từng item) không bao giờ đưa Order vào trạng thái
-                // trái quy tắc state machine. Nếu bước suy ra không phải transition hợp lệ từ
-                // trạng thái hiện tại (vd item bị đánh dấu DONE trong khi đơn đang PENDING,
-                // bỏ qua COOKING), giữ nguyên order.Status thay vì ép trạng thái không hợp lệ.
-                OrderStatus? derivedStatus = activeItems.All(d => d.Status == OrderDetailStatus.SERVED)
-                    ? OrderStatus.COMPLETED
-                    : activeItems.All(d => d.Status == OrderDetailStatus.DONE || d.Status == OrderDetailStatus.SERVED)
-                        ? OrderStatus.READY
-                        : activeItems.Any(d => d.Status == OrderDetailStatus.DOING || d.Status == OrderDetailStatus.DONE || d.Status == OrderDetailStatus.SERVED)
-                            ? OrderStatus.COOKING
-                            : null;
+        var orderIds = items.Select(i => i.OrderId).Distinct().ToList();
+        var notified = new List<(int OrderId, int TableId, string Status)>();
 
-                if (derivedStatus.HasValue && order.CanTransitionTo(derivedStatus.Value))
+        foreach (var orderId in orderIds)
+        {
+            var order = await _uow.Orders.GetByIdAsync(orderId)
+                ?? throw new EntityNotFoundException("Order", orderId);
+
+            foreach (var item in items.Where(i => i.OrderId == orderId))
+            {
+                var tracked = order.OrderDetails.FirstOrDefault(d => d.Id == item.Id);
+                if (tracked != null)
                 {
-                    order.UpdateStatus(derivedStatus.Value);
+                    tracked.Status = parsedStatus;
+                    if (parsedStatus == OrderDetailStatus.DONE)
+                        tracked.CompletedAt = DateTime.UtcNow;
+                }
+                else
+                {
+                    item.Status = parsedStatus;
+                    if (parsedStatus == OrderDetailStatus.DONE)
+                        item.CompletedAt = DateTime.UtcNow;
+                    order.OrderDetails.Add(item);
                 }
             }
+
+            ApplyDerivedOrderStatus(order);
+            notified.Add((order.Id, order.Session.TableId, order.Status.ToString()));
         }
 
         await _uow.SaveChangesAsync();
 
-        if (order != null)
-        {
-            await _notificationService.NotifyOrderStatusChangedAsync(order.Id, order.Session.TableId, order.Status.ToString());
-        }
+        foreach (var n in notified)
+            await _notificationService.NotifyOrderStatusChangedAsync(n.OrderId, n.TableId, n.Status);
 
         return true;
+    }
+
+    private static void ApplyDerivedOrderStatus(Order order)
+    {
+        var activeItems = order.OrderDetails
+            .Where(d => d.Status != OrderDetailStatus.CANCELLED && d.Status != OrderDetailStatus.RETURNED)
+            .ToList();
+        if (!activeItems.Any()) return;
+
+        OrderStatus? derivedStatus = activeItems.All(d => d.Status == OrderDetailStatus.SERVED)
+            ? OrderStatus.COMPLETED
+            : activeItems.All(d => d.Status == OrderDetailStatus.DONE || d.Status == OrderDetailStatus.SERVED)
+                ? OrderStatus.READY
+                : activeItems.Any(d => d.Status == OrderDetailStatus.DOING || d.Status == OrderDetailStatus.DONE || d.Status == OrderDetailStatus.SERVED)
+                    ? OrderStatus.COOKING
+                    : null;
+
+        if (derivedStatus.HasValue && order.CanTransitionTo(derivedStatus.Value))
+            order.UpdateStatus(derivedStatus.Value);
     }
 
     public async Task<OrderResponse> GetByIdAsync(int orderId)
@@ -359,6 +391,8 @@ public class OrderService
             FinalAmount = order.FinalAmount,
             Status = order.Status.ToString(),
             SessionStatus = order.Session?.Status.ToString() ?? nameof(DiningSessionStatus.ACTIVE),
+            TaxRate = order.Session?.TaxRate,
+            ServiceChargeRate = order.Session?.ServiceChargeRate,
             CreatedAt = order.CreatedAt,
             Items = order.OrderDetails.Select(i =>
             {

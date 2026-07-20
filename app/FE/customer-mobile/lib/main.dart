@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'routes/app_router.dart';
 import 'viewmodels/auth_viewmodel.dart';
+import 'theme/app_theme.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -68,10 +69,7 @@ class _MyAppState extends ConsumerState<MyApp> {
       builder: (context, child) {
         return MaterialApp.router(
           title: 'SmartDine',
-          theme: ThemeData(
-            primarySwatch: Colors.orange,
-            useMaterial3: true,
-          ),
+          theme: AppTheme.light,
           routerConfig: router,
         );
       },

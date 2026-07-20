@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../widgets/simple_qr_view.dart';
 import '../../viewmodels/auth_viewmodel.dart';
@@ -11,30 +12,8 @@ import '../../services/settings_repository.dart';
 import '../../services/socket/socket_service.dart';
 import '../../models/order_models.dart';
 import '../../utils/error_utils.dart';
-
-class _AppColors {
-  static const Color primary = Color(0xFFad2c00);
-  static const Color primaryContainer = Color(0xFFd34011);
-  static const Color onPrimaryContainer = Color(0xFFffffff);
-  static const Color background = Color(0xFFfcf9f8);
-  static const Color surface = Color(0xFFfcf9f8);
-  static const Color surfaceContainerLowest = Color(0xFFffffff);
-  static const Color surfaceContainerHigh = Color(0xFFeae7e7);
-  static const Color surfaceContainerHighest = Color(0xFFe5e2e1);
-  static const Color surfaceVariant = Color(0xFFe5e2e1);
-  static const Color onSurface = Color(0xFF1b1c1c);
-  static const Color onSurfaceVariant = Color(0xFF5a413a);
-  static const Color secondary = Color(0xFF685b5a);
-  static const Color secondaryContainer = Color(0xFFeddcda);
-  static const Color tertiary = Color(0xFF005cac);
-  static const Color onTertiaryContainer = Color(0xFFfefcff);
-  static const Color outline = Color(0xFF8f7068);
-  static const Color primaryFixed = Color(0xFFffdbd1);
-  static const Color errorContainer = Color(0xFFffdad6);
-  static const Color onErrorContainer = Color(0xFF93000a);
-  static const Color error = Color(0xFFba1a1a);
-  static const Color onPrimary = Color(0xFFffffff);
-}
+import '../../viewmodels/payment_lock_provider.dart';
+import '../../theme/app_theme.dart';
 
 class OrderHistoryPage extends ConsumerStatefulWidget {
   const OrderHistoryPage({super.key});
@@ -57,10 +36,11 @@ class _OrderHistoryPageState extends ConsumerState<OrderHistoryPage> {
   void initState() {
     super.initState();
     final tableId = ref.read(authViewModelProvider).guestSession?.tableId;
+    _socketService.subscribeToEvent('ReceivePaymentSuccess', _onPaymentSuccess);
     if (tableId != null) {
+      // ignore: unawaited_futures
       _socketService.connect(tableId);
     }
-    _socketService.subscribeToEvent('ReceivePaymentSuccess', _onPaymentSuccess);
   }
 
   @override
@@ -75,42 +55,27 @@ class _OrderHistoryPageState extends ConsumerState<OrderHistoryPage> {
     final invoiceId = (data['invoiceId'] ?? data['InvoiceId'])?.toString();
     if (invoiceId == null || invoiceId != _pendingInvoiceId) return;
 
-    _pendingInvoiceId = null;
     if (_isPaymentDialogOpen) {
       Navigator.of(context, rootNavigator: true).pop();
+      _isPaymentDialogOpen = false;
     }
+    _pendingInvoiceId = null;
+    ref.read(sessionCheckoutLockedProvider.notifier).state = false;
     ref.invalidate(orderListProvider);
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text('Thanh toán thành công'),
-        content: const Text('Cảm ơn quý khách! Phiên ăn đã được thanh toán.'),
+        title: Text('Thanh toán thành công', style: TextStyle(color: AppTheme.onSurface)),
+        content: Text('Cảm ơn quý khách! Phiên ăn đã được thanh toán.', style: TextStyle(color: AppTheme.onSurfaceVariant)),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: const Text('OK'),
+            child: Text('OK', style: TextStyle(color: AppTheme.primary)),
           ),
         ],
+        backgroundColor: AppTheme.surface,
       ),
     );
-  }
-
-  /// Khách bấm "Hủy thanh toán" trên dialog QR/tiền mặt — trước đây nút này chỉ đóng
-  /// dialog, payment vẫn PENDING và session vẫn khóa CHECKOUT tới khi PaymentExpiryJob
-  /// tự dọn sau tối đa 30 phút. Gọi API cancel-intent để mở khóa ngay lập tức.
-  Future<void> _cancelAndClose(int sessionId) async {
-    Navigator.of(context).pop();
-    try {
-      await ref.read(orderRepositoryProvider).cancelPaymentIntent(sessionId);
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Không thể hủy ngay: ${extractErrorMessage(e)}')),
-        );
-      }
-    } finally {
-      ref.invalidate(orderListProvider);
-    }
   }
 
   Future<void> _handlePayment(int sessionId) async {
@@ -133,13 +98,15 @@ class _OrderHistoryPageState extends ConsumerState<OrderHistoryPage> {
 
       _pendingInvoiceId = response.invoiceId;
       _isPaymentDialogOpen = true;
+      // Session chuyển CHECKOUT trên BE — khóa UI đặt món ngay. Không cho hủy.
+      ref.read(sessionCheckoutLockedProvider.notifier).state = true;
 
       if (method == 'CASH') {
         showDialog(
           context: context,
           barrierDismissible: false,
           builder: (context) => AlertDialog(
-            title: const Text('Yêu cầu thanh toán tiền mặt'),
+            title: Text('Yêu cầu thanh toán tiền mặt', style: TextStyle(color: AppTheme.onSurface)),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -148,28 +115,29 @@ class _OrderHistoryPageState extends ConsumerState<OrderHistoryPage> {
                 SizedBox(height: 8.h),
                 Text('Số tiền: ${response.totalPayable.toStringAsFixed(0)}đ'),
                 SizedBox(height: 16.h),
-                const Text(
-                  'Phiên ăn đã được khóa. Vui lòng đến quầy thu ngân và cung cấp số bàn hoặc mã hóa đơn. Nhân viên sẽ xác nhận thanh toán.',
+                Text(
+                  'Phiên ăn đã được khóa và không thể hủy thanh toán. Vui lòng đến quầy thu ngân và cung cấp số bàn hoặc mã hóa đơn. Nhân viên sẽ xác nhận thanh toán.',
+                  style: TextStyle(color: AppTheme.onSurfaceVariant),
                 ),
               ],
             ),
             actions: [
               TextButton(
-                onPressed: () => _cancelAndClose(sessionId),
-                child: const Text('Hủy thanh toán'),
+                onPressed: () => Navigator.of(context).pop(),
+                child: Text('Đã hiểu', style: TextStyle(color: AppTheme.primary)),
               ),
             ],
+            backgroundColor: AppTheme.surface,
           ),
         ).then((_) {
           _isPaymentDialogOpen = false;
-          _pendingInvoiceId = null;
         });
       } else {
         showDialog(
           context: context,
           barrierDismissible: false,
           builder: (context) => AlertDialog(
-            title: const Text('Thanh toán VietQR'),
+            title: Text('Thanh toán VietQR', style: TextStyle(color: AppTheme.onSurface)),
             content: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -181,7 +149,7 @@ class _OrderHistoryPageState extends ConsumerState<OrderHistoryPage> {
                     style: TextStyle(
                       fontSize: 22.sp,
                       fontWeight: FontWeight.bold,
-                      color: _AppColors.primary,
+                      color: AppTheme.primary,
                     ),
                   ),
                   SizedBox(height: 16.h),
@@ -189,23 +157,21 @@ class _OrderHistoryPageState extends ConsumerState<OrderHistoryPage> {
                     Container(
                       padding: EdgeInsets.all(8.r),
                       decoration: BoxDecoration(
-                        border: Border.all(color: _AppColors.surfaceVariant),
+                        border: Border.all(color: AppTheme.outlineVariant),
                         borderRadius: BorderRadius.circular(12.r),
                       ),
-                      // PayOS trả về qrUrl là chuỗi EMV thô (dữ liệu VietQR gốc), không
-                      // phải link ảnh — phải tự sinh ảnh QR ở client, không dùng
-                      // Image.network (luôn lỗi vì đó không phải 1 URL hợp lệ).
                       child: SimpleQrView(
                         data: response.qrUrl!,
                         size: 200.r,
-                        backgroundColor: _AppColors.surface,
-                        foregroundColor: _AppColors.onSurface,
+                        backgroundColor: AppTheme.surface,
+                        foregroundColor: AppTheme.onSurface,
                       ),
                     ),
                   SizedBox(height: 16.h),
-                  const Text(
-                    'Quét mã QR bằng ứng dụng ngân hàng hoặc ví điện tử để hoàn tất thanh toán.',
+                  Text(
+                    'Quét mã QR bằng ứng dụng ngân hàng hoặc ví điện tử để hoàn tất thanh toán. Không thể hủy sau khi tạo yêu cầu.',
                     textAlign: TextAlign.center,
+                    style: TextStyle(color: AppTheme.onSurfaceVariant),
                   ),
                   if (response.deeplink != null) ...[
                     SizedBox(height: 16.h),
@@ -221,8 +187,8 @@ class _OrderHistoryPageState extends ConsumerState<OrderHistoryPage> {
                         }
                       },
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: _AppColors.primary,
-                        foregroundColor: Colors.white,
+                        backgroundColor: AppTheme.primary,
+                        foregroundColor: AppTheme.onPrimary,
                       ),
                       icon: const Icon(Icons.open_in_new),
                       label: const Text('Mở liên kết thanh toán'),
@@ -233,14 +199,14 @@ class _OrderHistoryPageState extends ConsumerState<OrderHistoryPage> {
             ),
             actions: [
               TextButton(
-                onPressed: () => _cancelAndClose(sessionId),
-                child: const Text('Hủy thanh toán'),
+                onPressed: () => Navigator.of(context).pop(),
+                child: Text('Đã hiểu', style: TextStyle(color: AppTheme.primary)),
               ),
             ],
+            backgroundColor: AppTheme.surface,
           ),
         ).then((_) {
           _isPaymentDialogOpen = false;
-          _pendingInvoiceId = null;
         });
       }
     } catch (e) {
@@ -267,20 +233,20 @@ class _OrderHistoryPageState extends ConsumerState<OrderHistoryPage> {
         ?? const RestaurantBillingSettings();
 
     return Scaffold(
-      backgroundColor: _AppColors.background,
+      backgroundColor: AppTheme.background,
       appBar: AppBar(
-        backgroundColor: _AppColors.surface,
+        backgroundColor: AppTheme.surface,
         elevation: 0,
         scrolledUnderElevation: 2,
         surfaceTintColor: Colors.transparent,
         leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: _AppColors.primary),
+          icon: Icon(Icons.arrow_back, color: AppTheme.primary),
           onPressed: () => context.pop(),
         ),
         title: Text(
           'Hóa đơn tạm tính',
           style: TextStyle(
-            color: _AppColors.primary,
+            color: AppTheme.primary,
             fontSize: 20.sp,
             fontWeight: FontWeight.bold,
           ),
@@ -290,13 +256,13 @@ class _OrderHistoryPageState extends ConsumerState<OrderHistoryPage> {
             margin: EdgeInsets.only(right: 20.w),
             padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 4.h),
             decoration: BoxDecoration(
-              color: _AppColors.surfaceVariant,
+              color: AppTheme.surfaceContainerHigh,
               borderRadius: BorderRadius.circular(100.r),
             ),
             child: Text(
               'Bàn $tableNumber',
               style: TextStyle(
-                color: _AppColors.onSurfaceVariant,
+                color: AppTheme.onSurfaceVariant,
                 fontSize: 12.sp,
                 fontWeight: FontWeight.bold,
               ),
@@ -310,11 +276,11 @@ class _OrderHistoryPageState extends ConsumerState<OrderHistoryPage> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.error_outline, size: 48.sp, color: _AppColors.error),
+              Icon(Icons.error_outline, size: 48.sp, color: AppTheme.error),
               SizedBox(height: 16.h),
               Text(
                 'Lỗi khi tải hóa đơn',
-                style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.bold),
+                style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.bold, color: AppTheme.onSurface),
               ),
               SizedBox(height: 8.h),
               ElevatedButton(
@@ -332,12 +298,12 @@ class _OrderHistoryPageState extends ConsumerState<OrderHistoryPage> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.receipt_long, size: 64.sp, color: _AppColors.outline),
+                  Icon(Icons.receipt_long, size: 64.sp, color: AppTheme.outline),
                   SizedBox(height: 16.h),
                   Text(
                     'Chưa có đơn hàng nào',
                     style: TextStyle(
-                      color: _AppColors.onSurfaceVariant,
+                      color: AppTheme.onSurfaceVariant,
                       fontSize: 18.sp,
                       fontWeight: FontWeight.w600,
                     ),
@@ -345,7 +311,7 @@ class _OrderHistoryPageState extends ConsumerState<OrderHistoryPage> {
                   SizedBox(height: 8.h),
                   Text(
                     'Vui lòng gọi món từ thực đơn trước.',
-                    style: TextStyle(color: _AppColors.secondary, fontSize: 14.sp),
+                    style: TextStyle(color: AppTheme.onSurfaceVariant, fontSize: 14.sp),
                   ),
                 ],
               ),
@@ -386,13 +352,22 @@ class _OrderHistoryPageState extends ConsumerState<OrderHistoryPage> {
             }
           }
           final itemsList = groupedItems.values.toList();
-          // VAT + phí DV lấy từ RestaurantSettings (Manager chỉnh trên dashboard)
-          final taxRatePercent = billingSettings.taxRate;
-          final serviceRatePercent = billingSettings.serviceChargeRate;
+          // VAT + phí DV: snapshot phiên (fallback settings live nếu phiên cũ)
+          OrderResponse? snap;
+          for (final o in activeOrders) {
+            if (o.taxRate != null || o.serviceChargeRate != null) {
+              snap = o;
+              break;
+            }
+          }
+          final taxRatePercent = snap?.taxRate ?? billingSettings.taxRate;
+          final serviceRatePercent = snap?.serviceChargeRate ?? billingSettings.serviceChargeRate;
           final netAmount = subtotal - discount;
           final serviceFee = netAmount * serviceRatePercent / 100;
           final vat = netAmount * taxRatePercent / 100;
           final payableTotal = netAmount + serviceFee + vat;
+
+          final currencyFormat = NumberFormat('#,###', 'vi_VN');
 
           return SingleChildScrollView(
             padding: EdgeInsets.symmetric(horizontal: 20.w, vertical: 24.h),
@@ -403,16 +378,10 @@ class _OrderHistoryPageState extends ConsumerState<OrderHistoryPage> {
                 Container(
                   padding: EdgeInsets.all(24.r),
                   decoration: BoxDecoration(
-                    color: _AppColors.surfaceContainerLowest,
+                    color: AppTheme.surface,
                     borderRadius: BorderRadius.circular(16.r),
-                    border: Border.all(color: _AppColors.surfaceVariant),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.04),
-                        blurRadius: 20,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
+                    border: Border.all(color: AppTheme.outlineVariant),
+                    boxShadow: AppTheme.shadowCard,
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -420,7 +389,7 @@ class _OrderHistoryPageState extends ConsumerState<OrderHistoryPage> {
                       Text(
                         'Chi tiết món ăn',
                         style: TextStyle(
-                          color: _AppColors.onSurface,
+                          color: AppTheme.onSurface,
                           fontSize: 20.sp,
                           fontWeight: FontWeight.w600,
                         ),
@@ -434,61 +403,58 @@ class _OrderHistoryPageState extends ConsumerState<OrderHistoryPage> {
                           decoration: BoxDecoration(
                             border: isLast
                                 ? null
-                                : const Border(bottom: BorderSide(color: _AppColors.surfaceVariant)),
+                                : Border(bottom: BorderSide(color: AppTheme.outlineVariant.withOpacity(0.3))),
                           ),
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Expanded(
-                                child: Row(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Container(
-                                      width: 48.r,
-                                      height: 48.r,
-                                      decoration: BoxDecoration(
-                                        color: _AppColors.surfaceContainerHigh,
-                                        borderRadius: BorderRadius.circular(8.r),
-                                      ),
-                                      child: Icon(Icons.restaurant, color: _AppColors.outline, size: 24.sp),
-                                    ),
-                                    SizedBox(width: 16.w),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            item.name,
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: TextStyle(
-                                              color: _AppColors.onSurface,
-                                              fontSize: 16.sp,
-                                              fontWeight: FontWeight.w600,
-                                            ),
-                                          ),
-                                          SizedBox(height: 2.h),
-                                          Text(
-                                            'x${item.quantity}${item.notes != null && item.notes!.isNotEmpty ? ' • ${item.notes}' : ''}',
-                                            style: TextStyle(
-                                              color: _AppColors.secondary,
-                                              fontSize: 14.sp,
-                                            ),
-                                          ),
-                                        ],
+                                    Text(
+                                      item.name,
+                                      style: TextStyle(
+                                        color: AppTheme.onSurface,
+                                        fontSize: 16.sp,
+                                        fontWeight: FontWeight.w600,
                                       ),
                                     ),
+                                    if (item.notes != null && item.notes!.isNotEmpty) ...[
+                                      SizedBox(height: 2.h),
+                                      Text(
+                                        item.notes!,
+                                        style: TextStyle(
+                                          color: AppTheme.onSurfaceVariant,
+                                          fontSize: 12.sp,
+                                          fontStyle: FontStyle.italic,
+                                        ),
+                                      ),
+                                    ],
                                   ],
                                 ),
                               ),
-                              SizedBox(width: 8.w),
-                              Text(
-                                '${item.total.toStringAsFixed(0)}đ',
-                                style: TextStyle(
-                                  color: _AppColors.primary,
-                                  fontSize: 18.sp,
-                                  fontWeight: FontWeight.bold,
-                                ),
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
+                                  Text(
+                                    '${currencyFormat.format(item.unitPrice)}đ',
+                                    style: TextStyle(
+                                      color: AppTheme.primary,
+                                      fontSize: 16.sp,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  SizedBox(height: 4.h),
+                                  Text(
+                                    'x${item.quantity}',
+                                    style: TextStyle(
+                                      color: AppTheme.onSurfaceVariant,
+                                      fontSize: 14.sp,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ],
                           ),
@@ -497,326 +463,184 @@ class _OrderHistoryPageState extends ConsumerState<OrderHistoryPage> {
                     ],
                   ),
                 ),
-                SizedBox(height: 16.h),
+                SizedBox(height: 24.h),
 
-                // Loyalty Rewards
+                // Payment Method Selection
                 Container(
                   padding: EdgeInsets.all(16.r),
                   decoration: BoxDecoration(
-                    color: _AppColors.primaryContainer,
+                    color: AppTheme.surface,
                     borderRadius: BorderRadius.circular(16.r),
+                    boxShadow: AppTheme.shadowCard,
                   ),
-                  child: Row(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Icon(Icons.stars, color: _AppColors.primaryFixed, size: 24.sp),
-                      SizedBox(width: 12.w),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Loyalty Rewards',
-                            style: TextStyle(
-                              color: _AppColors.onPrimaryContainer.withOpacity(0.9),
-                              fontSize: 12.sp,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          Text(
-                            'Điểm tích lũy nhận được: +${(payableTotal / 1000).round()} points',
-                            style: TextStyle(
-                              color: _AppColors.onPrimaryContainer,
-                              fontSize: 14.sp,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
+                      Text(
+                        'Phương thức thanh toán',
+                        style: TextStyle(
+                          color: AppTheme.onSurface,
+                          fontSize: 20.sp,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
+                      SizedBox(height: 12.h),
+                      ...[
+                        {'method': 'VNPAY', 'icon': Icons.qr_code, 'desc': 'Quét mã QR ngân hàng/ví điện tử'},
+                        {'method': 'CASH', 'icon': Icons.payments, 'desc': 'Thanh toán tiền mặt tại quầy'},
+                      ].map((pm) {
+                        final isSelected = (_selectedPaymentMethod == 0 && pm['method'] == 'VNPAY') ||
+                            (_selectedPaymentMethod == 1 && pm['method'] == 'CASH');
+                        return InkWell(
+                          onTap: () {
+                            setState(() {
+                              _selectedPaymentMethod = pm['method'] == 'VNPAY' ? 0 : 1;
+                            });
+                          },
+                          borderRadius: BorderRadius.circular(12.r),
+                          child: Container(
+                            padding: EdgeInsets.all(16.r),
+                            margin: EdgeInsets.only(bottom: 8.h),
+                            decoration: BoxDecoration(
+                              color: isSelected ? AppTheme.primaryContainer : AppTheme.surfaceContainerHigh,
+                              borderRadius: BorderRadius.circular(12.r),
+                              border: Border.all(
+                                color: isSelected ? AppTheme.primary : AppTheme.outlineVariant,
+                                width: isSelected ? 2 : 1,
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                Container(
+                                  width: 40.r,
+                                  height: 40.r,
+                                  decoration: BoxDecoration(
+                                    color: isSelected ? AppTheme.primary : AppTheme.secondaryContainer,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Icon(
+                                    pm['icon'] as IconData,
+                                    color: isSelected ? AppTheme.onPrimary : AppTheme.onSecondaryContainer,
+                                    size: 20.sp,
+                                  ),
+                                ),
+                                SizedBox(width: 16.w),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        pm['method'] as String,
+                                        style: TextStyle(
+                                          color: AppTheme.onSurface,
+                                          fontSize: 16.sp,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                      SizedBox(height: 2.h),
+                                      Text(
+                                        pm['desc'] as String,
+                                        style: TextStyle(
+                                          color: AppTheme.onSurfaceVariant,
+                                          fontSize: 12.sp,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                if (isSelected)
+                                  Icon(Icons.check_circle, color: AppTheme.primary, size: 24.sp),
+                              ],
+                            ),
+                          ),
+                        );
+                      }).toList(),
                     ],
                   ),
                 ),
-                SizedBox(height: 32.h),
+                SizedBox(height: 24.h),
 
-                // Payment Methods
-                Text(
-                  'Phương thức thanh toán',
-                  style: TextStyle(
-                    color: _AppColors.onSurface,
-                    fontSize: 20.sp,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                SizedBox(height: 16.h),
-
-                _buildPaymentOption(
-                  index: 0,
-                  title: 'Ngân Hàng/QR',
-                  icon: Icons.qr_code_2,
-                  iconBgColor: _AppColors.secondaryContainer,
-                  iconColor: _AppColors.secondary,
-                ),
-                SizedBox(height: 12.h),
-                _buildPaymentOption(
-                  index: 1,
-                  title: 'Tiền Mặt tại quầy',
-                  icon: Icons.payments,
-                  iconBgColor: _AppColors.surfaceContainerHighest,
-                  iconColor: _AppColors.onSurfaceVariant,
-                ),
-
-                SizedBox(height: 32.h),
-
-                // Summary
+                // Summary Section
                 Container(
                   padding: EdgeInsets.all(24.r),
                   decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(24.r),
-                    border: Border.all(color: _AppColors.surfaceVariant),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.1),
-                        blurRadius: 20,
-                        offset: const Offset(0, 10),
-                      ),
-                    ],
+                    color: AppTheme.surface,
+                    borderRadius: BorderRadius.circular(16.r),
+                    boxShadow: AppTheme.shadowCard,
                   ),
                   child: Column(
                     children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text('Tạm tính (${itemsList.length} món)',
-                              style: TextStyle(color: _AppColors.onSurfaceVariant, fontSize: 16.sp)),
-                          Text('${subtotal.toStringAsFixed(0)}đ',
-                              style: TextStyle(color: _AppColors.onSurfaceVariant, fontSize: 16.sp)),
-                        ],
-                      ),
-                      if (discount > 0) ...[
-                        SizedBox(height: 12.h),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      _buildSummaryRow('Tạm tính', '${currencyFormat.format(subtotal)}đ', AppTheme.onSurfaceVariant, AppTheme.onSurfaceVariant, 16.sp),
+                      if (discount > 0)
+                        _buildSummaryRow('Giảm giá', '-${currencyFormat.format(discount)}đ', AppTheme.success, AppTheme.success, 16.sp),
+                      _buildSummaryRow('Phí dịch vụ (${serviceRatePercent.toStringAsFixed(0)}%)', '${currencyFormat.format(serviceFee)}đ', AppTheme.onSurfaceVariant, AppTheme.onSurfaceVariant, 16.sp),
+                      _buildSummaryRow('VAT (${taxRatePercent.toStringAsFixed(0)}%)', '${currencyFormat.format(vat)}đ', AppTheme.onSurfaceVariant, AppTheme.onSurfaceVariant, 16.sp),
+                      Divider(color: AppTheme.outlineVariant),
+                      _buildSummaryRow('Tổng cộng', '${currencyFormat.format(payableTotal)}đ', AppTheme.primary, AppTheme.primary, 24.sp, bold: true),
+                    ],
+                  ),
+                ),
+                SizedBox(height: 24.h),
+
+                // Action Button
+                ElevatedButton(
+                  onPressed: _isProcessingPayment ? null : () => _handlePayment(sessionId),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.primary,
+                    foregroundColor: AppTheme.onPrimary,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
+                    padding: EdgeInsets.symmetric(vertical: 20.h),
+                    elevation: 4,
+                    shadowColor: AppTheme.primary.withOpacity(0.3),
+                  ),
+                  child: _isProcessingPayment
+                      ? const CircularProgressIndicator(color: AppTheme.onPrimary)
+                      : Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Text('Giảm giá',
-                                style: TextStyle(color: _AppColors.error, fontSize: 16.sp)),
-                            Text('-${discount.toStringAsFixed(0)}đ',
-                                style: TextStyle(color: _AppColors.error, fontSize: 16.sp)),
-                          ],
-                        ),
-                      ],
-                      SizedBox(height: 12.h),
-                      if (serviceFee > 0) ...[
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
+                            Icon(Icons.payment, size: 24.sp),
+                            SizedBox(width: 12.w),
                             Text(
-                              'Phí dịch vụ (${serviceRatePercent.toStringAsFixed(serviceRatePercent.truncateToDouble() == serviceRatePercent ? 0 : 1)}%)',
-                              style: TextStyle(color: _AppColors.onSurfaceVariant, fontSize: 16.sp),
+                              'THANH TOÁN ${currencyFormat.format(payableTotal)}đ',
+                              style: TextStyle(
+                                fontSize: 18.sp,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
-                            Text('${serviceFee.round()}đ',
-                                style: TextStyle(color: _AppColors.onSurfaceVariant, fontSize: 16.sp)),
                           ],
                         ),
-                        SizedBox(height: 12.h),
-                      ],
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            'Thuế (VAT ${taxRatePercent.toStringAsFixed(taxRatePercent.truncateToDouble() == taxRatePercent ? 0 : 1)}%)',
-                            style: TextStyle(color: _AppColors.onSurfaceVariant, fontSize: 16.sp),
-                          ),
-                          Text('${vat.round()}đ',
-                              style: TextStyle(color: _AppColors.onSurfaceVariant, fontSize: 16.sp)),
-                        ],
-                      ),
-                      SizedBox(height: 12.h),
-                      const Divider(color: _AppColors.surfaceVariant),
-                      SizedBox(height: 12.h),
-                      Text(
-                        'Số tiền thanh toán',
-                        style: TextStyle(color: _AppColors.secondary, fontSize: 14.sp),
-                      ),
-                      SizedBox(height: 4.h),
-                      Text(
-                        '${payableTotal.round()}đ',
-                        key: const ValueKey('payable_total_with_vat'),
-                        style: TextStyle(
-                          color: _AppColors.onSurface,
-                          fontSize: 26.sp,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                      if (vat > 0 || serviceFee > 0) ...[
-                        SizedBox(height: 4.h),
-                        Text(
-                          serviceFee > 0
-                              ? '(đã gồm phí DV ${serviceFee.round()}đ + VAT ${vat.round()}đ)'
-                              : '(đã gồm VAT ${vat.round()}đ)',
-                          style: TextStyle(
-                            color: _AppColors.onSurfaceVariant,
-                            fontSize: 12.sp,
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
                 ),
-                SizedBox(height: 32.h),
-
-                // Footer Warning
-                Container(
-                  padding: EdgeInsets.all(16.r),
-                  decoration: BoxDecoration(
-                    color: _AppColors.errorContainer,
-                    borderRadius: BorderRadius.circular(16.r),
-                  ),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Icon(Icons.info, color: _AppColors.error, size: 24.sp),
-                      SizedBox(width: 12.w),
-                      Expanded(
-                        child: Text(
-                          'Vui lòng đến quầy thu ngân. Sau khi nhân viên xác nhận thanh toán, bàn sẽ được dọn sạch trước khi nhận khách mới. Cảm ơn quý khách!',
-                          style: TextStyle(
-                            color: _AppColors.onErrorContainer,
-                            fontSize: 14.sp,
-                            height: 1.2,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-
-                // Bottom Padding
-                SizedBox(height: 40.h),
               ],
             ),
           );
         },
       ),
-      bottomNavigationBar: Container(
-        padding: EdgeInsets.fromLTRB(20.w, 16.h, 20.w, 32.h),
-        decoration: BoxDecoration(
-          color: _AppColors.surface,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.04),
-              blurRadius: 20,
-              offset: const Offset(0, -4),
-            ),
-          ],
-        ),
-        child: ordersAsync.maybeWhen(
-          data: (orders) {
-            final activeOrders = orders.where((o) => o.status != 'CANCELLED').toList();
-            if (activeOrders.isEmpty) return const SizedBox.shrink();
-
-            return ElevatedButton(
-              onPressed: _isProcessingPayment ? null : () => _handlePayment(sessionId),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: _AppColors.primary,
-                foregroundColor: _AppColors.onPrimary,
-                disabledBackgroundColor: _AppColors.outline,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12.r),
-                ),
-                padding: EdgeInsets.symmetric(vertical: 16.h),
-                elevation: 4,
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  if (_isProcessingPayment)
-                    const CircularProgressIndicator(color: Colors.white)
-                  else ...[
-                    const Icon(Icons.payment, size: 24),
-                    SizedBox(width: 8.w),
-                    Text(
-                      _selectedPaymentMethod == 1
-                          ? 'XÁC NHẬN & KHÓA PHIÊN'
-                          : 'TIẾN HÀNH THANH TOÁN',
-                      style: TextStyle(
-                        fontSize: 18.sp,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            );
-          },
-          orElse: () => const SizedBox.shrink(),
-        ),
-      ),
     );
   }
 
-  Widget _buildPaymentOption({
-    required int index,
-    required String title,
-    required IconData icon,
-    required Color iconBgColor,
-    required Color iconColor,
-  }) {
-    final isSelected = _selectedPaymentMethod == index;
-
-    return InkWell(
-      onTap: () {
-        setState(() {
-          _selectedPaymentMethod = index;
-        });
-      },
-      borderRadius: BorderRadius.circular(16.r),
-      child: Container(
-        padding: EdgeInsets.all(16.r),
-        decoration: BoxDecoration(
-          color: _AppColors.surfaceContainerLowest,
-          borderRadius: BorderRadius.circular(16.r),
-          border: Border.all(
-            color: isSelected ? _AppColors.primary : Colors.transparent,
-            width: 2,
+  Widget _buildSummaryRow(String label, String value, Color labelColor, Color valueColor, double fontSize, {bool bold = false}) {
+    return Padding(
+      padding: EdgeInsets.symmetric(vertical: 8.h),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              color: labelColor,
+              fontSize: fontSize,
+              fontWeight: bold ? FontWeight.bold : FontWeight.normal,
+            ),
           ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.02),
-              blurRadius: 10,
-              offset: const Offset(0, 2),
+          Text(
+            value,
+            style: TextStyle(
+              color: valueColor,
+              fontSize: fontSize,
+              fontWeight: bold ? FontWeight.bold : FontWeight.normal,
             ),
-          ],
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Row(
-              children: [
-                Container(
-                  width: 40.r,
-                  height: 40.r,
-                  decoration: BoxDecoration(
-                    color: iconBgColor,
-                    borderRadius: BorderRadius.circular(12.r),
-                  ),
-                  child: Icon(icon, color: iconColor, size: 24.sp),
-                ),
-                SizedBox(width: 16.w),
-                Text(
-                  title,
-                  style: TextStyle(
-                    color: _AppColors.onSurface,
-                    fontSize: 16.sp,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
-            ),
-            Icon(
-              isSelected ? Icons.radio_button_checked : Icons.radio_button_unchecked,
-              color: isSelected ? _AppColors.primary : _AppColors.outline,
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

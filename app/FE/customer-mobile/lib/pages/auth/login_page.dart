@@ -4,21 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../viewmodels/auth_viewmodel.dart';
 import '../../routes/app_routes.dart';
-
-class _AppColors {
-  static const Color primary = Color(0xFFad2c00);
-  static const Color primaryContainer = Color(0xFFd34011);
-  static const Color onPrimaryContainer = Color(0xFFffffff);
-  static const Color background = Color(0xFFfcf9f8);
-  static const Color surfaceContainerLowest = Color(0xFFffffff);
-  static const Color onSurface = Color(0xFF1b1c1c);
-  static const Color onSurfaceVariant = Color(0xFF5a413a);
-  static const Color outlineVariant = Color(0xFFe3beb5);
-  static const Color outline = Color(0xFF8f7068);
-  static const Color secondaryContainer = Color(0xFFeddcda);
-  static const Color onSecondaryContainer = Color(0xFF6c605e);
-  static const Color primaryFixed = Color(0xFFffdbd1);
-}
+import '../../theme/app_theme.dart';
 
 class LoginPage extends ConsumerStatefulWidget {
   const LoginPage({super.key});
@@ -62,6 +48,8 @@ class _LoginPageState extends ConsumerState<LoginPage> {
   @override
   Widget build(BuildContext context) {
     final authState = ref.watch(authViewModelProvider);
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
 
     ref.listen<AuthState>(authViewModelProvider, (previous, next) {
       if (next.status == AuthStateStatus.error) {
@@ -72,19 +60,19 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     });
 
     return Scaffold(
-      backgroundColor: _AppColors.background,
+      backgroundColor: colors.surface,
       appBar: AppBar(
-        backgroundColor: _AppColors.background,
+        backgroundColor: colors.surface,
         elevation: 0,
         scrolledUnderElevation: 0,
         title: Row(
           children: [
-            Icon(Icons.restaurant, color: _AppColors.primary, size: 24.sp),
+            Icon(Icons.restaurant, color: colors.primary, size: 24.sp),
             SizedBox(width: 8.w),
             Text(
               'SmartDine',
               style: TextStyle(
-                color: _AppColors.primary,
+                color: colors.primary,
                 fontSize: 20.sp,
                 fontWeight: FontWeight.bold,
               ),
@@ -96,13 +84,13 @@ class _LoginPageState extends ConsumerState<LoginPage> {
             margin: EdgeInsets.only(right: 20.w),
             padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 8.h),
             decoration: BoxDecoration(
-              color: _AppColors.primaryContainer,
+              color: colors.primaryContainer,
               borderRadius: BorderRadius.circular(100.r),
             ),
             child: Text(
               'GUEST',
               style: TextStyle(
-                color: _AppColors.onPrimaryContainer,
+                color: colors.onPrimaryContainer,
                 fontSize: 12.sp,
                 fontWeight: FontWeight.w600,
                 letterSpacing: 0.6,
@@ -123,13 +111,13 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                 height: 128.r,
                 margin: EdgeInsets.only(bottom: 16.h),
                 decoration: BoxDecoration(
-                  color: _AppColors.primaryFixed.withOpacity(0.3),
+                  color: colors.primaryContainer.withOpacity(0.3),
                   shape: BoxShape.circle,
                 ),
                 child: Center(
                   child: Icon(
                     Icons.restaurant_menu,
-                    color: _AppColors.primary,
+                    color: colors.primary,
                     size: 48.sp,
                   ),
                 ),
@@ -138,9 +126,8 @@ class _LoginPageState extends ConsumerState<LoginPage> {
             Text(
               'Chào mừng bạn đến với SmartDine',
               textAlign: TextAlign.center,
-              style: TextStyle(
-                color: _AppColors.onSurface,
-                fontSize: 26.sp,
+              style: theme.textTheme.headlineSmall?.copyWith(
+                color: colors.onSurface,
                 fontWeight: FontWeight.bold,
                 letterSpacing: -0.5,
               ),
@@ -149,9 +136,8 @@ class _LoginPageState extends ConsumerState<LoginPage> {
             Text(
               'Trải nghiệm ẩm thực hiện đại trong tầm tay bạn.',
               textAlign: TextAlign.center,
-              style: TextStyle(
-                color: _AppColors.onSurfaceVariant,
-                fontSize: 16.sp,
+              style: theme.textTheme.bodyLarge?.copyWith(
+                color: colors.onSurfaceVariant,
               ),
             ),
             SizedBox(height: 32.h),
@@ -160,9 +146,9 @@ class _LoginPageState extends ConsumerState<LoginPage> {
             Container(
               padding: EdgeInsets.all(24.r),
               decoration: BoxDecoration(
-                color: _AppColors.surfaceContainerLowest,
-                borderRadius: BorderRadius.circular(12.r),
-                border: Border.all(color: _AppColors.outlineVariant.withOpacity(0.3)),
+                color: colors.surface,
+                borderRadius: BorderRadius.circular(16.r),
+                border: Border.all(color: colors.outlineVariant.withOpacity(0.3)),
                 boxShadow: [
                   BoxShadow(
                     color: Colors.black.withOpacity(0.04),
@@ -172,9 +158,6 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                 ],
               ),
               child: ValueListenableBuilder<TextEditingValue>(
-                // Hiện đúng số bàn khách đã nhập/quét — trước đây hardcode "12" và
-                // "Khu vực cửa sổ • 4 Chỗ ngồi" giả, không liên quan gì đến bàn thật
-                // (BE không có endpoint public trả vị trí/sức chứa bàn trước khi đăng nhập).
                 valueListenable: _tableIdController,
                 builder: (context, value, _) {
                   final tableText = value.text.trim();
@@ -184,14 +167,14 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                         width: 64.r,
                         height: 64.r,
                         decoration: BoxDecoration(
-                          color: _AppColors.primaryContainer,
+                          color: colors.primaryContainer,
                           borderRadius: BorderRadius.circular(12.r),
                         ),
                         child: Center(
                           child: Text(
                             tableText.isEmpty ? '?' : tableText,
                             style: TextStyle(
-                              color: _AppColors.onPrimaryContainer,
+                              color: colors.onPrimaryContainer,
                               fontSize: 20.sp,
                               fontWeight: FontWeight.bold,
                             ),
@@ -206,7 +189,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                             Text(
                               tableText.isEmpty ? 'Bàn của bạn' : 'Bàn số $tableText',
                               style: TextStyle(
-                                color: _AppColors.onSurface,
+                                color: colors.onSurface,
                                 fontSize: 20.sp,
                                 fontWeight: FontWeight.w600,
                               ),
@@ -214,13 +197,13 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                             SizedBox(height: 4.h),
                             Row(
                               children: [
-                                Icon(Icons.info_outline, color: _AppColors.onSurfaceVariant, size: 16.sp),
+                                Icon(Icons.info_outline, color: colors.onSurfaceVariant, size: 16.sp),
                                 SizedBox(width: 4.w),
                                 Expanded(
                                   child: Text(
                                     'Kiểm tra đúng số bàn trước khi tiếp tục',
                                     style: TextStyle(
-                                      color: _AppColors.onSurfaceVariant,
+                                      color: colors.onSurfaceVariant,
                                       fontSize: 14.sp,
                                     ),
                                   ),
@@ -241,8 +224,8 @@ class _LoginPageState extends ConsumerState<LoginPage> {
             Container(
               padding: EdgeInsets.all(24.r),
               decoration: BoxDecoration(
-                color: _AppColors.surfaceContainerLowest,
-                borderRadius: BorderRadius.circular(12.r),
+                color: colors.surface,
+                borderRadius: BorderRadius.circular(16.r),
                 boxShadow: [
                   BoxShadow(
                     color: Colors.black.withOpacity(0.04),
@@ -254,7 +237,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _buildLabel('Số Bàn', true),
+                  _buildLabel('Số Bàn', true, colors),
                   SizedBox(height: 8.h),
                   _buildTextField(
                     controller: _tableIdController,
@@ -262,27 +245,30 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                     hintText: 'Nhập số bàn hoặc quét mã QR',
                     keyboardType: TextInputType.number,
                     suffixIcon: IconButton(
-                      icon: Icon(Icons.qr_code_scanner, color: _AppColors.primary),
+                      icon: Icon(Icons.qr_code_scanner, color: colors.primary),
                       tooltip: 'Quét mã QR trên bàn',
                       onPressed: _handleScanQr,
                     ),
+                    colors: colors,
                   ),
                   SizedBox(height: 16.h),
-                  _buildLabel('Tên của bạn', true),
+                  _buildLabel('Tên của bạn', true, colors),
                   SizedBox(height: 8.h),
                   _buildTextField(
                     controller: _nameController,
                     icon: Icons.person_outline,
                     hintText: 'Nhập tên để chúng tôi xưng hô',
+                    colors: colors,
                   ),
                   SizedBox(height: 16.h),
-                  _buildLabel('Số điện thoại', false, '(Không bắt buộc)'),
+                  _buildLabel('Số điện thoại', false, colors, '(Không bắt buộc)'),
                   SizedBox(height: 8.h),
                   _buildTextField(
                     controller: _phoneController,
                     icon: Icons.call_outlined,
                     hintText: 'Để tích điểm tự động',
                     keyboardType: TextInputType.phone,
+                    colors: colors,
                   ),
                   SizedBox(height: 24.h),
                   SizedBox(
@@ -291,37 +277,36 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                     child: ElevatedButton(
                       onPressed: authState.status == AuthStateStatus.loading ? null : _handleGuestLogin,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: _AppColors.primary,
-                        foregroundColor: Colors.white,
+                        backgroundColor: colors.primary,
+                        foregroundColor: colors.onPrimary,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12.r),
                         ),
                         elevation: 4,
-                        shadowColor: _AppColors.primary.withOpacity(0.2),
+                        shadowColor: colors.primary.withOpacity(0.2),
                       ),
                       child: authState.status == AuthStateStatus.loading
-                        ? SizedBox(
-                            width: 24.sp,
-                            height: 24.sp,
-                            child: const CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                          )
-                        : Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Flexible(
-                                child: Text(
-                                'Tiếp tục làm khách vãng lai',
-                                style: TextStyle(
-                                  fontSize: 16.sp,
-                                  fontWeight: FontWeight.w600,
+                          ? SizedBox(
+                              width: 24.sp,
+                              height: 24.sp,
+                              child: CircularProgressIndicator(color: colors.onPrimary, strokeWidth: 2),
+                            )
+                          : Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Flexible(
+                                  child: Text(
+                                    'Tiếp tục làm khách vãng lai',
+                                    style: TextStyle(
+                                      fontSize: 16.sp,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
                                 ),
-                              ),
-                              ),
-                              
-                              SizedBox(width: 8.w),
-                              Icon(Icons.arrow_forward, size: 20.sp),
-                            ],
-                          ),
+                                SizedBox(width: 8.w),
+                                Icon(Icons.arrow_forward, size: 20.sp),
+                              ],
+                            ),
                     ),
                   ),
                 ],
@@ -336,7 +321,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
               child: Container(
                 padding: EdgeInsets.all(24.r),
                 decoration: BoxDecoration(
-                  color: _AppColors.secondaryContainer,
+                  color: colors.secondaryContainer,
                   borderRadius: BorderRadius.circular(12.r),
                 ),
                 child: Row(
@@ -345,12 +330,12 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                       width: 48.r,
                       height: 48.r,
                       decoration: BoxDecoration(
-                        color: _AppColors.onSecondaryContainer.withOpacity(0.1),
+                        color: colors.onSecondaryContainer.withOpacity(0.1),
                         shape: BoxShape.circle,
                       ),
                       child: Icon(
                         Icons.loyalty,
-                        color: _AppColors.onSecondaryContainer,
+                        color: colors.onSecondaryContainer,
                       ),
                     ),
                     SizedBox(width: 16.w),
@@ -361,7 +346,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                           Text(
                             'Đăng nhập thành viên',
                             style: TextStyle(
-                              color: _AppColors.onSecondaryContainer,
+                              color: colors.onSecondaryContainer,
                               fontSize: 20.sp,
                               fontWeight: FontWeight.w600,
                             ),
@@ -371,7 +356,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                     ),
                     Icon(
                       Icons.chevron_right,
-                      color: _AppColors.onSecondaryContainer,
+                      color: colors.onSecondaryContainer,
                     ),
                   ],
                 ),
@@ -384,7 +369,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
               '"Chúng tôi rất vui được phục vụ quý khách tại bàn hôm nay."',
               textAlign: TextAlign.center,
               style: TextStyle(
-                color: _AppColors.onSurfaceVariant,
+                color: colors.onSurfaceVariant,
                 fontSize: 14.sp,
                 fontStyle: FontStyle.italic,
               ),
@@ -395,13 +380,13 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     );
   }
 
-  Widget _buildLabel(String text, bool isRequired, [String? suffix]) {
+  Widget _buildLabel(String text, bool isRequired, ColorScheme colors, [String? suffix]) {
     return Row(
       children: [
         Text(
           text,
           style: TextStyle(
-            color: _AppColors.onSurfaceVariant,
+            color: colors.onSurfaceVariant,
             fontSize: 12.sp,
             fontWeight: FontWeight.w600,
             letterSpacing: 0.5,
@@ -412,7 +397,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
           Text(
             '*',
             style: TextStyle(
-              color: _AppColors.primary,
+              color: colors.primary,
               fontSize: 12.sp,
             ),
           ),
@@ -422,7 +407,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
           Text(
             suffix,
             style: TextStyle(
-              color: _AppColors.onSurfaceVariant.withOpacity(0.6),
+              color: colors.onSurfaceVariant.withOpacity(0.6),
               fontSize: 12.sp,
             ),
           ),
@@ -437,35 +422,36 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     required String hintText,
     TextInputType? keyboardType,
     Widget? suffixIcon,
+    required ColorScheme colors,
   }) {
     return TextField(
       controller: controller,
       keyboardType: keyboardType,
       style: TextStyle(
         fontSize: 16.sp,
-        color: _AppColors.onSurface,
+        color: colors.onSurface,
       ),
       decoration: InputDecoration(
         hintText: hintText,
         hintStyle: TextStyle(
-          color: _AppColors.outline,
+          color: colors.outline,
           fontSize: 16.sp,
         ),
         prefixIcon: Icon(
           icon,
-          color: _AppColors.outline,
+          color: colors.outline,
         ),
         suffixIcon: suffixIcon,
         filled: true,
-        fillColor: _AppColors.background,
+        fillColor: colors.surfaceContainerHighest,
         contentPadding: EdgeInsets.symmetric(vertical: 16.h, horizontal: 16.w),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12.r),
-          borderSide: const BorderSide(color: _AppColors.outlineVariant),
+          borderSide: BorderSide(color: colors.outlineVariant),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12.r),
-          borderSide: const BorderSide(color: _AppColors.primary),
+          borderSide: BorderSide(color: colors.primary, width: 2),
         ),
       ),
     );
