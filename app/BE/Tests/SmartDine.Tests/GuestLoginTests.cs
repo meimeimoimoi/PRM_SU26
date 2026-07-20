@@ -236,10 +236,42 @@ public class GuestLoginTests
     }
 
     [Fact]
-    public async Task LoginGuest_MaintenanceTable_ThrowsBusinessRuleViolation()
+    public async Task LoginGuest_MaintenanceTable_WithoutActiveSession_AllowsNewSession()
     {
+        // Sau thanh toán bàn về MAINTENANCE + session đóng → cho mở phiên mới.
         var table = new Table { Id = 7, TableNumber = 7, Status = TableStatus.MAINTENANCE };
         _tableRepoMock.Setup(r => r.GetByTableNumberAsync(7)).ReturnsAsync(table);
+        _sessionRepoMock.Setup(r => r.GetActiveByTableIdAsync(7)).ReturnsAsync((DiningSession?)null);
+        _sessionRepoMock.Setup(r => r.AddAsync(It.IsAny<DiningSession>()))
+            .ReturnsAsync((DiningSession s) => { s.Id = 70; return s; });
+        _jwtMock.Setup(j => j.GenerateGuestToken(It.IsAny<string>(), 70, "Khách"))
+            .Returns(("token", "jti"));
+
+        var result = await _authService.LoginGuestAsync(new GuestLoginRequest
+        {
+            TableId = 7,
+            GuestName = "Khách"
+        });
+
+        Assert.Equal(70, result.SessionId);
+        Assert.Equal(7, result.TableNumber);
+        Assert.Equal(TableStatus.OCCUPIED, table.Status);
+    }
+
+    [Fact]
+    public async Task LoginGuest_MaintenanceTable_WithActiveSession_ThrowsBusinessRuleViolation()
+    {
+        // Vẫn đang dọn / khóa phục vụ nhưng còn session ACTIVE → không cho guest mới.
+        var table = new Table { Id = 7, TableNumber = 7, Status = TableStatus.MAINTENANCE };
+        var existing = new DiningSession
+        {
+            Id = 71,
+            TableId = 7,
+            Status = DiningSessionStatus.ACTIVE,
+            Participants = new List<SessionParticipant>()
+        };
+        _tableRepoMock.Setup(r => r.GetByTableNumberAsync(7)).ReturnsAsync(table);
+        _sessionRepoMock.Setup(r => r.GetActiveByTableIdAsync(7)).ReturnsAsync(existing);
 
         await Assert.ThrowsAsync<BusinessRuleViolationException>(() =>
             _authService.LoginGuestAsync(new GuestLoginRequest { TableId = 7, GuestName = "Khách" }));
