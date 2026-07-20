@@ -4,7 +4,8 @@ import * as signalR from '@microsoft/signalr';
 // BE chỉ expose ASP.NET Core SignalR (OrderHub tại /hubs/orders), không có server
 // Socket.IO nào — client phải nói cùng giao thức thì mới nhận được sự kiện thật.
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api/v1';
-const HUB_URL = `${API_BASE_URL.replace(/\/api\/v1\/?$/, '')}/hubs/orders`;
+const HUB_URL = import.meta.env.VITE_ORDER_HUB_URL
+  || `${API_BASE_URL.replace(/\/api\/v1\/?$/, '')}/hubs/orders`;
 
 interface UseOrderHubOptions {
   // Tham gia nhóm "KitchenGroup" để nhận ReceiveNewOrder — chỉ dành cho STAFF/CHEF/MANAGER
