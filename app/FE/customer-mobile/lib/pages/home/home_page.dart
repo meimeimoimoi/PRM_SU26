@@ -8,6 +8,7 @@ import '../../viewmodels/auth_viewmodel.dart';
 import '../../viewmodels/cart_viewmodel.dart';
 import '../../viewmodels/payment_lock_provider.dart';
 import '../../widgets/customer_bottom_nav.dart';
+import '../../routes/app_routes.dart';
 import 'package:intl/intl.dart';
 import '../../theme/app_theme.dart';
 
@@ -44,7 +45,7 @@ class _HomePageState extends ConsumerState<HomePage> {
   }
 
   Widget _buildCustomerView(BuildContext context, WidgetRef ref, AuthState authState) {
-    final tableNumber = authState.guestSession?.tableNumber ?? 1;
+    final tableNumber = authState.tableNumber;
     final checkoutLocked = ref.watch(sessionCheckoutLockedProvider);
 
     final categoriesAsync = ref.watch(menuCategoriesProvider);
@@ -107,27 +108,48 @@ class _HomePageState extends ConsumerState<HomePage> {
                     ),
                   ),
                   SizedBox(width: 8.w),
-                  Container(
-                    margin: EdgeInsets.only(right: 20.w),
-                    padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 4.h),
-                    decoration: BoxDecoration(
-                      color: AppTheme.primaryContainer,
-                      border: Border.all(color: AppTheme.primary.withOpacity(0.2)),
-                      borderRadius: BorderRadius.circular(100.r),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(Icons.table_restaurant, color: AppTheme.primary, size: 16.sp),
-                        SizedBox(width: 4.w),
-                        Text(
-                          'Bàn $tableNumber',
-                          style: TextStyle(
-                            color: AppTheme.primary,
-                            fontSize: 12.sp,
-                            fontWeight: FontWeight.bold,
+                  InkWell(
+                    onTap: () async {
+                      final tableNum = await context.push<int>(AppRoutes.qrScan);
+                      if (tableNum == null || !context.mounted) return;
+                      final auth = ref.read(authViewModelProvider);
+                      final notifier = ref.read(authViewModelProvider.notifier);
+                      final ok = auth.status == AuthStateStatus.authenticated
+                          ? await notifier.joinTable(tableNum)
+                          : await notifier.loginGuest(tableNum, null, null);
+                      if (!ok && context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              ref.read(authViewModelProvider).errorMessage ?? 'Không gắn được bàn',
+                            ),
                           ),
-                        ),
-                      ],
+                        );
+                      }
+                    },
+                    borderRadius: BorderRadius.circular(100.r),
+                    child: Container(
+                      margin: EdgeInsets.only(right: 20.w),
+                      padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 4.h),
+                      decoration: BoxDecoration(
+                        color: AppTheme.primaryContainer,
+                        border: Border.all(color: AppTheme.primary.withOpacity(0.2)),
+                        borderRadius: BorderRadius.circular(100.r),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.table_restaurant, color: AppTheme.primary, size: 16.sp),
+                          SizedBox(width: 4.w),
+                          Text(
+                            tableNumber != null && tableNumber > 0 ? 'Bàn $tableNumber' : 'Chọn bàn',
+                            style: TextStyle(
+                              color: AppTheme.primary,
+                              fontSize: 12.sp,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ],

@@ -51,6 +51,7 @@ public class AuthService
     ///      - Tìm thấy nhưng IsActive = false → rơi xuống bước 2 (không tiết lộ tài khoản bị khóa).
     ///   2. Tìm email trong bảng Customers (khách hàng).
     ///      - Tìm thấy → verify password → cấp token với role = CUSTOMER.
+    ///      - Nếu request.TableNumber &gt; 0 → tạo/join DiningSession trên bàn đó (AttachCustomerToTableAsync).
     ///   3. Không tìm thấy ở cả 2 bảng → throw lỗi chung (chống user enumeration).
     ///
     /// Bảo mật: luôn trả cùng 1 error message dù email sai hay password sai.
@@ -59,6 +60,7 @@ public class AuthService
     ///   - Email không tồn tại → BusinessRuleViolationException (422).
     ///   - Password sai → BusinessRuleViolationException (422).
     ///   - Tài khoản User bị vô hiệu hóa → BusinessRuleViolationException (422).
+    ///   - TableNumber không tồn tại / bàn bảo trì → EntityNotFound / BusinessRuleViolation.
     /// </summary>
     public async Task<TokenResponse> LoginAsync(LoginRequest request)
     {
@@ -85,7 +87,27 @@ public class AuthService
             if (customer.PasswordHash == null || !_passwordHasher.VerifyPassword(password, customer.PasswordHash))
                 throw new BusinessRuleViolationException(ValidationMessages.EMAIL_OR_PASSSWORD_INVALID);
 
-            return await GenerateTokenResponseAsync(customer.Id, customer.Email ?? string.Empty, customer.FullName ?? "Customer", UserRole.CUSTOMER.ToString(), UserType.CUSTOMER, customer.Phone, customer.LoyaltyPoints, customer.MembershipLevel.ToString());
+            var token = await GenerateTokenResponseAsync(
+                customer.Id,
+                customer.Email ?? string.Empty,
+                customer.FullName ?? "Customer",
+                UserRole.CUSTOMER.ToString(),
+                UserType.CUSTOMER,
+                customer.Phone,
+                customer.LoyaltyPoints,
+                customer.MembershipLevel.ToString());
+
+            // CUSTOMER + số bàn → tạo/join DiningSession ngay khi đăng nhập thành công
+            if (request.TableNumber > 0)
+            {
+                var (sessionId, tableId, tableNumber) =
+                    await AttachCustomerToTableAsync(customer.Id, request.TableNumber);
+                token.SessionId = sessionId;
+                token.TableId = tableId;
+                token.TableNumber = tableNumber;
+            }
+
+            return token;
         }
 
         // Không tìm thấy → trả lỗi chung (chống enumeration)
@@ -137,6 +159,135 @@ public class AuthService
 
         // Tự động login: tạo token ngay sau register
         return await GenerateTokenResponseAsync(customer.Id, customer.Email, customer.FullName, UserRole.CUSTOMER.ToString(), UserType.CUSTOMER, customer.Phone, customer.LoyaltyPoints, customer.MembershipLevel.ToString());
+    }
+
+    /// <summary>
+    /// Đăng nhập hoặc đăng ký CUSTOMER + gắn bàn (tạo/join DiningSession) trong một bước.
+    /// FullName có giá trị → register rồi AttachCustomerToTable;
+    /// ngược lại → LoginAsync (đã tạo session nếu có TableNumber).
+    /// </summary>
+    public async Task<CustomerDiningLoginResponse> LoginOrRegisterWithTableAsync(LoginWithTableRequest request)
+    {
+        if (request.TableNumber <= 0)
+            throw new BusinessRuleViolationException("TABLE_NUMBER_REQUIRED");
+
+        TokenResponse token;
+        if (!string.IsNullOrWhiteSpace(request.FullName))
+        {
+            token = await RegisterAsync(new RegisterRequest
+            {
+                FullName = request.FullName,
+                Email = request.Email,
+                Password = request.Password,
+                PhoneNumber = request.PhoneNumber
+            });
+
+            if (!string.Equals(token.User.Role, UserRole.CUSTOMER.ToString(), StringComparison.OrdinalIgnoreCase))
+                throw new BusinessRuleViolationException("CUSTOMER_ACCOUNT_REQUIRED");
+
+            var (sessionId, tableId, tableNumber) =
+                await AttachCustomerToTableAsync(token.User.Id, request.TableNumber);
+            token.SessionId = sessionId;
+            token.TableId = tableId;
+            token.TableNumber = tableNumber;
+        }
+        else
+        {
+            // LoginAsync tự AttachCustomerToTable khi TableNumber > 0
+            token = await LoginAsync(new LoginRequest
+            {
+                Email = request.Email,
+                Password = request.Password,
+                TableNumber = request.TableNumber
+            });
+
+            if (!string.Equals(token.User.Role, UserRole.CUSTOMER.ToString(), StringComparison.OrdinalIgnoreCase))
+                throw new BusinessRuleViolationException("CUSTOMER_ACCOUNT_REQUIRED");
+
+            if (token.SessionId <= 0)
+                throw new BusinessRuleViolationException("TABLE_NUMBER_REQUIRED");
+        }
+
+        return new CustomerDiningLoginResponse
+        {
+            AccessToken = token.AccessToken,
+            RefreshToken = token.RefreshToken,
+            ExpiresIn = token.ExpiresIn,
+            User = token.User,
+            SessionId = token.SessionId,
+            TableId = token.TableId,
+            TableNumber = token.TableNumber
+        };
+    }
+
+    /// <summary>
+    /// Gắn CUSTOMER vào bàn theo số bàn — tạo DiningSession mới hoặc join session ACTIVE.
+    /// Bàn MAINTENANCE không còn session ACTIVE (đã thanh toán/soft-delete) → cho mở phiên mới.
+    /// </summary>
+    public async Task<(int SessionId, int TableId, int TableNumber)> AttachCustomerToTableAsync(int customerId, int tableNumber)
+    {
+        var table = await _uow.Tables.GetByTableNumberAsync(tableNumber)
+            ?? throw new EntityNotFoundException("Table", tableNumber);
+
+        var existingSession = await _uow.DiningSessions.GetActiveByTableIdAsync(table.Id);
+
+        if (table.Status == TableStatus.RESERVED)
+            throw new BusinessRuleViolationException(
+                string.Format(ValidationMessages.TABLE_RESERVED, table.TableNumber));
+
+        // Đã thanh toán → bàn MAINTENANCE nhưng session đã CLOSED/soft-delete → cho khách mới
+        if (table.Status == TableStatus.MAINTENANCE && existingSession == null)
+            table.Status = TableStatus.AVAILABLE;
+
+        if (table.Status == TableStatus.MAINTENANCE)
+            throw new BusinessRuleViolationException(
+                string.Format(ValidationMessages.TABLE_MAINTENANCE_CANNOT_SERVE, table.TableNumber));
+
+        DiningSession session;
+        if (existingSession != null)
+        {
+            session = existingSession;
+            var alreadyIn = session.Participants.Any(p =>
+                p.LeftAt == null && p.CustomerId == customerId);
+            if (!alreadyIn)
+            {
+                await _uow.SessionParticipants.AddAsync(new SessionParticipant
+                {
+                    SessionId = session.Id,
+                    CustomerId = customerId,
+                    Role = ParticipantRole.MEMBER,
+                    JoinedAt = DateTime.UtcNow
+                });
+                await _uow.SaveChangesAsync();
+            }
+        }
+        else
+        {
+            table.Status = TableStatus.OCCUPIED;
+            var settings = await _uow.Settings.GetSingletonAsync();
+            session = new DiningSession
+            {
+                CustomerId = customerId,
+                TableId = table.Id,
+                Status = DiningSessionStatus.ACTIVE,
+                StartedAt = DateTime.UtcNow,
+                TaxRate = settings?.TaxRate,
+                ServiceChargeRate = settings?.ServiceChargeRate
+            };
+            await _uow.DiningSessions.AddAsync(session);
+            await _uow.SaveChangesAsync();
+
+            await _uow.SessionParticipants.AddAsync(new SessionParticipant
+            {
+                SessionId = session.Id,
+                CustomerId = customerId,
+                Role = ParticipantRole.HOST,
+                JoinedAt = DateTime.UtcNow
+            });
+            await _uow.SaveChangesAsync();
+        }
+
+        return (session.Id, table.Id, table.TableNumber);
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -448,20 +599,21 @@ public class AuthService
         var table = await _uow.Tables.GetByTableNumberAsync(request.TableId)
             ?? throw new EntityNotFoundException("Table", request.TableId);
 
-        if (table.Status == TableStatus.MAINTENANCE)
-            throw new BusinessRuleViolationException(
-                string.Format(ValidationMessages.TABLE_MAINTENANCE_CANNOT_SERVE, table.TableNumber));
         if (table.Status == TableStatus.RESERVED)
             throw new BusinessRuleViolationException(
                 string.Format(ValidationMessages.TABLE_RESERVED, table.TableNumber));
 
         var existingSession = await _uow.DiningSessions.GetActiveByTableIdAsync(table.Id);
+
+        // Thanh toán xong → bàn MAINTENANCE nhưng session đã đóng → cho mở phiên mới
+        if (table.Status == TableStatus.MAINTENANCE && existingSession == null)
+            table.Status = TableStatus.AVAILABLE;
+
+        if (table.Status == TableStatus.MAINTENANCE)
+            throw new BusinessRuleViolationException(
+                string.Format(ValidationMessages.TABLE_MAINTENANCE_CANNOT_SERVE, table.TableNumber));
+
         DiningSession session;
-
-        if(table == null){
-            throw new EntityNotFoundException("Table", request.TableId);
-        }
-
         var guestName = request.GuestName ?? "Guest";
 
         if (existingSession != null)

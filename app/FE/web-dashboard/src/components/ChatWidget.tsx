@@ -12,7 +12,6 @@ interface ChatMessage {
 const SUGGESTED_QUESTIONS = [
   'Doanh thu tháng này là bao nhiêu?',
   'Có bao nhiêu bàn đang trống?',
-  'Món ăn nào bán chạy nhất?',
 ];
 
 /**
@@ -126,9 +125,6 @@ const ChatWidget: React.FC = () => {
       <div style={{ flex: 1, overflowY: 'auto', padding: 14 }}>
         {messages.length === 0 && (
           <div style={{ marginBottom: 16 }}>
-            <Typography.Text type="secondary" style={{ fontSize: 13 }}>
-              Hỏi tôi về doanh thu, tình trạng bàn, hoặc món ăn bán chạy:
-            </Typography.Text>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 12 }}>
               {SUGGESTED_QUESTIONS.map((q) => (
                 <Button key={q} size="small" onClick={() => sendMessage(q)} style={{ textAlign: 'left' }}>

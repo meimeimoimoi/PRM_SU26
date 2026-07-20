@@ -3,8 +3,8 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../viewmodels/auth_viewmodel.dart';
+import '../../viewmodels/pending_table_provider.dart';
 import '../../routes/app_routes.dart';
-import '../../theme/app_theme.dart';
 
 class LoginPage extends ConsumerStatefulWidget {
   const LoginPage({super.key});
@@ -16,43 +16,78 @@ class LoginPage extends ConsumerStatefulWidget {
 class _LoginPageState extends ConsumerState<LoginPage> {
   final _nameController = TextEditingController();
   final _phoneController = TextEditingController();
-  final _tableIdController = TextEditingController(text: '1');
+  bool _gateResetDone = false;
 
   @override
   void dispose() {
     _nameController.dispose();
     _phoneController.dispose();
-    _tableIdController.dispose();
     super.dispose();
   }
 
-  void _handleGuestLogin() async {
+  @override
+  void initState() {
+    super.initState();
+    // Xóa session/dining cũ trong storage — nguyên nhân chính luôn hiện "Bàn 1".
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (_gateResetDone || !mounted) return;
+      _gateResetDone = true;
+      await ref.read(authViewModelProvider.notifier).resetToLoginGate();
+    });
+  }
+
+  /// Bắt buộc có số bàn: chưa có thì mở màn quét/nhập bàn ngay.
+  Future<int?> _requireTableNumber({bool forceRescan = false}) async {
+    if (!forceRescan) {
+      final existing = ref.read(pendingTableNumberProvider);
+      if (existing != null && existing > 0) return existing;
+    }
+
+    if (!mounted) return null;
+    final scanned = await context.push<int>(AppRoutes.qrScan);
+    if (scanned == null || scanned <= 0 || !mounted) return null;
+
+    ref.read(pendingTableNumberProvider.notifier).state = scanned;
+    return scanned;
+  }
+
+  Future<void> _handleGuestLogin() async {
+    final tableNumber = await _requireTableNumber();
+    if (tableNumber == null || !mounted) return;
+
     final name = _nameController.text.trim();
     final phone = _phoneController.text.trim();
-    final tableId = int.tryParse(_tableIdController.text.trim()) ?? 1;
 
-    final success = await ref.read(authViewModelProvider.notifier).loginGuest(tableId, name, phone);
+    final success =
+        await ref.read(authViewModelProvider.notifier).loginGuest(tableNumber, name, phone);
 
     if (success && mounted) {
-      context.go('/home');
+      context.go(AppRoutes.home);
     }
   }
 
   Future<void> _handleScanQr() async {
-    final tableNumber = await context.push<int>(AppRoutes.qrScan);
-    if (tableNumber != null) {
-      _tableIdController.text = tableNumber.toString();
-    }
+    await _requireTableNumber(forceRescan: true);
+  }
+
+  Future<void> _openMemberLogin() async {
+    // Luôn bắt chọn/quét bàn lại — không dùng pending cũ (hay bị kẹt bàn 1).
+    final tableNumber = await _requireTableNumber(forceRescan: true);
+    if (tableNumber == null || !mounted) return;
+
+    context.go(AppRoutes.signupWithTable(tableNumber), extra: tableNumber);
   }
 
   @override
   Widget build(BuildContext context) {
     final authState = ref.watch(authViewModelProvider);
+    final tableNumber = ref.watch(pendingTableNumberProvider);
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
 
     ref.listen<AuthState>(authViewModelProvider, (previous, next) {
-      if (next.status == AuthStateStatus.error) {
+      if (next.status == AuthStateStatus.error ||
+          (next.errorMessage != null && next.errorMessage!.isNotEmpty)) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(next.errorMessage ?? 'Có lỗi xảy ra')),
         );
@@ -157,65 +192,59 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                   ),
                 ],
               ),
-              child: ValueListenableBuilder<TextEditingValue>(
-                valueListenable: _tableIdController,
-                builder: (context, value, _) {
-                  final tableText = value.text.trim();
-                  return Row(
-                    children: [
-                      Container(
-                        width: 64.r,
-                        height: 64.r,
-                        decoration: BoxDecoration(
-                          color: colors.primaryContainer,
-                          borderRadius: BorderRadius.circular(12.r),
-                        ),
-                        child: Center(
-                          child: Text(
-                            tableText.isEmpty ? '?' : tableText,
-                            style: TextStyle(
-                              color: colors.onPrimaryContainer,
-                              fontSize: 20.sp,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 64.r,
+                    height: 64.r,
+                    decoration: BoxDecoration(
+                      color: colors.primaryContainer,
+                      borderRadius: BorderRadius.circular(12.r),
+                    ),
+                    child: Center(
+                      child: Text(
+                        tableNumber == null ? '?' : '$tableNumber',
+                        style: TextStyle(
+                          color: colors.onPrimaryContainer,
+                          fontSize: 20.sp,
+                          fontWeight: FontWeight.bold,
                         ),
                       ),
-                      SizedBox(width: 24.w),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                    ),
+                  ),
+                  SizedBox(width: 24.w),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          tableNumber == null ? 'Chưa chọn bàn' : 'Bàn số $tableNumber',
+                          style: TextStyle(
+                            color: colors.onSurface,
+                            fontSize: 20.sp,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        SizedBox(height: 4.h),
+                        Row(
                           children: [
-                            Text(
-                              tableText.isEmpty ? 'Bàn của bạn' : 'Bàn số $tableText',
-                              style: TextStyle(
-                                color: colors.onSurface,
-                                fontSize: 20.sp,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            SizedBox(height: 4.h),
-                            Row(
-                              children: [
-                                Icon(Icons.info_outline, color: colors.onSurfaceVariant, size: 16.sp),
-                                SizedBox(width: 4.w),
-                                Expanded(
-                                  child: Text(
-                                    'Kiểm tra đúng số bàn trước khi tiếp tục',
-                                    style: TextStyle(
-                                      color: colors.onSurfaceVariant,
-                                      fontSize: 14.sp,
-                                    ),
-                                  ),
+                            Icon(Icons.info_outline, color: colors.onSurfaceVariant, size: 16.sp),
+                            SizedBox(width: 4.w),
+                            Expanded(
+                              child: Text(
+                                'Quét mã QR trên bàn để tiếp tục',
+                                style: TextStyle(
+                                  color: colors.onSurfaceVariant,
+                                  fontSize: 14.sp,
                                 ),
-                              ],
+                              ),
                             ),
                           ],
                         ),
-                      ),
-                    ],
-                  );
-                },
+                      ],
+                    ),
+                  ),
+                ],
               ),
             ),
             SizedBox(height: 24.h),
@@ -239,17 +268,28 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                 children: [
                   _buildLabel('Số Bàn', true, colors),
                   SizedBox(height: 8.h),
-                  _buildTextField(
-                    controller: _tableIdController,
-                    icon: Icons.table_restaurant,
-                    hintText: 'Nhập số bàn hoặc quét mã QR',
-                    keyboardType: TextInputType.number,
-                    suffixIcon: IconButton(
-                      icon: Icon(Icons.qr_code_scanner, color: colors.primary),
-                      tooltip: 'Quét mã QR trên bàn',
+                  SizedBox(
+                    width: double.infinity,
+                    height: 56.h,
+                    child: OutlinedButton.icon(
                       onPressed: _handleScanQr,
+                      icon: Icon(Icons.qr_code_scanner, color: colors.primary, size: 22.sp),
+                      label: Text(
+                        tableNumber == null ? 'Quét mã QR trên bàn' : 'Quét lại (Bàn $tableNumber)',
+                        style: TextStyle(
+                          fontSize: 16.sp,
+                          fontWeight: FontWeight.w600,
+                          color: colors.primary,
+                        ),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        side: BorderSide(color: colors.primary, width: 1.5),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12.r),
+                        ),
+                        backgroundColor: colors.primaryContainer.withOpacity(0.35),
+                      ),
                     ),
-                    colors: colors,
                   ),
                   SizedBox(height: 16.h),
                   _buildLabel('Tên của bạn', true, colors),
@@ -314,51 +354,64 @@ class _LoginPageState extends ConsumerState<LoginPage> {
             ),
             SizedBox(height: 24.h),
 
-            // Loyalty Card (Navigate to Login/Signup)
-            InkWell(
-              onTap: () => context.push('/signup'),
+            // Loyalty Card — bắt buộc đã quét bàn
+            Material(
+              color: colors.secondaryContainer,
               borderRadius: BorderRadius.circular(12.r),
-              child: Container(
-                padding: EdgeInsets.all(24.r),
-                decoration: BoxDecoration(
-                  color: colors.secondaryContainer,
-                  borderRadius: BorderRadius.circular(12.r),
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 48.r,
-                      height: 48.r,
-                      decoration: BoxDecoration(
-                        color: colors.onSecondaryContainer.withOpacity(0.1),
-                        shape: BoxShape.circle,
+              child: InkWell(
+                onTap: () {
+                  // ignore: discarded_futures
+                  _openMemberLogin();
+                },
+                borderRadius: BorderRadius.circular(12.r),
+                child: Padding(
+                  padding: EdgeInsets.all(24.r),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 48.r,
+                        height: 48.r,
+                        decoration: BoxDecoration(
+                          color: colors.onSecondaryContainer.withOpacity(0.1),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          Icons.loyalty,
+                          color: colors.onSecondaryContainer,
+                        ),
                       ),
-                      child: Icon(
-                        Icons.loyalty,
+                      SizedBox(width: 16.w),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Đăng nhập thành viên',
+                              style: TextStyle(
+                                color: colors.onSecondaryContainer,
+                                fontSize: 18.sp,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            SizedBox(height: 4.h),
+                            Text(
+                              tableNumber == null
+                                  ? 'Quét QR bàn trước, rồi đăng nhập để tích điểm'
+                                  : 'Bàn $tableNumber — tích điểm & xem hạng thành viên',
+                              style: TextStyle(
+                                color: colors.onSecondaryContainer.withOpacity(0.8),
+                                fontSize: 13.sp,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Icon(
+                        Icons.chevron_right,
                         color: colors.onSecondaryContainer,
                       ),
-                    ),
-                    SizedBox(width: 16.w),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Đăng nhập thành viên',
-                            style: TextStyle(
-                              color: colors.onSecondaryContainer,
-                              fontSize: 20.sp,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Icon(
-                      Icons.chevron_right,
-                      color: colors.onSecondaryContainer,
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -421,7 +474,6 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     required IconData icon,
     required String hintText,
     TextInputType? keyboardType,
-    Widget? suffixIcon,
     required ColorScheme colors,
   }) {
     return TextField(
@@ -441,7 +493,6 @@ class _LoginPageState extends ConsumerState<LoginPage> {
           icon,
           color: colors.outline,
         ),
-        suffixIcon: suffixIcon,
         filled: true,
         fillColor: colors.surfaceContainerHighest,
         contentPadding: EdgeInsets.symmetric(vertical: 16.h, horizontal: 16.w),

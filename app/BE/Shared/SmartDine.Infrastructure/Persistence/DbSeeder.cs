@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -90,7 +91,7 @@ public class DbSeeder
             // QrCode dùng URL trang web đặt món (không phải custom URI scheme) — khớp quy ước
             // TableService.CreateAsync. DbSeeder không có IConfiguration nên dùng domain mặc định;
             // nếu chạy local và cần QR trỏ đúng localhost, xóa 5 bàn này rồi tạo lại qua UI Manager.
-            const string webBaseUrl = "https://smartdine.app";
+            const string webBaseUrl = "http://localhost:8090";
             var tables = new List<Table>
             {
                 new() { TableNumber = 1, Capacity = 2, Status = TableStatus.AVAILABLE, QrCode = $"{webBaseUrl}/?table=1" },
@@ -101,6 +102,23 @@ public class DbSeeder
             };
 
             await _context.Tables.AddRangeAsync(tables);
+            await _context.SaveChangesAsync();
+        }
+        else
+        {
+            // DB cũ có thể thiếu bàn 4–5 (đã xóa / seed nửa vời) → bổ sung để QR không 404.
+            const string webBaseUrl = "http://localhost:8090";
+            for (var n = 1; n <= 5; n++)
+            {
+                if (await _context.Tables.AnyAsync(t => t.TableNumber == n)) continue;
+                await _context.Tables.AddAsync(new Table
+                {
+                    TableNumber = n,
+                    Capacity = n <= 2 ? 2 : 4,
+                    Status = TableStatus.AVAILABLE,
+                    QrCode = $"{webBaseUrl}/?table={n}"
+                });
+            }
             await _context.SaveChangesAsync();
         }
 
@@ -156,19 +174,41 @@ public class DbSeeder
             await _context.Customers.AddAsync(defaultCustomer);
             await _context.SaveChangesAsync();
 
-            var firstTable = _context.Tables.First(t => t.TableNumber == 1);
-            var session = new DiningSession
-            {
-                CustomerId = defaultCustomer.Id,
-                TableId = firstTable.Id,
-                GuestName = defaultCustomer.FullName,
-                GuestPhone = defaultCustomer.Phone,
-                Status = DiningSessionStatus.ACTIVE,
-                TotalSpent = 0.00m
-            };
+            // Không seed DiningSession ACTIVE sẵn — nếu seed bàn 1 ACTIVE thì mọi lần
+            // login/guest vào bàn 1 chỉ JOIN session cũ, không tạo dòng dining_sessions mới.
+        }
 
-            await _context.DiningSessions.AddAsync(session);
-            await _context.SaveChangesAsync();
+        // Cleanup DB cũ: đóng session ACTIVE của customer seed (không có order) để bàn 1
+        // có thể mở phiên mới khi khách đăng nhập.
+        var seedCustomer = await _context.Customers
+            .FirstOrDefaultAsync(c => c.Email == "customer@smartdine.com");
+        if (seedCustomer != null)
+        {
+            var stuckSessions = await _context.DiningSessions
+                .Include(s => s.Orders)
+                .Where(s =>
+                    s.CustomerId == seedCustomer.Id &&
+                    s.Status == DiningSessionStatus.ACTIVE &&
+                    !s.Orders.Any())
+                .ToListAsync();
+
+            if (stuckSessions.Count > 0)
+            {
+                foreach (var session in stuckSessions)
+                {
+                    session.Status = DiningSessionStatus.CLOSED;
+                    session.EndedAt = DateTime.UtcNow;
+                }
+
+                var tableIds = stuckSessions.Select(s => s.TableId).Distinct().ToList();
+                var tables = await _context.Tables
+                    .Where(t => tableIds.Contains(t.Id) && t.Status == TableStatus.OCCUPIED)
+                    .ToListAsync();
+                foreach (var table in tables)
+                    table.Status = TableStatus.AVAILABLE;
+
+                await _context.SaveChangesAsync();
+            }
         }
 
         // 5. Seed Restaurant Settings (singleton row)

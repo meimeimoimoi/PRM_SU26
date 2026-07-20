@@ -28,7 +28,14 @@ String _localizeAuthError(String code) {
       return 'Email này đã được đăng ký';
     case 'PHONE_ALREADY_EXISTS':
       return 'Số điện thoại này đã được đăng ký';
+    case 'TABLE_NUMBER_REQUIRED':
+      return 'Vui lòng chọn số bàn trước khi đăng nhập';
+    case 'CUSTOMER_ACCOUNT_REQUIRED':
+      return 'Tài khoản này không dùng được trên app khách';
     default:
+      if (code.contains('Table') || code.contains('TABLE') || code.contains('not found') || code.contains('NotFound')) {
+        return 'Không tìm thấy bàn. Hãy nhập đúng số bàn (VD: 1–5).';
+      }
       return code;
   }
 }

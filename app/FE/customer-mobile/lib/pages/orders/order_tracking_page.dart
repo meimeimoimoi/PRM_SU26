@@ -51,7 +51,7 @@ class _OrderTrackingPageState extends ConsumerState<OrderTrackingPage> with Sing
     );
 
     final authState = ref.read(authViewModelProvider);
-    final tableId = authState.guestSession?.tableId;
+    final tableId = authState.tableId;
     _socketService.subscribeToEvent('ReceiveOrderStatusUpdate', (data) {
       if (!mounted || data is! Map) return;
       final eventOrderId = data['orderId'] ?? data['OrderId'];
@@ -161,7 +161,7 @@ class _OrderTrackingPageState extends ConsumerState<OrderTrackingPage> with Sing
   @override
   Widget build(BuildContext context) {
     final authState = ref.watch(authViewModelProvider);
-    final tableNumber = authState.guestSession?.tableNumber ?? 1;
+    final tableNumber = authState.tableNumber;
 
     return Scaffold(
       backgroundColor: AppTheme.background,
@@ -198,7 +198,7 @@ class _OrderTrackingPageState extends ConsumerState<OrderTrackingPage> with Sing
               borderRadius: BorderRadius.circular(100.r),
             ),
             child: Text(
-              'Bàn $tableNumber',
+              tableNumber != null && tableNumber > 0 ? 'Bàn $tableNumber' : 'Chưa chọn bàn',
               style: TextStyle(
                 color: AppTheme.onPrimaryContainer,
                 fontSize: 12.sp,

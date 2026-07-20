@@ -97,6 +97,7 @@ public class ScanTableResponse
 {
     public int SessionId { get; set; }
     public int TableId { get; set; }
+    public int TableNumber { get; set; }
     public string Status { get; set; } = nameof(DiningSessionStatus.ACTIVE);
     public bool IsNewSession { get; set; }
     public string Message { get; set; } = string.Empty;

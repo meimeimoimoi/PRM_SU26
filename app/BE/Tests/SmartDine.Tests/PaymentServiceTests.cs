@@ -23,6 +23,8 @@ public class PaymentServiceTests
     private readonly Mock<ICustomerRepository> _customerRepoMock;
     private readonly Mock<IRepository<LoyaltyTransaction>> _loyaltyRepoMock;
     private readonly Mock<ISettingsRepository> _settingsRepoMock;
+    private readonly Mock<IOrderRepository> _orderRepoMock;
+    private readonly Mock<IRepository<OrderDetail>> _orderDetailRepoMock;
     private readonly Mock<IPaymentGateway> _gatewayMock;
     private readonly Mock<IOrderNotificationService> _notificationMock;
     private readonly PaymentService _service;
@@ -36,6 +38,8 @@ public class PaymentServiceTests
         _customerRepoMock = new Mock<ICustomerRepository>();
         _loyaltyRepoMock = new Mock<IRepository<LoyaltyTransaction>>();
         _settingsRepoMock = new Mock<ISettingsRepository>();
+        _orderRepoMock = new Mock<IOrderRepository>();
+        _orderDetailRepoMock = new Mock<IRepository<OrderDetail>>();
         _gatewayMock = new Mock<IPaymentGateway>();
         _notificationMock = new Mock<IOrderNotificationService>();
 
@@ -45,6 +49,8 @@ public class PaymentServiceTests
         _uowMock.Setup(u => u.Customers).Returns(_customerRepoMock.Object);
         _uowMock.Setup(u => u.LoyaltyTransactions).Returns(_loyaltyRepoMock.Object);
         _uowMock.Setup(u => u.Settings).Returns(_settingsRepoMock.Object);
+        _uowMock.Setup(u => u.Orders).Returns(_orderRepoMock.Object);
+        _uowMock.Setup(u => u.OrderDetails).Returns(_orderDetailRepoMock.Object);
         _uowMock.Setup(u => u.SaveChangesAsync(default)).ReturnsAsync(1);
 
         // Mặc định: VAT 8%, không phí DV — khớp seed cũ để assert ổn định
@@ -330,7 +336,7 @@ public class PaymentServiceTests
         var customer = new Customer { Id = 10, LoyaltyPoints = 0, TotalSpent = 0, VisitCount = 0, MembershipLevel = LoyaltyTier.BRONZE };
 
         _paymentRepoMock.Setup(r => r.GetByExternalRefAsync("123456")).ReturnsAsync(payment);
-        _sessionRepoMock.Setup(r => r.GetByIdWithParticipantsAsync(1)).ReturnsAsync(session);
+        _sessionRepoMock.Setup(r => r.GetByIdWithParticipantsAndOrdersAsync(1)).ReturnsAsync(session);
         _tableRepoMock.Setup(r => r.GetByIdAsync(5)).ReturnsAsync(table);
         _customerRepoMock.Setup(r => r.GetByIdAsync(10)).ReturnsAsync(customer);
         _loyaltyRepoMock.Setup(r => r.AddAsync(It.IsAny<LoyaltyTransaction>()))
@@ -345,6 +351,8 @@ public class PaymentServiceTests
         Assert.Equal("00", result.RspCode);
         Assert.Equal(PaymentStatus.SUCCESS, payment.PaymentStatus);
         Assert.Equal(DiningSessionStatus.CLOSED, session.Status);
+        Assert.True(session.IsDeleted);
+        Assert.All(session.Orders, o => Assert.True(o.IsDeleted));
         Assert.Equal(TableStatus.MAINTENANCE, table.Status);
 
         // 200.000 VND → 200 điểm (200.000 / 1.000 * 1)
@@ -378,7 +386,7 @@ public class PaymentServiceTests
         var table = new Table { Id = 7, Status = TableStatus.OCCUPIED };
 
         _paymentRepoMock.Setup(r => r.GetByExternalRefAsync("999")).ReturnsAsync(payment);
-        _sessionRepoMock.Setup(r => r.GetByIdWithParticipantsAsync(2)).ReturnsAsync(session);
+        _sessionRepoMock.Setup(r => r.GetByIdWithParticipantsAndOrdersAsync(2)).ReturnsAsync(session);
         _tableRepoMock.Setup(r => r.GetByIdAsync(7)).ReturnsAsync(table);
 
         _gatewayMock.Setup(g => g.VerifyAndParseWebhook(It.IsAny<string>(), It.IsAny<string>()))
@@ -440,7 +448,7 @@ public class PaymentServiceTests
         Assert.Equal("00", result.RspCode);
         Assert.Equal("Already processed", result.Message);
         // Không update session, không cộng điểm
-        _sessionRepoMock.Verify(r => r.GetByIdWithParticipantsAsync(It.IsAny<int>()), Times.Never);
+        _sessionRepoMock.Verify(r => r.GetByIdWithParticipantsAndOrdersAsync(It.IsAny<int>()), Times.Never);
         _loyaltyRepoMock.Verify(r => r.AddAsync(It.IsAny<LoyaltyTransaction>()), Times.Never);
         _uowMock.Verify(u => u.SaveChangesAsync(default), Times.Never);
     }

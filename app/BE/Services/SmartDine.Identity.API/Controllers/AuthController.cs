@@ -10,16 +10,6 @@ using SmartDine.Application.Services;
 
 namespace SmartDine.Identity.API.Controllers;
 
-/// <summary>
-/// Controller xác thực và quản lý phiên đăng nhập (Identity Microservice).
-///
-/// Tất cả endpoint public trừ /logout và /me (yêu cầu JWT Bearer token).
-/// Luồng request: Client → Gateway(:5000) → Identity.API(:5001) → AuthController → AuthService.
-/// Exception được bắt bởi ExceptionHandlingMiddleware → trả về ApiResponse chuẩn.
-///
-/// Đây là service DUY NHẤT giữ RSA private key để ký JWT.
-/// Các service khác (Menu, Order, Table, AI) chỉ cần public key để verify.
-/// </summary>
 [ApiController]
 [Route("api/v1/auth")]
 public class AuthController : ControllerBase
@@ -34,6 +24,8 @@ public class AuthController : ControllerBase
     /// <summary>
     /// POST /api/v1/auth/login — Đăng nhập (User hoặc Customer).
     /// Public endpoint. Trả về cặp AccessToken (1h) + RefreshToken (7 ngày).
+    /// CUSTOMER gửi kèm <c>tableNumber</c> → tạo/join DiningSession trên bàn đó
+    /// (response có thêm sessionId, tableId, tableNumber).
     /// </summary>
     [HttpPost("login")]
     public async Task<IActionResult> Login([FromBody] LoginRequest request)
@@ -95,6 +87,41 @@ public class AuthController : ControllerBase
     {
         var result = await _authService.LoginGuestAsync(request);
         return Ok(ApiResponse<GuestLoginResponse>.Ok(result, ValidationMessages.GUEST_LOGIN_SUCCESS));
+    }
+
+    /// <summary>
+    /// POST /api/v1/auth/login-with-table — Login/Register CUSTOMER + tạo/join DiningSession (1 bước).
+    /// </summary>
+    [HttpPost("login-with-table")]
+    public async Task<IActionResult> LoginWithTable([FromBody] LoginWithTableRequest request)
+    {
+        var result = await _authService.LoginOrRegisterWithTableAsync(request);
+        return Ok(ApiResponse<CustomerDiningLoginResponse>.Ok(result, ValidationMessages.LOGIN_SUCCESS));
+    }
+
+    /// <summary>
+    /// POST /api/v1/auth/join-table — CUSTOMER gắn bàn khi đã có JWT.
+    /// </summary>
+    [HttpPost("join-table")]
+    [Authorize(Roles = Roles.Customer)]
+    public async Task<IActionResult> JoinTable([FromBody] JoinTableRequest request)
+    {
+        if (request.TableNumber <= 0)
+            return BadRequest(ApiResponse<object>.Fail("TABLE_NUMBER_REQUIRED"));
+
+        var customerId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        var (sessionId, tableId, tableNumber) =
+            await _authService.AttachCustomerToTableAsync(customerId, request.TableNumber);
+
+        return Ok(ApiResponse<object>.Ok(new
+        {
+            sessionId,
+            tableId,
+            tableNumber,
+            status = "ACTIVE",
+            isNewSession = true,
+            message = $"Đã gắn bàn {tableNumber}"
+        }));
     }
 
     /// <summary>

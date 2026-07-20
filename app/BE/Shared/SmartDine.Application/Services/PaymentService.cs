@@ -270,6 +270,9 @@ public class PaymentService
         if (payment.PaymentStatus == PaymentStatus.SUCCESS)
             return new PaymentWebhookResponse { RspCode = "00", Message = "Already processed" };
 
+        int? notifyTableId = null;
+        int notifyTableNumber = 0;
+
         if (webhookData.IsSuccess)
         {
             // 4a. Thanh toán thành công
@@ -277,14 +280,8 @@ public class PaymentService
             payment.PaidAt = DateTime.UtcNow;
             await _uow.Payments.UpdateAsync(payment);
 
-            // Load session với Table để cập nhật trạng thái bàn
-            var session = await _uow.DiningSessions.GetByIdWithParticipantsAsync(payment.SessionId)
+            var session = await _uow.DiningSessions.GetByIdWithParticipantsAndOrdersAsync(payment.SessionId)
                 ?? throw new EntityNotFoundException("Dining Session", payment.SessionId);
-
-            session.Status = DiningSessionStatus.CLOSED;
-            session.EndedAt = DateTime.UtcNow;
-            session.TotalSpent = payment.Amount;
-            await _uow.DiningSessions.UpdateAsync(session);
 
             // Sau thanh toán: bàn sang MAINTENANCE để nhân viên dọn dẹp,
             // rồi staff chuyển lại AVAILABLE khi dọn xong.
@@ -293,14 +290,15 @@ public class PaymentService
             {
                 table.Status = TableStatus.MAINTENANCE;
                 await _uow.Tables.UpdateAsync(table);
+                notifyTableNumber = table.TableNumber;
             }
 
-            // Cộng điểm loyalty cho CUSTOMER (GUEST không có tài khoản nên không tích điểm)
+            notifyTableId = session.TableId;
+
+            // Cộng điểm loyalty trước khi soft-delete session/orders
             await AwardLoyaltyPointsAsync(session, payment.Amount);
 
-            // Thông báo realtime về bàn ăn — client ẩn QR, hiện màn hình "Cảm ơn"
-            await _notificationService.NotifyPaymentSuccessAsync(
-                session.TableId, table?.TableNumber ?? 0, payment.InvoiceId, payment.Amount);
+            await CloseAndSoftDeleteSessionAsync(session, payment.Amount);
         }
         else
         {
@@ -317,6 +315,17 @@ public class PaymentService
         }
 
         await _uow.SaveChangesAsync();
+
+        // Thông báo realtime sau khi DB đã commit (dùng biến đã capture — session đã soft-delete)
+        if (webhookData.IsSuccess && notifyTableId.HasValue)
+        {
+            await _notificationService.NotifyPaymentSuccessAsync(
+                notifyTableId.Value,
+                notifyTableNumber,
+                payment.InvoiceId,
+                payment.Amount);
+        }
+
         return new PaymentWebhookResponse { RspCode = "00", Message = "Confirm success" };
     }
 
@@ -503,11 +512,6 @@ public class PaymentService
         var session = await _uow.DiningSessions.GetByIdWithParticipantsAndOrdersAsync(payment.SessionId)
             ?? throw new EntityNotFoundException("Dining Session", payment.SessionId);
 
-        session.Status = DiningSessionStatus.CLOSED;
-        session.EndedAt = DateTime.UtcNow;
-        session.TotalSpent = payment.Amount;
-        await _uow.DiningSessions.UpdateAsync(session);
-
         // MAINTENANCE: nhân viên dọn bàn rồi mới chuyển AVAILABLE trên Table Management
         var table = await _uow.Tables.GetByIdAsync(session.TableId);
         if (table != null)
@@ -517,12 +521,54 @@ public class PaymentService
         }
 
         await AwardLoyaltyPointsAsync(session, payment.Amount);
+        await CloseAndSoftDeleteSessionAsync(session, payment.Amount);
+
+        // Lưu DB trước — tránh SignalR lỗi làm mất cập nhật payment/session/table
+        await _uow.SaveChangesAsync();
 
         await _notificationService.NotifyPaymentSuccessAsync(
             session.TableId, table?.TableNumber ?? 0, payment.InvoiceId, payment.Amount);
 
-        await _uow.SaveChangesAsync();
         return true;
+    }
+
+    /// <summary>
+    /// Đóng phiên (CLOSED) + soft-delete lịch sử phiên (session, orders, order details).
+    /// Payment giữ lại để manager xem doanh thu / lịch sử giao dịch.
+    /// </summary>
+    private async Task CloseAndSoftDeleteSessionAsync(DiningSession session, decimal totalSpent)
+    {
+        session.Status = DiningSessionStatus.CLOSED;
+        session.EndedAt = DateTime.UtcNow;
+        session.TotalSpent = totalSpent;
+        session.IsDeleted = true;
+        session.UpdatedAt = DateTime.UtcNow;
+
+        if (session.Participants != null)
+        {
+            foreach (var participant in session.Participants.Where(p => p.LeftAt == null))
+                participant.LeftAt = DateTime.UtcNow;
+        }
+
+        var orders = session.Orders?.ToList() ?? new List<Order>();
+        if (orders.Count == 0)
+            orders = (await _uow.Orders.GetByDiningSessionIdAsync(session.Id)).ToList();
+
+        foreach (var order in orders)
+        {
+            foreach (var detail in order.OrderDetails.ToList())
+            {
+                detail.IsDeleted = true;
+                detail.UpdatedAt = DateTime.UtcNow;
+                await _uow.OrderDetails.UpdateAsync(detail);
+            }
+
+            order.IsDeleted = true;
+            order.UpdatedAt = DateTime.UtcNow;
+            await _uow.Orders.UpdateAsync(order);
+        }
+
+        await _uow.DiningSessions.UpdateAsync(session);
     }
 
     public async Task<bool> CompletePaymentByTableAsync(int tableNumber)

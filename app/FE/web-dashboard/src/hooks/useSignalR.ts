@@ -18,7 +18,6 @@ function getOrCreateConnection(): HubConnection {
   const conn = new HubConnectionBuilder()
     .withUrl(SIGNALR_URL, {
       ...(token ? { accessTokenFactory: () => token } : {}),
-      transport: 0,
     })
     .withAutomaticReconnect([0, 2, 5, 10, 15, 30])
     .build();

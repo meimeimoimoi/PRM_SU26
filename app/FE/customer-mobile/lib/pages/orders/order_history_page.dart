@@ -35,7 +35,7 @@ class _OrderHistoryPageState extends ConsumerState<OrderHistoryPage> {
   @override
   void initState() {
     super.initState();
-    final tableId = ref.read(authViewModelProvider).guestSession?.tableId;
+    final tableId = ref.read(authViewModelProvider).tableId;
     _socketService.subscribeToEvent('ReceivePaymentSuccess', _onPaymentSuccess);
     if (tableId != null) {
       // ignore: unawaited_futures
@@ -52,9 +52,18 @@ class _OrderHistoryPageState extends ConsumerState<OrderHistoryPage> {
 
   void _onPaymentSuccess(dynamic data) {
     if (!mounted || data is! Map) return;
-    final invoiceId = (data['invoiceId'] ?? data['InvoiceId'])?.toString();
-    if (invoiceId == null || invoiceId != _pendingInvoiceId) return;
 
+    final invoiceId = (data['invoiceId'] ?? data['InvoiceId'])?.toString();
+    final eventTableId = data['tableId'] ?? data['TableId'];
+    final myTableId = ref.read(authViewModelProvider).tableId;
+    final invoiceMatch =
+        _pendingInvoiceId != null && invoiceId != null && invoiceId == _pendingInvoiceId;
+    final tableMatch = myTableId != null &&
+        eventTableId != null &&
+        eventTableId.toString() == myTableId.toString();
+    if (!invoiceMatch && !tableMatch) return;
+
+    // Đóng dialog QR/tiền mặt nếu đang mở. Popup thành công + về login do main.dart xử lý.
     if (_isPaymentDialogOpen) {
       Navigator.of(context, rootNavigator: true).pop();
       _isPaymentDialogOpen = false;
@@ -62,20 +71,6 @@ class _OrderHistoryPageState extends ConsumerState<OrderHistoryPage> {
     _pendingInvoiceId = null;
     ref.read(sessionCheckoutLockedProvider.notifier).state = false;
     ref.invalidate(orderListProvider);
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: Text('Thanh toán thành công', style: TextStyle(color: AppTheme.onSurface)),
-        content: Text('Cảm ơn quý khách! Phiên ăn đã được thanh toán.', style: TextStyle(color: AppTheme.onSurfaceVariant)),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: Text('OK', style: TextStyle(color: AppTheme.primary)),
-          ),
-        ],
-        backgroundColor: AppTheme.surface,
-      ),
-    );
   }
 
   Future<void> _handlePayment(int sessionId) async {
@@ -225,8 +220,8 @@ class _OrderHistoryPageState extends ConsumerState<OrderHistoryPage> {
   @override
   Widget build(BuildContext context) {
     final authState = ref.watch(authViewModelProvider);
-    final tableNumber = authState.guestSession?.tableNumber ?? 1;
-    final sessionId = authState.guestSession?.sessionId ?? 1;
+    final tableNumber = authState.tableNumber;
+    final sessionId = authState.sessionId;
 
     final ordersAsync = ref.watch(orderListProvider);
     final billingSettings = ref.watch(billingSettingsProvider).valueOrNull
@@ -260,7 +255,7 @@ class _OrderHistoryPageState extends ConsumerState<OrderHistoryPage> {
               borderRadius: BorderRadius.circular(100.r),
             ),
             child: Text(
-              'Bàn $tableNumber',
+              tableNumber != null && tableNumber > 0 ? 'Bàn $tableNumber' : 'Chưa chọn bàn',
               style: TextStyle(
                 color: AppTheme.onSurfaceVariant,
                 fontSize: 12.sp,
@@ -584,7 +579,9 @@ class _OrderHistoryPageState extends ConsumerState<OrderHistoryPage> {
 
                 // Action Button
                 ElevatedButton(
-                  onPressed: _isProcessingPayment ? null : () => _handlePayment(sessionId),
+                  onPressed: _isProcessingPayment || sessionId == null || sessionId <= 0
+                      ? null
+                      : () => _handlePayment(sessionId),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppTheme.primary,
                     foregroundColor: AppTheme.onPrimary,

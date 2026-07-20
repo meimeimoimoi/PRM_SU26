@@ -338,8 +338,11 @@ export const orderService = {
           <script>
             window.onload = function() {
               window.print();
+            };
+            // Chỉ đóng sau khi hộp thoại in đóng (OK/Cancel) — tránh flash rồi tắt liền
+            window.onafterprint = function() {
               window.close();
-            }
+            };
           </script>
         </body>
       </html>
@@ -356,7 +359,16 @@ export const orderService = {
   getPendingCashPayments: async (): Promise<PendingCashPayment[]> => {
     const response = await apiClient.get<any>('/payments/pending-cash');
     const data = response.data.data || response.data;
-    return Array.isArray(data) ? data : [];
+    const list = Array.isArray(data) ? data : [];
+    return list.map((p: any) => ({
+      paymentId: Number(p.paymentId ?? p.PaymentId ?? 0),
+      invoiceId: String(p.invoiceId ?? p.InvoiceId ?? ''),
+      sessionId: Number(p.sessionId ?? p.SessionId ?? 0),
+      tableId: Number(p.tableId ?? p.TableId ?? 0),
+      tableNumber: Number(p.tableNumber ?? p.TableNumber ?? 0),
+      amount: Number(p.amount ?? p.Amount ?? 0),
+      createdAt: String(p.createdAt ?? p.CreatedAt ?? ''),
+    })).filter((p: PendingCashPayment) => p.tableNumber > 0);
   }
 };
 

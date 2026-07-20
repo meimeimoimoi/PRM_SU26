@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../pages/auth/login_page.dart';
 import '../pages/auth/signup_page.dart';
@@ -13,7 +14,11 @@ import '../pages/profile/profile_page.dart';
 import '../pages/settings/settings_page.dart';
 import 'app_routes.dart';
 
+/// Dùng để showDialog toàn cục (vd. thanh toán thành công → OK về login).
+final GlobalKey<NavigatorState> rootNavigatorKey = GlobalKey<NavigatorState>();
+
 final GoRouter appRouter = GoRouter(
+  navigatorKey: rootNavigatorKey,
   initialLocation: AppRoutes.login,
   routes: [
     GoRoute(
@@ -21,8 +26,29 @@ final GoRouter appRouter = GoRouter(
       builder: (context, state) => const LoginPage(),
     ),
     GoRoute(
+      path: '${AppRoutes.signup}/:tableNumber',
+      builder: (context, state) {
+        final fromPath = int.tryParse(state.pathParameters['tableNumber'] ?? '');
+        final fromExtra =
+            state.extra is int ? state.extra as int : int.tryParse('${state.extra ?? ''}');
+        final tableNumber = (fromPath != null && fromPath > 0)
+            ? fromPath
+            : (fromExtra != null && fromExtra > 0 ? fromExtra : null);
+        return SignupPage(tableNumber: tableNumber);
+      },
+    ),
+    // Fallback cũ: /signup?table=N
+    GoRoute(
       path: AppRoutes.signup,
-      builder: (context, state) => const SignupPage(),
+      builder: (context, state) {
+        final fromQuery = int.tryParse(state.uri.queryParameters['table'] ?? '');
+        final fromExtra =
+            state.extra is int ? state.extra as int : int.tryParse('${state.extra ?? ''}');
+        final tableNumber = (fromQuery != null && fromQuery > 0)
+            ? fromQuery
+            : (fromExtra != null && fromExtra > 0 ? fromExtra : null);
+        return SignupPage(tableNumber: tableNumber);
+      },
     ),
     GoRoute(
       path: AppRoutes.forgotPassword,
