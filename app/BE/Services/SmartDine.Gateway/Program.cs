@@ -24,6 +24,7 @@ var app = builder.Build();
 
 app.UseCors("AllowAll");
 app.UseHttpMetrics();
+app.UseWebSockets();
 
 // Map Health Check & Metrics Endpoints
 app.MapHealthChecks("/health");

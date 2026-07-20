@@ -7,26 +7,7 @@ import '../../viewmodels/order_viewmodel.dart';
 import '../../viewmodels/auth_viewmodel.dart';
 import '../../services/socket/socket_service.dart';
 import '../../widgets/customer_bottom_nav.dart';
-
-
-class _AppColors {
-  static const Color primary = Color(0xFFad2c00);
-  static const Color primaryContainer = Color(0xFFd34011);
-  static const Color onPrimaryContainer = Color(0xFFffffff);
-  static const Color background = Color(0xFFfcf9f8);
-  static const Color surface = Color(0xFFfcf9f8);
-  static const Color surfaceContainerLowest = Color(0xFFffffff);
-  static const Color surfaceContainerHighest = Color(0xFFe5e2e1);
-  static const Color surfaceContainerHigh = Color(0xFFeae7e7);
-  static const Color onSurface = Color(0xFF1b1c1c);
-  static const Color onSurfaceVariant = Color(0xFF5a413a);
-  static const Color secondaryContainer = Color(0xFFeddcda);
-  static const Color onSecondaryContainer = Color(0xFF6c605e);
-  static const Color tertiary = Color(0xFF005cac);
-  static const Color outlineVariant = Color(0xFFe3beb5);
-  static const Color error = Color(0xFFba1a1a);
-  static const Color onPrimary = Color(0xFFffffff);
-}
+import '../../theme/app_theme.dart';
 
 class OrderListPage extends ConsumerStatefulWidget {
   const OrderListPage({super.key});
@@ -49,15 +30,16 @@ class _OrderListPageState extends ConsumerState<OrderListPage> {
     });
 
     final tableId = ref.read(authViewModelProvider).guestSession?.tableId;
-    if (tableId != null) {
-      _socketService.connect(tableId);
-    }
     _socketService.subscribeToEvent('ReceiveOrderStatusUpdate', (data) {
       if (mounted) ref.invalidate(orderListProvider);
     });
     _socketService.subscribeToEvent('ReceiveNewOrder', (data) {
       if (mounted) ref.invalidate(orderListProvider);
     });
+    if (tableId != null) {
+      // ignore: unawaited_futures
+      _socketService.connect(tableId);
+    }
   }
 
   @override
@@ -69,29 +51,24 @@ class _OrderListPageState extends ConsumerState<OrderListPage> {
     super.dispose();
   }
 
-  // Thanh toán đã có 1 điểm vào duy nhất: nút "Thanh toán" ở trang Thực đơn →
-  // /invoice (OrderHistoryPage, hóa đơn tạm tính đầy đủ + chọn phương thức + trạng
-  // thái ReceivePaymentSuccess). Trang này chỉ còn là danh sách lịch sử đơn thuần túy.
-
   @override
   Widget build(BuildContext context) {
     final ordersAsync = ref.watch(orderListProvider);
 
     return Scaffold(
-      backgroundColor: _AppColors.background,
+      backgroundColor: AppTheme.background,
       appBar: AppBar(
-        backgroundColor: _AppColors.surface.withOpacity(0.8),
+        backgroundColor: AppTheme.surface,
         elevation: 0,
         scrolledUnderElevation: 2,
         leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: _AppColors.primary),
-          // Đơn hàng luôn được vào qua tab bottom-nav (context.go, không push).
+          icon: Icon(Icons.arrow_back, color: AppTheme.primary),
           onPressed: () => context.canPop() ? context.pop() : context.go('/home'),
         ),
         title: Text(
           'Lịch sử đơn hàng',
           style: TextStyle(
-            color: _AppColors.primary,
+            color: AppTheme.primary,
             fontSize: 20.sp,
             fontWeight: FontWeight.bold,
             letterSpacing: -0.5,
@@ -102,16 +79,38 @@ class _OrderListPageState extends ConsumerState<OrderListPage> {
       body: ordersAsync.when(
         data: (orders) {
           if (orders.isEmpty) {
-            return const Center(child: Text('Chưa có đơn hàng nào.'));
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.receipt_long, size: 80.sp, color: AppTheme.outlineVariant),
+                  SizedBox(height: 16.h),
+                  Text(
+                    'Chưa có đơn hàng nào',
+                    style: TextStyle(
+                      color: AppTheme.onSurface,
+                      fontSize: 20.sp,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  SizedBox(height: 8.h),
+                  Text(
+                    'Đơn hàng sẽ xuất hiện ở đây sau khi bạn đặt món',
+                    style: TextStyle(color: AppTheme.onSurfaceVariant, fontSize: 14.sp),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+            );
           }
-          
+
           final now = DateTime.now();
           final today = <dynamic>[];
           final older = <dynamic>[];
           for (final order in orders) {
-            if (order.createdAt != null && 
-                order.createdAt!.year == now.year && 
-                order.createdAt!.month == now.month && 
+            if (order.createdAt != null &&
+                order.createdAt!.year == now.year &&
+                order.createdAt!.month == now.month &&
                 order.createdAt!.day == now.day) {
               today.add(order);
             } else {
@@ -143,7 +142,7 @@ class _OrderListPageState extends ConsumerState<OrderListPage> {
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (err, stack) => Center(child: Text('Lỗi tải danh sách: $err')),
       ),
-      
+
       bottomNavigationBar: const CustomerBottomNav(activeTab: CustomerNavTab.orders),
     );
   }
@@ -152,7 +151,7 @@ class _OrderListPageState extends ConsumerState<OrderListPage> {
     return Text(
       title.toUpperCase(),
       style: TextStyle(
-        color: _AppColors.onSurfaceVariant,
+        color: AppTheme.onSurfaceVariant,
         fontSize: 12.sp,
         fontWeight: FontWeight.w600,
         letterSpacing: 1.2,
@@ -161,13 +160,13 @@ class _OrderListPageState extends ConsumerState<OrderListPage> {
   }
 
   Widget _buildOrderItem(BuildContext context, dynamic order) {
-    final statusColor = order.status == 'COMPLETED' ? _AppColors.tertiary : _AppColors.onSecondaryContainer;
-    final statusBg = order.status == 'COMPLETED' ? _AppColors.tertiary.withOpacity(0.1) : _AppColors.secondaryContainer;
+    final statusColor = order.status == 'COMPLETED' ? AppTheme.success : AppTheme.onSecondaryContainer;
+    final statusBg = order.status == 'COMPLETED' ? AppTheme.successContainer : AppTheme.secondaryContainer;
     final statusLabel = _getStatusLabel(order.status);
     final timeStr = order.createdAt != null
         ? '${order.createdAt!.hour.toString().padLeft(2, '0')}:${order.createdAt!.minute.toString().padLeft(2, '0')}'
         : '';
-    
+
     return Padding(
       padding: EdgeInsets.only(bottom: 16.h),
       child: _buildOrderCard(
@@ -211,16 +210,10 @@ class _OrderListPageState extends ConsumerState<OrderListPage> {
       child: Container(
         padding: EdgeInsets.all(16.r),
         decoration: BoxDecoration(
-          color: _AppColors.surfaceContainerLowest,
-          borderRadius: BorderRadius.circular(12.r),
-          border: Border.all(color: _AppColors.outlineVariant.withOpacity(0.3)),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.04),
-              blurRadius: 20,
-              offset: const Offset(0, 4),
-            ),
-          ],
+          color: AppTheme.surface,
+          borderRadius: BorderRadius.circular(16.r),
+          border: Border.all(color: AppTheme.outlineVariant.withOpacity(0.3)),
+          boxShadow: AppTheme.shadowCard,
         ),
         child: Column(
           children: [
@@ -234,7 +227,7 @@ class _OrderListPageState extends ConsumerState<OrderListPage> {
                     Text(
                       orderId,
                       style: TextStyle(
-                        color: _AppColors.onSurface,
+                        color: AppTheme.onSurface,
                         fontSize: 16.sp,
                         fontWeight: FontWeight.bold,
                       ),
@@ -243,7 +236,7 @@ class _OrderListPageState extends ConsumerState<OrderListPage> {
                     Text(
                       time,
                       style: TextStyle(
-                        color: _AppColors.onSurfaceVariant,
+                        color: AppTheme.onSurfaceVariant,
                         fontSize: 12.sp,
                         fontWeight: FontWeight.w600,
                       ),
@@ -274,14 +267,14 @@ class _OrderListPageState extends ConsumerState<OrderListPage> {
                 Text(
                   title,
                   style: TextStyle(
-                    color: _AppColors.onSurfaceVariant,
+                    color: AppTheme.onSurfaceVariant,
                     fontSize: 14.sp,
                   ),
                 ),
                 Text(
                   price,
                   style: TextStyle(
-                    color: _AppColors.primary,
+                    color: AppTheme.primary,
                     fontSize: 16.sp,
                     fontWeight: FontWeight.bold,
                   ),
@@ -293,7 +286,7 @@ class _OrderListPageState extends ConsumerState<OrderListPage> {
               padding: EdgeInsets.only(top: 12.h),
               decoration: BoxDecoration(
                 border: Border(
-                  top: BorderSide(color: _AppColors.outlineVariant.withOpacity(0.2)),
+                  top: BorderSide(color: AppTheme.outlineVariant.withOpacity(0.2)),
                 ),
               ),
               child: Row(
@@ -301,8 +294,8 @@ class _OrderListPageState extends ConsumerState<OrderListPage> {
                 children: [
                   _buildActionButton(
                     text: 'Chi tiết',
-                    textColor: _AppColors.primary,
-                    bgColor: _AppColors.primary.withOpacity(0.1),
+                    textColor: AppTheme.primary,
+                    bgColor: AppTheme.primaryContainer,
                     onTap: onTap,
                   ),
                 ],
@@ -342,5 +335,4 @@ class _OrderListPageState extends ConsumerState<OrderListPage> {
       ),
     );
   }
-
 }

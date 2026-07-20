@@ -6,21 +6,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../viewmodels/menu_viewmodel.dart';
 import '../../viewmodels/auth_viewmodel.dart';
 import '../../viewmodels/cart_viewmodel.dart';
+import '../../viewmodels/payment_lock_provider.dart';
 import '../../widgets/customer_bottom_nav.dart';
 import 'package:intl/intl.dart';
-
-class _AppColors {
-  static const Color primary = Color(0xFFad2c00);
-  static const Color primaryContainer = Color(0xFFd34011);
-  static const Color background = Color(0xFFfcf9f8);
-  static const Color surface = Color(0xFFfcf9f8);
-  static const Color surfaceContainer = Color(0xFFf0eded);
-  static const Color surfaceContainerLowest = Color(0xFFffffff);
-  static const Color onSurface = Color(0xFF1b1c1c);
-  static const Color onSurfaceVariant = Color(0xFF5a413a);
-  static const Color secondaryContainer = Color(0xFFeddcda);
-  static const Color outline = Color(0xFF8f7068);
-}
+import '../../theme/app_theme.dart';
 
 class HomePage extends ConsumerStatefulWidget {
   const HomePage({super.key});
@@ -56,18 +45,19 @@ class _HomePageState extends ConsumerState<HomePage> {
 
   Widget _buildCustomerView(BuildContext context, WidgetRef ref, AuthState authState) {
     final tableNumber = authState.guestSession?.tableNumber ?? 1;
+    final checkoutLocked = ref.watch(sessionCheckoutLockedProvider);
 
     final categoriesAsync = ref.watch(menuCategoriesProvider);
 
     return Scaffold(
-      backgroundColor: _AppColors.background,
+      backgroundColor: AppTheme.background,
       body: Stack(
         children: [
           CustomScrollView(
             slivers: [
               // App Bar & Search
               SliverAppBar(
-                backgroundColor: _AppColors.surface,
+                backgroundColor: AppTheme.surface,
                 pinned: true,
                 elevation: 0,
                 scrolledUnderElevation: 2,
@@ -75,42 +65,39 @@ class _HomePageState extends ConsumerState<HomePage> {
                 toolbarHeight: 60.h,
                 title: Row(
                   children: [
-                    Icon(Icons.restaurant, color: _AppColors.primary, size: 24.sp),
+                    Icon(Icons.restaurant, color: AppTheme.primary, size: 24.sp),
                     SizedBox(width: 8.w),
                     Flexible(
-                      child:Text(
-                      'SmartDine',
-                      style: TextStyle(
-                        color: _AppColors.primary,
-                        fontSize: 20.sp,
-                        fontWeight: FontWeight.bold,
-                      ),
+                      child: Text(
+                        'SmartDine',
+                        style: TextStyle(
+                          color: AppTheme.primary,
+                          fontSize: 20.sp,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ),
                   ],
                 ),
                 actions: [
-                  // Nút thanh toán — vào thẳng hóa đơn tạm tính (/invoice, OrderHistoryPage)
-                  // để khách xem chi tiết món + chọn phương thức thanh toán. Trước đây màn
-                  // hình này tồn tại nhưng không có lối vào nào từ app, còn logic thanh toán
-                  // lại bị nhúng trùng lặp (và chết, không ai gọi tới) ở trang "Lịch sử đơn hàng".
+                  // Thanh toán button
                   InkWell(
                     onTap: () => context.push('/invoice'),
                     borderRadius: BorderRadius.circular(100.r),
                     child: Container(
                       padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 4.h),
                       decoration: BoxDecoration(
-                        color: _AppColors.primary,
+                        color: AppTheme.primary,
                         borderRadius: BorderRadius.circular(100.r),
                       ),
                       child: Row(
                         children: [
-                          Icon(Icons.payment, color: Colors.white, size: 16.sp),
+                          Icon(Icons.payment, color: AppTheme.onPrimary, size: 16.sp),
                           SizedBox(width: 4.w),
                           Text(
                             'Thanh toán',
                             style: TextStyle(
-                              color: Colors.white,
+                              color: AppTheme.onPrimary,
                               fontSize: 12.sp,
                               fontWeight: FontWeight.bold,
                             ),
@@ -124,18 +111,18 @@ class _HomePageState extends ConsumerState<HomePage> {
                     margin: EdgeInsets.only(right: 20.w),
                     padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 4.h),
                     decoration: BoxDecoration(
-                      color: _AppColors.primaryContainer.withOpacity(0.1),
-                      border: Border.all(color: _AppColors.primaryContainer.withOpacity(0.2)),
+                      color: AppTheme.primaryContainer,
+                      border: Border.all(color: AppTheme.primary.withOpacity(0.2)),
                       borderRadius: BorderRadius.circular(100.r),
                     ),
                     child: Row(
                       children: [
-                        Icon(Icons.table_restaurant, color: _AppColors.primary, size: 16.sp),
+                        Icon(Icons.table_restaurant, color: AppTheme.primary, size: 16.sp),
                         SizedBox(width: 4.w),
                         Text(
                           'Bàn $tableNumber',
                           style: TextStyle(
-                            color: _AppColors.primary,
+                            color: AppTheme.primary,
                             fontSize: 12.sp,
                             fontWeight: FontWeight.bold,
                           ),
@@ -151,13 +138,13 @@ class _HomePageState extends ConsumerState<HomePage> {
                     child: Container(
                       height: 48.h,
                       decoration: BoxDecoration(
-                        color: _AppColors.surfaceContainer,
+                        color: AppTheme.surfaceContainerHigh,
                         borderRadius: BorderRadius.circular(12.r),
                       ),
                       padding: EdgeInsets.symmetric(horizontal: 16.w),
                       child: Row(
                         children: [
-                          Icon(Icons.search, color: _AppColors.onSurfaceVariant, size: 20.sp),
+                          Icon(Icons.search, color: AppTheme.onSurfaceVariant, size: 20.sp),
                           SizedBox(width: 12.w),
                           Expanded(
                             child: TextField(
@@ -165,12 +152,12 @@ class _HomePageState extends ConsumerState<HomePage> {
                               onChanged: _onSearchChanged,
                               style: TextStyle(
                                 fontSize: 16.sp,
-                                color: _AppColors.onSurface,
+                                color: AppTheme.onSurface,
                               ),
                               decoration: InputDecoration(
                                 hintText: 'Tìm món ăn...',
                                 hintStyle: TextStyle(
-                                  color: _AppColors.outline,
+                                  color: AppTheme.outline,
                                   fontSize: 16.sp,
                                 ),
                                 border: InputBorder.none,
@@ -194,7 +181,6 @@ class _HomePageState extends ConsumerState<HomePage> {
                     categoriesAsync.when(
                       data: (categories) {
                         final selectedCategoryId = ref.watch(selectedCategoryIdProvider);
-                        // index 0 = "Tất cả" (categoryId = null); các index sau map 1-1 với categories.
                         final allCategories = ['Tất cả', ...categories.map((c) => c.name)];
                         return SizedBox(
                           height: 40.h,
@@ -214,13 +200,13 @@ class _HomePageState extends ConsumerState<HomePage> {
                                   alignment: Alignment.center,
                                   padding: EdgeInsets.symmetric(horizontal: 24.w),
                                   decoration: BoxDecoration(
-                                    color: isSelected ? _AppColors.primary : _AppColors.secondaryContainer,
+                                    color: isSelected ? AppTheme.primary : AppTheme.secondaryContainer,
                                     borderRadius: BorderRadius.circular(100.r),
                                   ),
                                   child: Text(
                                     allCategories[index],
                                     style: TextStyle(
-                                      color: isSelected ? Colors.white : _AppColors.primary,
+                                      color: isSelected ? AppTheme.onPrimary : AppTheme.primary,
                                       fontSize: 12.sp,
                                       fontWeight: FontWeight.w600,
                                     ),
@@ -243,7 +229,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                               width: 80.w,
                               height: 40.h,
                               decoration: BoxDecoration(
-                                color: _AppColors.surfaceContainer,
+                                color: AppTheme.surfaceContainerHigh,
                                 borderRadius: BorderRadius.circular(100.r),
                               ),
                             );
@@ -260,13 +246,13 @@ class _HomePageState extends ConsumerState<HomePage> {
                               alignment: Alignment.center,
                               padding: EdgeInsets.symmetric(horizontal: 24.w),
                               decoration: BoxDecoration(
-                                color: _AppColors.primary,
+                                color: AppTheme.primary,
                                 borderRadius: BorderRadius.circular(100.r),
                               ),
                               child: Text(
                                 'Tất cả',
                                 style: TextStyle(
-                                  color: Colors.white,
+                                  color: AppTheme.onPrimary,
                                   fontSize: 12.sp,
                                   fontWeight: FontWeight.w600,
                                 ),
@@ -277,11 +263,38 @@ class _HomePageState extends ConsumerState<HomePage> {
                       ),
                     ),
 
-                    
                     SizedBox(height: 16.h),
                   ],
                 ),
               ),
+
+              if (checkoutLocked)
+                SliverToBoxAdapter(
+                  child: Container(
+                    margin: EdgeInsets.fromLTRB(20.w, 0, 20.w, 12.h),
+                    padding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 12.h),
+                    decoration: BoxDecoration(
+                      color: AppTheme.errorContainer,
+                      borderRadius: BorderRadius.circular(12.r),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.lock_outline, color: AppTheme.error, size: 20.sp),
+                        SizedBox(width: 10.w),
+                        Expanded(
+                          child: Text(
+                            'Bàn đang khóa thanh toán. Không thể đặt thêm món cho đến khi hủy hoặc hoàn tất thanh toán.',
+                            style: TextStyle(
+                              color: AppTheme.error,
+                              fontSize: 13.sp,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
 
               // Menu Grid Items
               SliverPadding(
@@ -299,15 +312,9 @@ class _HomePageState extends ConsumerState<HomePage> {
                         final item = items[index];
                         return Container(
                           decoration: BoxDecoration(
-                            color: _AppColors.surfaceContainerLowest,
+                            color: AppTheme.surface,
                             borderRadius: BorderRadius.circular(16.r),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.03),
-                                blurRadius: 10,
-                                offset: const Offset(0, 2),
-                              ),
-                            ],
+                            boxShadow: AppTheme.shadowCard,
                           ),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -326,12 +333,11 @@ class _HomePageState extends ConsumerState<HomePage> {
                                               fit: BoxFit.cover,
                                             )
                                           : Container(
-                                              color: _AppColors.surfaceContainer,
-                                              child: Icon(Icons.restaurant, color: _AppColors.outline, size: 40.sp),
+                                              color: AppTheme.surfaceContainerHigh,
+                                              child: Icon(Icons.restaurant, color: AppTheme.outline, size: 40.sp),
                                             ),
                                     ),
-                                    // Chỉ hiện badge sao khi BE thật sự trả averageRating — không bịa số
-                                    // đánh giá giả cho món chưa có review nào.
+                                    // Rating badge
                                     if (item.rating != null)
                                       Positioned(
                                         top: 8.h,
@@ -339,7 +345,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                                         child: Container(
                                           padding: EdgeInsets.symmetric(horizontal: 6.w, vertical: 2.h),
                                           decoration: BoxDecoration(
-                                            color: Colors.white.withOpacity(0.9),
+                                            color: AppTheme.onSurface.withOpacity(0.9),
                                             borderRadius: BorderRadius.circular(100.r),
                                             boxShadow: [
                                               BoxShadow(
@@ -355,7 +361,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                                               Text(
                                                 item.rating!.toStringAsFixed(1),
                                                 style: TextStyle(
-                                                  color: _AppColors.onSurface,
+                                                  color: AppTheme.onSurface,
                                                   fontSize: 10.sp,
                                                   fontWeight: FontWeight.bold,
                                                 ),
@@ -380,7 +386,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                                         maxLines: 2,
                                         overflow: TextOverflow.ellipsis,
                                         style: TextStyle(
-                                          color: _AppColors.onSurface,
+                                          color: AppTheme.onSurface,
                                           fontSize: 14.sp,
                                           fontWeight: FontWeight.bold,
                                           height: 1.2,
@@ -391,9 +397,9 @@ class _HomePageState extends ConsumerState<HomePage> {
                                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                         children: [
                                           Text(
-                                            '${item.price}',
+                                            '${currencyFormat.format(item.price)}đ',
                                             style: TextStyle(
-                                              color: _AppColors.primary,
+                                              color: AppTheme.primary,
                                               fontSize: 16.sp,
                                               fontWeight: FontWeight.bold,
                                             ),
@@ -402,26 +408,42 @@ class _HomePageState extends ConsumerState<HomePage> {
                                             width: 32.r,
                                             height: 32.r,
                                             decoration: BoxDecoration(
-                                              color: _AppColors.primary,
+                                              color: checkoutLocked
+                                                  ? AppTheme.outlineVariant
+                                                  : AppTheme.primary,
                                               shape: BoxShape.circle,
-                                              boxShadow: [
-                                                BoxShadow(
-                                                  color: _AppColors.primary.withOpacity(0.3),
-                                                  blurRadius: 8,
-                                                  offset: const Offset(0, 2),
-                                                ),
-                                              ],
+                                              boxShadow: checkoutLocked
+                                                  ? null
+                                                  : [
+                                                      BoxShadow(
+                                                        color: AppTheme.primary.withOpacity(0.3),
+                                                        blurRadius: 8,
+                                                        offset: const Offset(0, 2),
+                                                      ),
+                                                    ],
                                             ),
                                             child: InkWell(
                                               onTap: () {
+                                                if (checkoutLocked) {
+                                                  ScaffoldMessenger.of(context).showSnackBar(
+                                                    const SnackBar(
+                                                      content: Text(
+                                                        'Bàn đang khóa thanh toán. Không thể đặt thêm món.',
+                                                      ),
+                                                    ),
+                                                  );
+                                                  return;
+                                                }
                                                 ref.read(cartViewModelProvider.notifier).addItem(item);
                                                 ScaffoldMessenger.of(context).showSnackBar(
                                                   SnackBar(content: Text('Đã thêm ${item.name} vào giỏ hàng')),
                                                 );
                                               },
                                               child: Icon(
-                                                Icons.add,
-                                                color: Colors.white,
+                                                checkoutLocked ? Icons.lock : Icons.add,
+                                                color: checkoutLocked
+                                                    ? AppTheme.onSurfaceVariant
+                                                    : AppTheme.onPrimary,
                                                 size: 20.sp,
                                               ),
                                             ),
@@ -455,13 +477,9 @@ class _HomePageState extends ConsumerState<HomePage> {
               ),
             ],
           ),
-
         ],
       ),
 
-      // Bottom nav dùng chung — trước đây có thêm 1 thanh "Giỏ hàng của bàn" luôn nổi
-      // phía trên nav kể cả khi giỏ trống (0 món • 0k), đã bỏ vì khách đã có tab
-      // "Giỏ hàng" ngay dưới để xem khi cần, không cần nhắc lại liên tục.
       bottomNavigationBar: const CustomerBottomNav(activeTab: CustomerNavTab.home),
     );
   }

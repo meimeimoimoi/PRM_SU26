@@ -168,8 +168,10 @@ public class DiningSessionService
             .Sum(o => o.FinalAmount);
 
         var settings = await _uow.Settings.GetSingletonAsync();
+        var (taxRate, serviceRate) = BillingCalculator.ResolveRates(
+            session.TaxRate, session.ServiceChargeRate, settings.TaxRate, settings.ServiceChargeRate);
         var (serviceCharge, tax, estimatedTotal) = BillingCalculator.Compute(
-            subTotal, settings.TaxRate, settings.ServiceChargeRate);
+            subTotal, taxRate, serviceRate);
 
         return new BillSummaryResponse
         {
@@ -178,8 +180,8 @@ public class DiningSessionService
             ServiceCharge = serviceCharge,
             Tax = tax,
             EstimatedTotal = estimatedTotal,
-            TaxRate = settings.TaxRate,
-            ServiceChargeRate = settings.ServiceChargeRate
+            TaxRate = taxRate,
+            ServiceChargeRate = serviceRate
         };
     }
 

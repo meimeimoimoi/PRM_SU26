@@ -141,12 +141,15 @@ public class TableService
         }
 
         // Bàn trống → tạo phiên ăn mới + chuyển bàn sang OCCUPIED
+        var settings = await _uow.Settings.GetSingletonAsync();
         var newSession = new DiningSession
         {
             CustomerId = request.CustomerId,
             TableId = tableId,
             Status = DiningSessionStatus.ACTIVE,
-            StartedAt = DateTime.UtcNow
+            StartedAt = DateTime.UtcNow,
+            TaxRate = settings?.TaxRate,
+            ServiceChargeRate = settings?.ServiceChargeRate
         };
 
         await _uow.DiningSessions.AddAsync(newSession);
@@ -389,6 +392,7 @@ public class TableService
             newTableStatus = table.Status.ToString();
 
             // Tạo phiên ăn mới cho nhóm khách đã đặt trước
+            var settings = await _uow.Settings.GetSingletonAsync();
             var newSession = new DiningSession
             {
                 CustomerId = reservation.CustomerId,
@@ -396,7 +400,9 @@ public class TableService
                 GuestName = reservation.GuestName,
                 GuestPhone = reservation.GuestPhone,
                 Status = DiningSessionStatus.ACTIVE,
-                StartedAt = DateTime.UtcNow
+                StartedAt = DateTime.UtcNow,
+                TaxRate = settings?.TaxRate,
+                ServiceChargeRate = settings?.ServiceChargeRate
             };
             await _uow.DiningSessions.AddAsync(newSession);
         }

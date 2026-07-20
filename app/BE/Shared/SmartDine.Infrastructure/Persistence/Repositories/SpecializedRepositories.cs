@@ -84,11 +84,17 @@ public class UserRepository : GenericRepository<User>, IUserRepository
 {
     public UserRepository(SmartDineDbContext context) : base(context) { }
 
-    public async Task<User?> GetByEmailAsync(string email) =>
-        await _dbSet.FirstOrDefaultAsync(u => u.Email == email);
+    public async Task<User?> GetByEmailAsync(string email)
+    {
+        var normalized = email.Trim().ToLowerInvariant();
+        return await _dbSet.FirstOrDefaultAsync(u => u.Email.ToLower() == normalized);
+    }
 
-    public async Task<bool> ExistsAsync(string email) =>
-        await _dbSet.AnyAsync(u => u.Email == email);
+    public async Task<bool> ExistsAsync(string email)
+    {
+        var normalized = email.Trim().ToLowerInvariant();
+        return await _dbSet.AnyAsync(u => u.Email.ToLower() == normalized);
+    }
 
     public async Task<(IReadOnlyList<User> Items, int TotalCount)> GetPagedFilteredAsync(
         string? role, bool? isActive, int page, int pageSize)
@@ -116,8 +122,11 @@ public class CustomerRepository : GenericRepository<Customer>, ICustomerReposito
 {
     public CustomerRepository(SmartDineDbContext context) : base(context) { }
 
-    public async Task<Customer?> GetByEmailAsync(string email) =>
-        await _dbSet.FirstOrDefaultAsync(c => c.Email == email);
+    public async Task<Customer?> GetByEmailAsync(string email)
+    {
+        var normalized = email.Trim().ToLowerInvariant();
+        return await _dbSet.FirstOrDefaultAsync(c => c.Email != null && c.Email.ToLower() == normalized);
+    }
 
     public async Task<Customer?> GetByPhoneAsync(string phone) =>
         await _dbSet.FirstOrDefaultAsync(c => c.Phone == phone);

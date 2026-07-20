@@ -3,19 +3,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../viewmodels/auth_viewmodel.dart';
-
-class _AppColors {
-  static const Color primary = Color(0xFFad2c00);
-  static const Color primaryContainer = Color(0xFFd34011);
-  static const Color onPrimaryContainer = Color(0xFFffffff);
-  static const Color background = Color(0xFFfcf9f8);
-  static const Color surfaceContainerLowest = Color(0xFFffffff);
-  static const Color onSurface = Color(0xFF1b1c1c);
-  static const Color onSurfaceVariant = Color(0xFF5a413a);
-  static const Color outlineVariant = Color(0xFFe3beb5);
-  static const Color outline = Color(0xFF8f7068);
-  static const Color secondary = Color(0xFF685b5a);
-}
+import '../../theme/app_theme.dart';
 
 class SignupPage extends ConsumerStatefulWidget {
   const SignupPage({super.key});
@@ -77,6 +65,8 @@ class _SignupPageState extends ConsumerState<SignupPage> {
   @override
   Widget build(BuildContext context) {
     final authState = ref.watch(authViewModelProvider);
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
 
     ref.listen<AuthState>(authViewModelProvider, (previous, next) {
       if (next.status == AuthStateStatus.error) {
@@ -87,12 +77,12 @@ class _SignupPageState extends ConsumerState<SignupPage> {
     });
 
     return Scaffold(
-      backgroundColor: _AppColors.background,
+      backgroundColor: colors.surface,
       appBar: AppBar(
-        backgroundColor: _AppColors.background,
+        backgroundColor: colors.surface,
         elevation: 0,
         leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: _AppColors.onSurface),
+          icon: Icon(Icons.arrow_back, color: colors.onSurface),
           onPressed: () => context.pop(),
         ),
       ),
@@ -103,9 +93,8 @@ class _SignupPageState extends ConsumerState<SignupPage> {
           children: [
             Text(
               _isLogin ? 'Đăng nhập thành viên' : 'Tạo tài khoản mới',
-              style: TextStyle(
-                color: _AppColors.onSurface,
-                fontSize: 28.sp,
+              style: theme.textTheme.headlineMedium?.copyWith(
+                color: colors.onSurface,
                 fontWeight: FontWeight.bold,
               ),
             ),
@@ -114,9 +103,8 @@ class _SignupPageState extends ConsumerState<SignupPage> {
               _isLogin 
                 ? 'Đăng nhập để nhận ưu đãi giảm giá và tích điểm.' 
                 : 'Trở thành khách hàng thân thiết của SmartDine.',
-              style: TextStyle(
-                color: _AppColors.onSurfaceVariant,
-                fontSize: 16.sp,
+              style: theme.textTheme.bodyLarge?.copyWith(
+                color: colors.onSurfaceVariant,
               ),
             ),
             SizedBox(height: 32.h),
@@ -164,7 +152,7 @@ class _SignupPageState extends ConsumerState<SignupPage> {
                   child: Text(
                     'Quên mật khẩu?',
                     style: TextStyle(
-                      color: _AppColors.primary,
+                      color: colors.primary,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -176,14 +164,6 @@ class _SignupPageState extends ConsumerState<SignupPage> {
               height: 56.h,
               child: ElevatedButton(
                 onPressed: authState.status == AuthStateStatus.loading ? null : _handleSubmit,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: _AppColors.primary,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12.r),
-                  ),
-                  elevation: 2,
-                ),
                 child: authState.status == AuthStateStatus.loading
                   ? const SizedBox(
                       width: 24,
@@ -207,7 +187,7 @@ class _SignupPageState extends ConsumerState<SignupPage> {
                 Text(
                   _isLogin ? 'Chưa có tài khoản?' : 'Đã có tài khoản?',
                   style: TextStyle(
-                    color: _AppColors.onSurfaceVariant,
+                    color: colors.onSurfaceVariant,
                     fontSize: 14.sp,
                   ),
                 ),
@@ -220,7 +200,7 @@ class _SignupPageState extends ConsumerState<SignupPage> {
                   child: Text(
                     _isLogin ? 'Đăng ký ngay' : 'Đăng nhập',
                     style: TextStyle(
-                      color: _AppColors.primary,
+                      color: colors.primary,
                       fontWeight: FontWeight.bold,
                       fontSize: 14.sp,
                     ),
@@ -241,34 +221,26 @@ class _SignupPageState extends ConsumerState<SignupPage> {
     TextInputType? keyboardType,
     bool obscureText = false,
   }) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+
     return TextField(
       controller: controller,
       keyboardType: keyboardType,
       obscureText: obscureText,
       style: TextStyle(
         fontSize: 16.sp,
-        color: _AppColors.onSurface,
+        color: colors.onSurface,
       ),
       decoration: InputDecoration(
         hintText: hintText,
         hintStyle: TextStyle(
-          color: _AppColors.outline,
+          color: colors.outline,
           fontSize: 16.sp,
         ),
         prefixIcon: Icon(
           icon,
-          color: _AppColors.outline,
-        ),
-        filled: true,
-        fillColor: _AppColors.surfaceContainerLowest,
-        contentPadding: EdgeInsets.symmetric(vertical: 16.h, horizontal: 16.w),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12.r),
-          borderSide: const BorderSide(color: _AppColors.outlineVariant),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12.r),
-          borderSide: const BorderSide(color: _AppColors.primary),
+          color: colors.outline,
         ),
       ),
     );

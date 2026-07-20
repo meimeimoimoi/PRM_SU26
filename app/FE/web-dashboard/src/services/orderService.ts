@@ -22,6 +22,9 @@ export interface OrderResponse {
   status: string;
   /** ACTIVE | CHECKOUT | CLOSED — CHECKOUT = đang chờ thanh toán (tiền mặt). */
   sessionStatus?: string;
+  /** Snapshot thuế/phí của phiên ăn (Manager đổi settings chỉ áp dụng phiên sau). */
+  taxRate?: number | null;
+  serviceChargeRate?: number | null;
   createdAt: string;
   items: OrderDetailItem[];
 }
@@ -90,9 +93,9 @@ export const orderService = {
     return true;
   },
 
-  /** Cập nhật trạng thái tất cả món trong cùng một lượt order (1 lần bấm). */
+  /** Cập nhật trạng thái tất cả món trong cùng một lượt order (1 lần bấm, 1 transaction BE). */
   updateOrderItemsStatus: async (itemIds: number[], newStatus: KitchenItemStatus): Promise<boolean> => {
-    await Promise.all(itemIds.map((id) => apiClient.patch(`/orders/items/${id}/status`, { status: newStatus })));
+    await apiClient.patch(`/orders/items/status`, { itemIds, status: newStatus });
     return true;
   },
 

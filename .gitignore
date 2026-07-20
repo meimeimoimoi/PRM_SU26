@@ -102,3 +102,27 @@ Desktop.ini
 package-lock.json
 yarn.lock
 pnpm-lock.yaml
+.augment/
+.claude/
+.codebuddy/
+.codewhale/
+.codex/
+.continue/
+.cursor/
+.factory/
+.gemini/
+.github/copilot*
+.kilocode/
+.kiro/
+.opencode/
+.qoder/
+.roo/
+.trae/
+.warp/
+.windsurf/
+
+# Agent skill backups / UI-UX Pro Max packs (không commit)
+**/ui-ux-pro-max/
+app/FE/.agents_backup/
+app/FE/.augment_backup/
+app/FE/.github/prompts/

@@ -101,14 +101,15 @@ public class PaymentService
         // 4. Ownership check — STAFF bỏ qua; CUSTOMER/GUEST phải là participant đang active
         EnsureCallerCanPay(session.Participants, callerCustomerId, callerGuestSessionId, isStaff);
 
-        // 5. Tính tổng hóa đơn — FinalAmount + phí DV + VAT theo RestaurantSettings (Manager chỉnh)
+        // 5. Tính tổng hóa đơn — dùng snapshot thuế/phí của phiên (Manager đổi settings → phiên sau)
         var subTotal = session.Orders.Sum(o => o.FinalAmount);
         if (subTotal <= 0)
             throw new BusinessRuleViolationException(ValidationMessages.PAYMENT_NO_ORDERS);
 
         var settings = await _uow.Settings.GetSingletonAsync();
-        var (_, _, totalPayable) = BillingCalculator.Compute(
-            subTotal, settings.TaxRate, settings.ServiceChargeRate);
+        var (taxRate, serviceRate) = BillingCalculator.ResolveRates(
+            session.TaxRate, session.ServiceChargeRate, settings.TaxRate, settings.ServiceChargeRate);
+        var (_, _, totalPayable) = BillingCalculator.Compute(subTotal, taxRate, serviceRate);
 
         // 6. Parse payment method — unknown method fallback về VNPAY (không lỗi, tránh UX xấu)
         var paymentMethod = Enum.TryParse<PaymentMethod>(request.PaymentMethod, true, out var pm)
@@ -538,8 +539,9 @@ public class PaymentService
         {
             var subTotal = session.Orders.Sum(o => o.FinalAmount);
             var settings = await _uow.Settings.GetSingletonAsync();
-            var (_, _, totalPayable) = BillingCalculator.Compute(
-                subTotal, settings.TaxRate, settings.ServiceChargeRate);
+            var (taxRate, serviceRate) = BillingCalculator.ResolveRates(
+                session.TaxRate, session.ServiceChargeRate, settings.TaxRate, settings.ServiceChargeRate);
+            var (_, _, totalPayable) = BillingCalculator.Compute(subTotal, taxRate, serviceRate);
             var orderCode = await _uow.Payments.GetNextOrderCodeAsync();
             var invoiceId = GenerateInvoiceId(orderCode);
 

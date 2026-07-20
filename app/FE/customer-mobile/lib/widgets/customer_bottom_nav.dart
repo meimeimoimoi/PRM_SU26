@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
+import '../../theme/app_theme.dart';
 
 class _AppColors {
   static const Color primaryContainer = Color(0xFFd34011);
@@ -27,14 +28,8 @@ class CustomerBottomNav extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: _AppColors.surface,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 20,
-            offset: const Offset(0, -4),
-          ),
-        ],
+        color: AppTheme.surface,
+        boxShadow: AppTheme.shadowBottomNav,
         borderRadius: BorderRadius.vertical(top: Radius.circular(16.r)),
       ),
       child: SafeArea(
@@ -95,7 +90,7 @@ class _NavItem extends StatelessWidget {
       child: Container(
         padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 8.h),
         decoration: BoxDecoration(
-          color: isActive ? _AppColors.primaryContainer : Colors.transparent,
+          color: isActive ? AppTheme.primaryContainer : Colors.transparent,
           borderRadius: BorderRadius.circular(12.r),
         ),
         child: Column(
@@ -103,14 +98,14 @@ class _NavItem extends StatelessWidget {
           children: [
             Icon(
               icon,
-              color: isActive ? _AppColors.onPrimaryContainer : _AppColors.secondary,
+              color: isActive ? AppTheme.primary : AppTheme.onSurfaceVariant,
               size: 24.sp,
             ),
             SizedBox(height: 4.h),
             Text(
               label,
               style: TextStyle(
-                color: isActive ? _AppColors.onPrimaryContainer : _AppColors.secondary,
+                color: isActive ? AppTheme.primary : AppTheme.onSurfaceVariant,
                 fontSize: 12.sp,
                 fontWeight: isActive ? FontWeight.bold : FontWeight.w600,
               ),
