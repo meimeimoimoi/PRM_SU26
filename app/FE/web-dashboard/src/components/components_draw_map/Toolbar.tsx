@@ -138,7 +138,8 @@ export const Toolbar = () => {
       graph_text: payload.graph
     });
     try {
-      const response = await fetch('http://localhost:3001/api/maps', {
+      const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api/v1';
+      const response = await fetch(`${API_BASE}/maps`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
