@@ -17,6 +17,8 @@ import { Toolbox } from './Toolbox';
 import { getMapPixels, pixelToWorld, worldToPixel } from '@/utils/coordinateUtils';
 import { useSignalR } from '@/hooks/useSignalR';
 
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api/v1';
+
 const MIN_ZOOM = 0.25;
 const MAX_ZOOM = 3;
 const ZOOM_STEP = 0.1;
@@ -512,7 +514,7 @@ export function MapCanvas() {
 
       if (selectedMapId) {
         try {
-          const metaRes = await fetch(`/api/v1/maps/${selectedMapId}`);
+          const metaRes = await fetch(`${API_BASE}/maps/${selectedMapId}`);
           const meta = await metaRes.json();
           if (meta && typeof meta.robotStart?.x === 'number' && typeof meta.robotStart?.y === 'number') {
             addGraphNode({
@@ -533,12 +535,12 @@ export function MapCanvas() {
 
       if (!nodeCreated) {
         try {
-          const listRes = await fetch('/api/v1/maps');
+          const listRes = await fetch(`${API_BASE}/maps`);
           const list = await listRes.json();
           if (!Array.isArray(list) || list.length === 0) return;
           const mapId = list[0].id;
           setSelectedMapId(mapId);
-          const metaRes = await fetch(`/api/v1/maps/${mapId}`);
+          const metaRes = await fetch(`${API_BASE}/maps/${mapId}`);
           const meta = await metaRes.json();
           if (meta && typeof meta.robotStart?.x === 'number' && typeof meta.robotStart?.y === 'number') {
             addGraphNode({
