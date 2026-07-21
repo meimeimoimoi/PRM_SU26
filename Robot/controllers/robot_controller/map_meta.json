@@ -1,10 +1,11 @@
 {
-  "resolution": 0.05,
   "floorSize": 20,
+  "resolution": 0.05,
   "robotStart": {
-    "x": 0.03333333333333127,
-    "y": 0.23567708333333254,
+    "x": 0,
+    "y": 0,
     "theta": 0
   },
-  "createdAt": "2026-07-13T14:40:29.112Z"
+  "totalObjects": 5,
+  "createdAt": "2026-07-21T01:35:32.0448160Z"
 }
