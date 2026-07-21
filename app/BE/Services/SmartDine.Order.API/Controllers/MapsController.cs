@@ -91,6 +91,41 @@ public class MapsController : ControllerBase
         return Ok(dict);
     }
 
+    /// <summary>POST /api/v1/maps — Save a new map (from draw-map editor)</summary>
+    [HttpPost]
+    public IActionResult Create([FromBody] CreateMapRequest req)
+    {
+        var id = Guid.NewGuid().ToString("N").Substring(0, 12);
+        var mapDir = Path.Combine(_dataRoot, id);
+        Directory.CreateDirectory(mapDir);
+
+        var meta = new
+        {
+            floorSize = req.FloorSize,
+            resolution = req.Resolution,
+            robotStart = new
+            {
+                x = req.RobotStartWorldX,
+                y = req.RobotStartWorldY,
+                theta = req.RobotStartWorldTheta
+            },
+            totalObjects = req.Objects?.Count ?? 0,
+            createdAt = DateTime.UtcNow.ToString("o")
+        };
+
+        System.IO.File.WriteAllText(
+            Path.Combine(mapDir, "meta.json"),
+            JsonSerializer.Serialize(meta, JsonOpts));
+
+        if (!string.IsNullOrEmpty(req.Graph))
+            System.IO.File.WriteAllText(Path.Combine(mapDir, "graph.json"), req.Graph);
+
+        if (!string.IsNullOrEmpty(req.Waypoints))
+            System.IO.File.WriteAllText(Path.Combine(mapDir, "waypoints.txt"), req.Waypoints);
+
+        return Ok(new { id, message = "Map saved successfully" });
+    }
+
     /// <summary>GET /api/v1/maps/{id}/files — Download all map files for sidecar.
     /// Returns JSON with: meta, graph, waypoints, mapYaml, mapPgmBase64.</summary>
     [HttpGet("{id}/files")]
@@ -153,4 +188,31 @@ public class MapFilesResponse
 
     [JsonPropertyName("mapPgmBase64")]
     public string? MapPgmBase64 { get; set; }
+}
+
+public class CreateMapRequest
+{
+    [JsonPropertyName("floorSize")]
+    public double FloorSize { get; set; }
+
+    [JsonPropertyName("resolution")]
+    public double Resolution { get; set; }
+
+    [JsonPropertyName("robot_start_world_x")]
+    public double RobotStartWorldX { get; set; }
+
+    [JsonPropertyName("robot_start_world_y")]
+    public double RobotStartWorldY { get; set; }
+
+    [JsonPropertyName("robot_start_world_theta")]
+    public double RobotStartWorldTheta { get; set; }
+
+    [JsonPropertyName("objects")]
+    public List<object>? Objects { get; set; }
+
+    [JsonPropertyName("graph")]
+    public string? Graph { get; set; }
+
+    [JsonPropertyName("waypoints")]
+    public string? Waypoints { get; set; }
 }

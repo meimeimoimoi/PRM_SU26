@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Alert, Button, Card, Col, Row, Select, Space, Statistic, Tag, Typography } from 'antd';
+import { Alert, Button, Card, Col, Row, Select, Space, Statistic, Tag, Typography, message } from 'antd';
 import {
   ArrowDown,
   ArrowLeft,
@@ -57,7 +57,9 @@ export const RobotConsole: React.FC = () => {
   const sendControlCommand = async (command: string, target?: string, direction?: string) => {
     try {
       await invoke('SendRobotCommand', command, target || 'NONE', direction || 'NONE');
-    } catch (_error) {
+    } catch (error) {
+      console.error('[RobotConsole] Failed to send command:', command, target, error);
+      message.error(`Gửi lệnh thất bại: ${command}`);
     }
   };
 
@@ -74,6 +76,8 @@ export const RobotConsole: React.FC = () => {
   const handleReturnToKitchen = () => {
     if (kitchenNode) {
       sendControlCommand('NAV_TO_TABLE', kitchenNode.id);
+    } else {
+      message.warning('Không tìm thấy node Kitchen trong graph');
     }
   };
 
