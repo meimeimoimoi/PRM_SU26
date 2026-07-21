@@ -2,10 +2,8 @@
 import { useMemo } from 'react';
 import { Alert, Button, Popconfirm, message } from 'antd';
 import { useMapStore } from '../../store/mapStore';
-import { exportPGM } from '../../utils/exportPGM';
 import { exportWaypoints } from '../../utils/exportWaypoints';
 import { exportGraph } from '../../utils/exportGraph';
-import { validateRoute } from '../../utils/astar';
 import { validateGraph, getGraphValidationSummary } from '../../utils/validateGraph';
 import { pixelToWorld } from '../../utils/coordinateUtils';
 
@@ -17,84 +15,10 @@ export const Toolbar = () => {
   const floorSize = useMapStore((s: any) => s.floorSize) || 20;
   const resolution = useMapStore((s: any) => s.resolution) || 0.05;
 
-
-  const handleExportPGM = () => {
-    const blob = exportPGM(objects, floorSize, resolution);
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'map_nhahang.pgm';
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const handleExportWaypoints = () => {
-    const content = exportWaypoints(graphNodes, floorSize, resolution);
-    const blob = new Blob([content], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'waypoints.txt';
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const handleExportGraph = () => {
-    const content = exportGraph(graphNodes, graphEdges, floorSize, resolution);
-    const blob = new Blob([content], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'graph.json';
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
   const graphValidation = useMemo(() => validateGraph(objects, graphNodes, graphEdges, floorSize, resolution), [objects, graphNodes, graphEdges, floorSize, resolution]);
   const graphValidationSummary = useMemo(() => getGraphValidationSummary(graphValidation), [graphValidation]);
 
-  const handleValidateNavigation = () => {
-    const startObj = objects.find((obj) => obj.type === 'robotStart');
-    const tables = objects.filter((obj) => obj.type === 'table');
-    if (!startObj) {
-      message.warning('Chưa đặt vị trí xuất phát (robotStart)');
-      return;
-    }
-    const startWorld = pixelToWorld(
-      startObj.x + startObj.width / 2,
-      startObj.y + startObj.height / 2,
-      floorSize,
-      resolution
-    );
-    let allValid = true;
-    for (const table of tables) {
-      let cx = table.x + table.width / 2;
-      let cy = table.y + table.height / 2;
-
-      const angleRad = ((table.rotation || 0) * Math.PI) / 180;
-      const offX = table.deliveryOffsetX || 0;
-      const offY = table.deliveryOffsetY || 0;
-
-      cx += offX * Math.cos(angleRad) - offY * Math.sin(angleRad);
-      cy += offX * Math.sin(angleRad) + offY * Math.cos(angleRad);
-
-      const goalWorld = pixelToWorld(cx, cy, floorSize, resolution);
-
-      const result = validateRoute(startWorld, goalWorld, objects, floorSize, resolution);
-      if (!result.valid) {
-        message.error(`Không tìm được đường đến bàn ${table.name || table.id}`);
-        allValid = false;
-        break;
-      }
-    }
-    if (allValid) {
-      message.success('Tất cả các bàn đều có đường đi!');
-    }
-  };
-
   const handleSendToRobot = async () => {
-    // Determine robot start position – prefer a GraphNode `robotStart` if present,
-    // otherwise fall back to a MapObject of type `robotStart` (legacy).
     const startNode = graphNodes.find((n) => n.type === 'robotStart');
     const startObj = objects.find((obj) => obj.type === 'robotStart');
     let robot_start_world_x = 0;
@@ -102,7 +26,6 @@ export const Toolbar = () => {
     let robot_start_world_theta = 0;
 
     if (startNode) {
-      // GraphNode already stores world coordinates directly.
       robot_start_world_x = startNode.x;
       robot_start_world_y = startNode.y;
       robot_start_world_theta = startNode.theta ?? 0;
@@ -124,19 +47,8 @@ export const Toolbar = () => {
       robot_start_world_theta,
       objects,
       graph: graphText,
-      waypoints: waypointsText, // <--- Đính kèm chuỗi text vào payload
+      waypoints: waypointsText,
     };
-    console.log(">>> [FE LOG] Dữ liệu chuẩn bị gửi lên Server:", {
-      floorSize: payload.floorSize,
-      resolution: payload.resolution,
-      start_x: payload.robot_start_world_x,
-      start_y: payload.robot_start_world_y,
-      total_objects: payload.objects.length,
-      total_graph_nodes: graphNodes.length,
-      total_graph_edges: graphEdges.length,
-      waypoints_text: payload.waypoints,
-      graph_text: payload.graph
-    });
     try {
       const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api/v1';
       const response = await fetch(`${API_BASE}/maps`, {
@@ -163,12 +75,21 @@ export const Toolbar = () => {
   return (
     <div className="toolbar">
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10, width: '100%' }}>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-          <button onClick={handleExportPGM}>Export PGM</button>
-          <button onClick={handleExportWaypoints}>Export Waypoints</button>
-          <button onClick={handleExportGraph}>Export Graph</button>
-          <button onClick={handleValidateNavigation}>Validate Navigation</button>
-          <button onClick={handleSendToRobot}>Gửi dữ liệu đến robot</button>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+          <Button
+            type="primary"
+            size="large"
+            onClick={handleSendToRobot}
+            style={{
+              height: 44,
+              fontSize: 15,
+              fontWeight: 600,
+              padding: '0 24px',
+              boxShadow: '0 2px 8px rgba(24,144,255,0.4)',
+            }}
+          >
+            Gửi dữ liệu đến robot
+          </Button>
           <Popconfirm
             title="Reset map?"
             description="Xóa toàn bộ state hiện tại, bao gồm objects, graph nodes, graph edges và dữ liệu lưu local."

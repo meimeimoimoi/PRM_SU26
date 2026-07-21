@@ -6,131 +6,110 @@
   },
   "nodes": [
     {
-      "id": "robotStart-1783853735497",
+      "id": "robotStart-2",
       "type": "robotStart",
       "name": "Start",
-      "x": 0.03333333333333127,
-      "y": 0.23567708333333254,
+      "x": 0,
+      "y": 0,
       "theta": 0
     },
     {
       "id": "delivery-table-101",
       "type": "delivery",
       "name": "Table 101_Delivery",
-      "x": -3.25,
-      "y": 5.800000000000001,
+      "x": -3.2,
+      "y": 6.9,
       "theta": 0,
       "tableNumber": 101,
-      "deliveryOffsetX": 83,
-      "deliveryOffsetY": 17.99999999999999
+      "deliveryOffsetX": 74.00000000000001,
+      "deliveryOffsetY": 0.9999999999999964
     },
     {
       "id": "delivery-table-102",
       "type": "delivery",
       "name": "Table 102_Delivery",
-      "x": -3.1071428571428585,
-      "y": -1.521428571428571,
+      "x": -3,
+      "y": -1.1,
       "theta": 0,
       "tableNumber": 102,
-      "deliveryOffsetX": 76.71428571428571,
-      "deliveryOffsetY": 10.999999999999972
+      "deliveryOffsetX": 80,
+      "deliveryOffsetY": 23
     },
     {
       "id": "delivery-table-103",
       "type": "delivery",
       "name": "Table 103_Delivery",
-      "x": 2.6875,
-      "y": 5.768750000000001,
+      "x": 2.9000000000000004,
+      "y": -0.8500000000000001,
       "theta": 0,
       "tableNumber": 103,
-      "deliveryOffsetX": -80.25,
-      "deliveryOffsetY": 13.62499999999999
+      "deliveryOffsetX": -75,
+      "deliveryOffsetY": 5.999999999999998
     },
     {
       "id": "delivery-table-104",
       "type": "delivery",
       "name": "Table 104_Delivery",
-      "x": 2.6821428571428556,
-      "y": -1.4419642857142863,
+      "x": 2.75,
+      "y": 6.8500000000000005,
       "theta": 0,
       "tableNumber": 104,
-      "deliveryOffsetX": -92.35714285714288,
-      "deliveryOffsetY": 19.839285714285726
+      "deliveryOffsetX": -75,
+      "deliveryOffsetY": -5
     },
     {
-      "id": "kitchen-kitchen-107",
+      "id": "kitchen-kitchen-105",
       "type": "kitchen",
-      "name": "Kitchen 107",
-      "x": -1.7954545454545467,
-      "y": -8.425,
+      "name": "Kitchen 105",
+      "x": -2.0500000000000003,
+      "y": -8.05,
       "theta": 0,
-      "deliveryOffsetX": 106.09090909090907,
-      "deliveryOffsetY": 15.000000000000018
+      "deliveryOffsetX": 100.00000000000001,
+      "deliveryOffsetY": 15
     }
   ],
   "edges": [
     {
       "id": "edge-2",
-      "from": "robotStart-1783853735497",
-      "to": "kitchen-kitchen-107",
+      "from": "delivery-table-102",
+      "to": "kitchen-kitchen-105",
       "bidirectional": true,
-      "weight": 7.793309002945172
+      "weight": 7.563398706930635
     },
     {
       "id": "edge-3",
       "from": "delivery-table-102",
-      "to": "kitchen-kitchen-107",
+      "to": "delivery-table-101",
       "bidirectional": true,
-      "weight": 9.384075497026029
+      "weight": 6.450193795538239
     },
     {
       "id": "edge-4",
-      "from": "delivery-table-101",
-      "to": "delivery-table-102",
+      "from": "robotStart-2",
+      "to": "kitchen-kitchen-105",
       "bidirectional": true,
-      "weight": 5.86046073274107
+      "weight": 8.006247560499238
     },
     {
       "id": "edge-5",
-      "from": "kitchen-kitchen-107",
-      "to": "delivery-table-104",
+      "from": "kitchen-kitchen-105",
+      "to": "delivery-table-103",
       "bidirectional": true,
-      "weight": 9.788558266357937
+      "weight": 10.010619361458112
     },
     {
       "id": "edge-6",
-      "from": "delivery-table-104",
-      "to": "delivery-table-103",
-      "bidirectional": true,
-      "weight": 6.053304882458838
-    },
-    {
-      "id": "edge-7",
       "from": "delivery-table-103",
-      "to": "kitchen-kitchen-107",
+      "to": "delivery-table-104",
       "bidirectional": true,
-      "weight": 15.035048756678595
+      "weight": 6.551717332119877
     },
     {
-      "id": "edge-9",
-      "from": "kitchen-kitchen-107",
-      "to": "delivery-table-101",
-      "bidirectional": true,
-      "weight": 14.299172265531276
-    },
-    {
-      "id": "edge-10",
-      "from": "delivery-table-103",
-      "to": "delivery-table-101",
-      "bidirectional": true,
-      "weight": 7.004462863060949
-    },
-    {
-      "id": "edge-11",
+      "id": "edge-8",
       "from": "delivery-table-104",
-      "to": "delivery-table-102",
+      "to": "kitchen-kitchen-105",
       "bidirectional": true,
-      "weight": 7.20017360901805
+      "weight": 15.385463918907353
     }
   ]
 }
